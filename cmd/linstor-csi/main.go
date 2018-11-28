@@ -21,6 +21,7 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
 
 	"github.com/LINBIT/linstor-csi/pkg/driver"
 )
@@ -31,10 +32,11 @@ func main() {
 	)
 	flag.Parse()
 
-	drv, err := driver.NewDriver(*endpoint)
+	drv, err := driver.NewDriver(*endpoint, os.Stderr)
 	if err != nil {
 		log.Fatalln(err)
 	}
+	defer drv.Stop()
 
 	if err := drv.Run(); err != nil {
 		log.Fatalln(err)
