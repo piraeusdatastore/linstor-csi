@@ -30,6 +30,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"time"
 
 	"github.com/LINBIT/linstor-csi/pkg/volume"
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -41,21 +42,27 @@ import (
 
 // Driver fullfils CSI controller, node, and indentity server interfaces.
 type Driver struct {
-	endpoint    string
-	nodeID      string
-	srv         *grpc.Server
-	log         *log.Logger
-	storage     volume.CreateDeleter
-	assignments volume.AttacherDettacher
+	endpoint           string
+	nodeID             string
+	srv                *grpc.Server
+	log                *log.Logger
+	storage            volume.CreateDeleter
+	assignments        volume.AttacherDettacher
+	mount              volume.Mount
+	defaultControllers string
+	defaultStoragePool string
 }
 
 // Config provides sensible defaults for creating Drivers
 type Config struct {
-	Endpoint    string
-	Node        string
-	LogOut      io.Writer
-	Storage     volume.CreateDeleter
-	Assignments volume.AttacherDettacher
+	Endpoint           string
+	Node               string
+	DefaultControllers string
+	DefaultStoragePool string
+	LogOut             io.Writer
+	Storage            volume.CreateDeleter
+	Assignments        volume.AttacherDettacher
+	Mount              volume.Mount
 }
 
 // NewDriver build up a driver.
@@ -71,6 +78,7 @@ func NewDriver(cfg Config) (*Driver, error) {
 
 	d.storage = cfg.Storage
 	d.assignments = cfg.Assignments
+	d.mount = cfg.Mount
 
 	return &d, nil
 }
@@ -138,7 +146,29 @@ func (d Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeReq
 			"NodeStageVolume", req.VolumeId, "VolumeCapability slice")
 	}
 
-	// TODO: Actually mount some volumes here.
+	mnt := req.VolumeCapability.GetMount()
+	mntOpts := mnt.MountFlags
+
+	fsType := "ext4"
+	if mnt.FsType != "" {
+		fsType = mnt.FsType
+	}
+
+	existingVolume, err := d.storage.GetByID(req.GetVolumeId())
+	if err != nil {
+		return nil, err
+	}
+
+	assignedTo, err := d.assignments.GetAssignmentOnNode(existingVolume, d.nodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	err = d.mount.Mount(existingVolume, assignedTo.Path, req.StagingTargetPath, fsType, mntOpts)
+	if err != nil {
+		return nil, err
+	}
+
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
@@ -170,7 +200,12 @@ func (d Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolum
 	if req.StagingTargetPath == "" {
 		return &csi.NodeUnstageVolumeResponse{}, missingAttr("NodeUnstageVolume", req.VolumeId, "StagingTargetPath")
 	}
-	// TODO: Actually mount some volumes here.
+
+	err := d.mount.Unmount(req.StagingTargetPath)
+	if err != nil {
+		return nil, err
+	}
+
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
@@ -210,7 +245,27 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		return &csi.NodePublishVolumeResponse{}, missingAttr("NodePublishVolume", req.VolumeId, "VolumeCapability slice")
 	}
 
-	// TODO: Actually mount some volumes here.
+	mnt := req.VolumeCapability.GetMount()
+	mntOpts := mnt.MountFlags
+	mntOpts = append(mntOpts, "bind")
+	if req.Readonly {
+		mntOpts = append(mntOpts, "ro")
+	}
+	fsType := "ext4"
+	if mnt.FsType != "" {
+		fsType = mnt.FsType
+	}
+
+	existingVolume, err := d.storage.GetByID(req.GetVolumeId())
+	if err != nil {
+		return nil, err
+	}
+
+	err = d.mount.Mount(existingVolume, req.StagingTargetPath, req.TargetPath, fsType, mntOpts)
+	if err != nil {
+		return nil, err
+	}
+
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
@@ -237,7 +292,11 @@ func (d Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishV
 		return nil, missingAttr("NodeUnpublishVolume", req.VolumeId, "TargetPath")
 	}
 
-	// TODO: Actually mount some volumes here.
+	err := d.mount.Unmount(req.TargetPath)
+	if err != nil {
+		return nil, err
+	}
+
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
@@ -314,6 +373,8 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 
 	if existingVolume != nil {
 
+		d.log.Printf("found existing volume %s (%+v)", req.Name, existingVolume)
+
 		if existingVolume.CreatedBy != createdByMe {
 			return &csi.CreateVolumeResponse{}, status.Error(
 				codes.AlreadyExists, fmt.Sprintf(
@@ -335,19 +396,20 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 				VolumeId: existingVolume.ID,
 				// TODO: Make sure this doesn't exceede LimitBytes.
 				CapacityBytes: existingVolume.SizeBytes,
-				// TODO: Maybe leave out non creation-related info.
-				VolumeContext: req.Parameters,
 			}}, nil
 	}
 
 	// Spec says volume ID and name must differ.
 	volumeID := uuid.New()
-	err = d.storage.Create(&volume.Info{
-		Name:       req.Name,
-		ID:         volumeID,
-		SizeBytes:  size,
-		CreatedBy:  createdByMe,
-		Parameters: req.Parameters})
+	vol := &volume.Info{
+		Name: req.Name, ID: volumeID, SizeBytes: size, CreatedBy: createdByMe,
+		CreationTime: time.Now(),
+		Parameters:   make(map[string]string)}
+	for k, v := range req.Parameters {
+		vol.Parameters[k] = v
+	}
+	d.log.Printf("creating new volume %s (%+v)", vol.Name, vol)
+	err = d.storage.Create(vol)
 	if err != nil {
 		return &csi.CreateVolumeResponse{}, status.Error(
 			codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
@@ -378,6 +440,7 @@ func (d Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) 
 		// Volume doesn't exist, and that's the point of this call after all.
 		return &csi.DeleteVolumeResponse{}, nil
 	}
+	d.log.Printf("found existing volume %s (%+v)", existingVolume.Name, existingVolume)
 
 	if err := d.storage.Delete(existingVolume); err != nil {
 		return nil, err
@@ -424,6 +487,8 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 				"ControllerPublishVolume failed for %s: volume not present in storage backend",
 				req.VolumeId))
 	}
+	d.log.Printf("found existing volume %s (%+v)", existingVolume.Name, existingVolume)
+
 	// Or have had their attributes changed.
 	if existingVolume.Readonly != req.Readonly {
 		return nil, status.Error(
@@ -501,6 +566,7 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 		return nil, status.Error(
 			codes.NotFound, fmt.Sprintf("ValidateVolumeCapabilities failed for %s: volume not present in storage backend", req.VolumeId))
 	}
+	d.log.Printf("found existing volume %s (%+v)", existingVolume.Name, existingVolume)
 
 	supportedCapabilities := []*csi.VolumeCapability{
 		{AccessType: &csi.VolumeCapability_Mount{

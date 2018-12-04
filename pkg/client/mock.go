@@ -22,14 +22,9 @@ import (
 	"github.com/LINBIT/linstor-csi/pkg/volume"
 )
 
-type assignment struct {
-	vol  *volume.Info
-	node string
-}
-
 type MockStorage struct {
 	createdVolumes  []*volume.Info
-	assignedVolumes []*assignment
+	assignedVolumes []*volume.Assignment
 }
 
 func (s *MockStorage) ListAll(parameters map[string]string) ([]*volume.Info, error) {
@@ -70,13 +65,13 @@ func (s *MockStorage) Delete(vol *volume.Info) error {
 }
 
 func (s *MockStorage) Attach(vol *volume.Info, node string) error {
-	s.assignedVolumes = append(s.assignedVolumes, &assignment{vol: vol, node: node})
+	s.assignedVolumes = append(s.assignedVolumes, &volume.Assignment{Vol: vol, Node: node, Path: "/dev/null"})
 	return nil
 }
 
-func (s *MockStorage) Detech(vol *volume.Info, node string) error {
+func (s *MockStorage) Detach(vol *volume.Info, node string) error {
 	for _, a := range s.assignedVolumes {
-		if a.vol.Name == vol.Name && a.node == node {
+		if a.Vol.Name == vol.Name && a.Node == node {
 			// Close enough for testing...
 			a = nil
 		}
@@ -91,4 +86,21 @@ func (s *MockStorage) NodeAvailable(node string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func (s *MockStorage) GetAssignmentOnNode(vol *volume.Info, node string) (*volume.Assignment, error) {
+	for _, a := range s.assignedVolumes {
+		if a.Vol.ID == vol.ID && a.Node == node {
+			// Close enough for testing...
+			return a, nil
+		}
+	}
+	return nil, nil
+}
+
+func (s *MockStorage) Mount(vol *volume.Info, source, target, fsType string, options []string) error {
+	return nil
+}
+func (s *MockStorage) Unmount(target string) error {
+	return nil
 }
