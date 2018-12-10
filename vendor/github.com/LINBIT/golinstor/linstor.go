@@ -51,6 +51,8 @@ type ResourceDeploymentConfig struct {
 	ClientList          []string
 	ReplicasOnSame      []string
 	ReplicasOnDifferent []string
+	DRSites             []string
+	DRSiteKey           string
 	AutoPlace           uint64
 	DoNotPlaceWithRegex string
 	SizeKiB             uint64
@@ -78,11 +80,12 @@ type ResourceDeploymentConfig struct {
 // If no Encryption is specified, none will be used.
 // If no Controllers are specified, none will be used.
 // If no LogOut is specified, ioutil.Discard will be used.
+// TODO: Document DR stuff.
 func NewResourceDeployment(c ResourceDeploymentConfig) ResourceDeployment {
 	r := ResourceDeployment{ResourceDeploymentConfig: c}
 
 	if r.Name == "" {
-		r.Name = fmt.Sprintf("%s", uuid.NewV4())
+		r.Name = fmt.Sprintf("auto-%s", uuid.NewV4())
 	}
 
 	if len(r.NodeList) == 0 && r.AutoPlace == 0 {
@@ -125,6 +128,10 @@ func NewResourceDeployment(c ResourceDeploymentConfig) ResourceDeployment {
 
 	if r.LogOut == nil {
 		r.LogOut = ioutil.Discard
+	}
+
+	if r.DRSiteKey == "" {
+		r.DRSiteKey = "DR-site"
 	}
 
 	r.log = log.New(r.LogOut, "golinstor: ", log.Ldate|log.Ltime|log.Lshortfile)
@@ -245,6 +252,26 @@ type ResDef struct {
 	} `json:"rsc_dfn_props,omitempty"`
 }
 
+type nodeInfo []struct {
+	Nodes []struct {
+		ConnectionStatus int    `json:"connection_status"`
+		UUID             string `json:"uuid"`
+		NetInterfaces    []struct {
+			StltPort           int    `json:"stlt_port"`
+			StltEncryptionType string `json:"stlt_encryption_type"`
+			Address            string `json:"address"`
+			UUID               string `json:"uuid"`
+			Name               string `json:"name"`
+		} `json:"net_interfaces"`
+		Props []struct {
+			Value string `json:"value"`
+			Key   string `json:"key"`
+		} `json:"props"`
+		Type string `json:"type"`
+		Name string `json:"name"`
+	} `json:"nodes"`
+}
+
 func (s returnStatuses) validate() error {
 	for _, message := range s {
 		if !linstorSuccess(message.RetCode) {
@@ -343,6 +370,23 @@ func (r ResourceDeployment) listResources() (resList, error) {
 	return list, nil
 }
 
+func (r ResourceDeployment) listNodes() (nodeInfo, error) {
+	list := nodeInfo{}
+	out, err := r.traceCombinedOutput("linstor", r.prependOpts("node", "list")...)
+	if err != nil {
+		return nil, fmt.Errorf("%v: %s", err, out)
+	}
+
+	if !json.Valid(out) {
+		return nil, fmt.Errorf("invalid json from 'linstor -m node list'")
+	}
+	if err := json.Unmarshal(out, &list); err != nil {
+		return nil, fmt.Errorf("couldn't Unmarshal '%s' :%v", out, err)
+	}
+
+	return list, nil
+}
+
 // Create reserves the resource name in Linstor.
 func (r ResourceDeployment) Create() error {
 	defPresent, volZeroPresent, err := r.checkDefined()
@@ -427,7 +471,16 @@ func (r ResourceDeployment) Assign() error {
 		}
 	}
 
-	return r.deployToList(r.ClientList, true)
+	if err := r.deployToList(r.ClientList, true); err != nil {
+		return err
+	}
+
+	if len(r.ResourceDeploymentConfig.DRSites) > 0 {
+		if err := r.enableProxy(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r ResourceDeployment) deployToList(list []string, asClients bool) error {
@@ -454,6 +507,81 @@ func (r ResourceDeployment) deployToList(list []string, asClients bool) error {
 		}
 	}
 	return nil
+}
+
+func (r ResourceDeployment) enableProxy() error {
+
+	drNodes, err := r.proxyNodes()
+	if err != nil {
+		return err
+	}
+
+	// Figure out deployed nodes before assigning proxy resources.
+	deployedNodes, err := r.deployedNodes()
+	if err != nil {
+		return err
+	}
+
+	// Assign the resource to all proxy nodes.
+	if err := r.deployToList(drNodes, false); err != nil {
+		return err
+	}
+
+	for _, p := range drNodes {
+		for _, d := range deployedNodes {
+			if err := r.linstor("resource-connection", "drbd-options", "--protocol", "A", p, d, r.Name); err != nil {
+				return nil
+			}
+			if err := r.linstor("drbd-proxy", "enable", p, d, r.Name); err != nil {
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
+func (r ResourceDeployment) proxyNodes() ([]string, error) {
+	list, err := r.listNodes()
+	if err != nil {
+		return []string{}, nil
+	}
+	return doProxyNodes(list, r.DRSites, r.DRSiteKey)
+}
+
+func doProxyNodes(list nodeInfo, sites []string, key string) ([]string, error) {
+	var proxySiteNodes []string
+	auxPrefix := "Aux/"
+	if !strings.HasPrefix(key, auxPrefix) {
+		key = auxPrefix + key
+	}
+
+	for _, n := range list[0].Nodes {
+		for _, p := range n.Props {
+			if p.Key == key && contains(sites, p.Value) {
+				proxySiteNodes = append(proxySiteNodes, n.Name)
+			}
+		}
+	}
+
+	return proxySiteNodes, nil
+}
+
+func (r ResourceDeployment) deployedNodes() ([]string, error) {
+	list, err := r.listResources()
+	if err != nil {
+		return []string{}, nil
+	}
+	return doDeployedNodes(list, r.Name)
+}
+
+func doDeployedNodes(l resList, resName string) ([]string, error) {
+	var deployed []string
+	for _, res := range l[0].Resources {
+		if res.Name == resName && !contains(res.RscFlags, "DISKLESS") {
+			deployed = append(deployed, res.NodeName)
+		}
+	}
+	return deployed, nil
 }
 
 // Unassign unassigns a resource from a particular node.
@@ -790,7 +918,7 @@ func getDevPath(list resList, resName, node string) (string, error) {
 
 	if devicePath == "" {
 		return devicePath, fmt.Errorf(
-			"unable to find the device path volume zero of %s in %+v", resName, list)
+			"unable to find the device path of volume zero of resource %s on node %s in %+v", resName, node, list)
 	}
 
 	return devicePath, nil

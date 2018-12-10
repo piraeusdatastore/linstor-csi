@@ -70,8 +70,9 @@ func TestDriver(t *testing.T) {
 		TargetPath:  mntDir,
 		Address:     *endpoint,
 
+		// TODO: Use a parameters file here. Pass the file via flags.
 		TestVolumeParameters: map[string]string{
-			"autoPlace": "2",
+			"autoPlace": "1",
 		},
 	}
 

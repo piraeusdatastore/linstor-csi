@@ -11,7 +11,7 @@ import:
   subpackages:
   - unix
 - package: github.com/LINBIT/golinstor
-  version: has/csi-update
+  version: 0.11.0
 testImport:
 - package: github.com/kubernetes-csi/csi-test
   version: ~1.0.0-rc2

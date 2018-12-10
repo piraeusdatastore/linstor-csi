@@ -1,5 +1,5 @@
-hash: 9723f4d65ac236448f155cd3f9b0314b0052b47b5bad7997dfa764b41010d5a6
-updated: 2018-12-06T14:20:48.686712843-08:00
+hash: 0456a7f925b7f272f0831acf946deb8eacf7106aac19351d36c2dab7220a0b6f
+updated: 2018-12-10T15:19:32.592481016-08:00
 imports:
 - name: github.com/container-storage-interface/spec
   version: ed0bb0e1557548aa028307f48728767cfe8f6345
@@ -16,7 +16,7 @@ imports:
   - ptypes/timestamp
   - ptypes/wrappers
 - name: github.com/LINBIT/golinstor
-  version: 7a6923741472665570c0639ea4fb8f3f06ee14e2
+  version: ef20dda0fc11e0afdac3b237e11f966abce717ca
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/satori/go.uuid
