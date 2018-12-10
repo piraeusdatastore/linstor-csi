@@ -1,0 +1,19 @@
+package: github.com/LINBIT/linstor-csi
+import:
+- package: github.com/container-storage-interface/spec
+  version: ~1.0.0
+  subpackages:
+  - lib/go/csi
+- package: google.golang.org/grpc
+  version: ~1.16.0
+- package: golang.org/x/sys
+  version: 4ed8d59d0b35e1e29334a206d1b3f38b1e5dfb31
+  subpackages:
+  - unix
+- package: github.com/LINBIT/golinstor
+  version: 0.11.0
+testImport:
+- package: github.com/kubernetes-csi/csi-test
+  version: ~1.0.0-rc2
+  subpackages:
+  - pkg/sanity
