@@ -86,7 +86,7 @@ func NewDriver(cfg Config) (*Driver, error) {
 // GetPluginInfo returns driver info
 func (d Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	return &csi.GetPluginInfoResponse{
-		Name:          "io.drbd.com.linstor-csi",
+		Name:          "io.drbd.linstor-csi",
 		VendorVersion: "0.1.0",
 	}, nil
 }
