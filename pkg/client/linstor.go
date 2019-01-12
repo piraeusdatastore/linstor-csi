@@ -45,8 +45,11 @@ const (
 	ControllersKey         = "controllers"
 	BlockSizeKey           = "blocksize"
 	ForceKey               = "force"
-	MountOptsKey           = "mountopts"
-	FSOptsKey              = "fsopts"
+	FSKey                  = "filesystem"
+	// These have to be camel case. Maybe move them into resource config for
+	// consistency?
+	MountOptsKey = "mountOpts"
+	FSOptsKey    = "fsOpts"
 )
 
 type Linstor struct {
@@ -114,6 +117,9 @@ func (s *Linstor) resDeploymentConfigFromVolumeInfo(vol *volume.Info) (*lc.Resou
 	// Use ID's with prefix here to conform to linstor naming rules.
 	cfg.Name = s.prefix + vol.ID
 
+	// TODO: Make don't extend volume size by 1 Kib, unless you have to.
+	cfg.SizeKiB = uint64(vol.SizeBytes/1024 + 1)
+
 	for k, v := range vol.Parameters {
 		switch strings.ToLower(k) {
 		case NodeListKey:
@@ -150,6 +156,7 @@ func (s *Linstor) resDeploymentConfigFromVolumeInfo(vol *volume.Info) (*lc.Resou
 		return nil, err
 	}
 
+	// TODO: Support for other annotations.
 	cfg.Annotations = make(map[string]string)
 	cfg.Annotations[s.AnnotationsKey] = string(serializedVol)
 
@@ -290,10 +297,14 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 	if err != nil {
 		return err
 	}
+
+	// Merge mount options from Storage Classes and CSI calls.
+	options = append(options, vol.Parameters[MountOptsKey])
+	mntOpts := strings.Join(options, ",")
 	mounter := lc.FSUtil{
 		ResourceDeployment: r,
-		FSType:             "ext4",
-		MountOpts:          strings.Join(options, ","),
+		FSType:             vol.Parameters[FSKey],
+		MountOpts:          mntOpts,
 		FSOpts:             vol.Parameters[FSOptsKey],
 	}
 
