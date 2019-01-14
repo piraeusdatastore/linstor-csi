@@ -158,7 +158,6 @@ func (d Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeReq
 	mnt := req.VolumeCapability.GetMount()
 	mntOpts := mnt.MountFlags
 
-	// TODO: Honor FS type from GetMount, this is ignored presently.
 	fsType := "ext4"
 	if mnt.FsType != "" {
 		fsType = mnt.FsType

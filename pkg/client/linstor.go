@@ -301,9 +301,17 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 	// Merge mount options from Storage Classes and CSI calls.
 	options = append(options, vol.Parameters[MountOptsKey])
 	mntOpts := strings.Join(options, ",")
+
+	// If an FSType is supplided by the parameters, override the one passed
+	// to the Mount Call.
+	parameterFsType, ok := vol.Parameters[FSKey]
+	if ok {
+		fsType = parameterFsType
+	}
+
 	mounter := lc.FSUtil{
 		ResourceDeployment: r,
-		FSType:             vol.Parameters[FSKey],
+		FSType:             fsType,
 		MountOpts:          mntOpts,
 		FSOpts:             vol.Parameters[FSOptsKey],
 	}
