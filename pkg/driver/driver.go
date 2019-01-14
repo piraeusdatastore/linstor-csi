@@ -363,6 +363,10 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 
 	// TODO: This needs to be a function.
 	size := req.CapacityRange.GetRequiredBytes()
+	linstorMinimumVolumeSizeBytes := int64(4096)
+	if size < linstorMinimumVolumeSizeBytes {
+		size = linstorMinimumVolumeSizeBytes
+	}
 	limit := req.CapacityRange.GetLimitBytes()
 	unlimited := limit == int64(0)
 	if size > limit && !unlimited {
