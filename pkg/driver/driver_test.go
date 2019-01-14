@@ -48,6 +48,8 @@ func TestDriver(t *testing.T) {
 	}
 
 	driver, _ := NewDriver(driverCfg)
+	driver.name = "io.drbd.linstor-csi-test"
+	driver.version = "linstor-csi-test-version"
 	defer driver.Stop()
 
 	// run your driver

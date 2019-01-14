@@ -22,7 +22,7 @@ GO = go
 PROJECT_NAME = linstor-csi
 VERSION=$(shell git describe --tags --always --dirty)
 LATESTTAG=$(shell git describe --abbrev=0 --tags | tr -d 'v')
-LDFLAGS = -X main.Version=${VERSION}
+LDFLAGS = -X github.com/LINBIT/linstor-csi/pkg/driver.Version=${VERSION}
 DOCKERREGISTRY = drbd.io
 DOCKERREGPATH = $(DOCKERREGISTRY)/$(PROJECT_NAME)
 

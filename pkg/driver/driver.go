@@ -40,6 +40,9 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Version is set via ldflags configued in the Makefile.
+var Version = "UNKNOWN"
+
 // Driver fullfils CSI controller, node, and indentity server interfaces.
 type Driver struct {
 	endpoint           string
@@ -51,6 +54,8 @@ type Driver struct {
 	mount              volume.Mount
 	defaultControllers string
 	defaultStoragePool string
+	version            string
+	name               string
 }
 
 // Config provides sensible defaults for creating Drivers
@@ -72,9 +77,13 @@ func NewDriver(cfg Config) (*Driver, error) {
 	if cfg.LogOut == nil {
 		cfg.LogOut = ioutil.Discard
 	}
+
+	d.version = Version
+	d.name = "io.drbd.linstor-csi"
+
 	// TODO: Need to validate this.
 	d.nodeID = cfg.Node
-	d.log = log.New(cfg.LogOut, "linstor-csi: ", log.Ldate|log.Ltime|log.Lshortfile)
+	d.log = log.New(cfg.LogOut, d.name+": ", log.Ldate|log.Ltime|log.Lshortfile)
 
 	d.storage = cfg.Storage
 	d.assignments = cfg.Assignments
@@ -86,8 +95,8 @@ func NewDriver(cfg Config) (*Driver, error) {
 // GetPluginInfo returns driver info
 func (d Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	return &csi.GetPluginInfoResponse{
-		Name:          "io.drbd.linstor-csi",
-		VendorVersion: "0.1.0",
+		Name:          d.name,
+		VendorVersion: d.version,
 	}, nil
 }
 
@@ -641,6 +650,8 @@ func (d Driver) ListSnapshots(context.Context, *csi.ListSnapshotsRequest) (*csi.
 
 // Run the server.
 func (d Driver) Run() error {
+	d.log.Printf("Preparing to start %s server version %s", d.name, d.version)
+
 	u, err := url.Parse(d.endpoint)
 	if err != nil {
 		return fmt.Errorf("unable to parse address: %q", err)
