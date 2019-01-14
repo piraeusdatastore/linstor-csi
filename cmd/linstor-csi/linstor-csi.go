@@ -44,7 +44,7 @@ func main() {
 		DefaultControllers: *controllers,
 		DefaultStoragePool: *storagePool,
 	}
-	linstorClient := client.NewLinstor(driverCfg.LogOut, "csi-test-annotations")
+	linstorClient := client.NewLinstor(driverCfg.LogOut, "csi-volume-data")
 	linstorClient.DefaultControllers = *controllers
 	linstorClient.DefaultStoragePool = *storagePool
 	driverCfg.Storage = linstorClient
