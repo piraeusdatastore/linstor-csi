@@ -23,12 +23,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"strconv"
 	"strings"
 
 	lc "github.com/LINBIT/golinstor"
 	"github.com/LINBIT/linstor-csi/pkg/volume"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -53,33 +53,58 @@ const (
 )
 
 type Linstor struct {
-	LogOut         io.Writer
-	AnnotationsKey string
-	log            *log.Logger
+	DefaultControllers string
+	DefaultStoragePool string
+	LogOut             io.Writer
+	log                *log.Entry
+	prefix             string
+	annotationsKey     string
+}
+
+type LinstorConfig struct {
+	LogOut io.Writer
+	LogFmt log.Formatter
+	Debug  bool
 
 	// Mostly just for testing
 	DefaultControllers string
 	DefaultStoragePool string
-
-	prefix string
 }
 
-func NewLinstor(logOut io.Writer, annotationsKey string) *Linstor {
+func NewLinstor(cfg LinstorConfig) *Linstor {
 	l := &Linstor{}
-	if logOut == nil {
-		logOut = ioutil.Discard
-	}
-	l.LogOut = logOut
 
-	l.log = log.New(l.LogOut, "linstor-csi-client: ", log.Ldate|log.Ltime|log.Lshortfile)
-
-	if annotationsKey == "" {
-		annotationsKey = "csi-volume-annotations"
-	}
-
-	l.AnnotationsKey = annotationsKey
+	l.annotationsKey = "csi-volume-annotations"
+	// Used to namespace csi volumes and meet linstor naming requirements.
 	l.prefix = "csi-"
 
+	l.DefaultControllers = cfg.DefaultControllers
+	l.DefaultStoragePool = cfg.DefaultStoragePool
+	l.LogOut = cfg.LogOut
+
+	if cfg.LogFmt != nil {
+		log.SetFormatter(cfg.LogFmt)
+	}
+	if cfg.LogOut == nil {
+		cfg.LogOut = ioutil.Discard
+	}
+	if cfg.Debug {
+		log.SetLevel(log.DebugLevel)
+		log.SetReportCaller(true)
+	}
+	log.SetOutput(cfg.LogOut)
+
+	l.log = log.WithFields(log.Fields{
+		"linstorCSIComponent": "client",
+		"annotationsKey":      l.annotationsKey,
+		"resourcePrefix":      l.prefix,
+		"defaultControllers":  l.DefaultControllers,
+		"defaultStoragePool":  l.DefaultStoragePool,
+	})
+
+	l.log.WithFields(log.Fields{
+		"resourceDeployment": fmt.Sprintf("%+v", l),
+	}).Debug("generated new ResourceDeployment")
 	return l
 }
 
@@ -89,7 +114,7 @@ func (s *Linstor) ListAll(parameters map[string]string) ([]*volume.Info, error) 
 
 func (s *Linstor) resDefToVolume(resDef lc.ResDef) (*volume.Info, error) {
 	for _, p := range resDef.RscDfnProps {
-		if p.Key == "Aux/"+s.AnnotationsKey {
+		if p.Key == "Aux/"+s.annotationsKey {
 			vol := &volume.Info{
 				Parameters: make(map[string]string),
 			}
@@ -101,6 +126,10 @@ func (s *Linstor) resDefToVolume(resDef lc.ResDef) (*volume.Info, error) {
 			if vol.Name == "" {
 				return nil, fmt.Errorf("Failed to extract resource name from %+v", vol)
 			}
+			s.log.WithFields(log.Fields{
+				"resourceDefinition": fmt.Sprintf("%+v", resDef),
+				"volume":             fmt.Sprintf("%+v", vol),
+			}).Debug("converted resource definition to volume")
 			return vol, nil
 		}
 	}
@@ -158,7 +187,7 @@ func (s *Linstor) resDeploymentConfigFromVolumeInfo(vol *volume.Info) (*lc.Resou
 
 	// TODO: Support for other annotations.
 	cfg.Annotations = make(map[string]string)
-	cfg.Annotations[s.AnnotationsKey] = string(serializedVol)
+	cfg.Annotations[s.annotationsKey] = string(serializedVol)
 
 	return cfg, nil
 }
@@ -173,9 +202,12 @@ func (s *Linstor) resDeploymentFromVolumeInfo(vol *volume.Info) (*lc.ResourceDep
 }
 
 func (s *Linstor) GetByName(name string) (*volume.Info, error) {
-	s.log.Printf("looking up resource by name %s", name)
+	s.log.WithFields(log.Fields{
+		"csiVolumeName": name,
+	}).Debug("looking up resource by CSI volume name")
+
 	r := lc.NewResourceDeployment(lc.ResourceDeploymentConfig{
-		Name:        "GetByName",
+		Name:        "CSIGetByName",
 		Controllers: s.DefaultControllers,
 		LogOut:      s.LogOut})
 	list, err := r.ListResourceDefinitions()
@@ -187,7 +219,7 @@ func (s *Linstor) GetByName(name string) (*volume.Info, error) {
 		if err != nil {
 			return nil, err
 		}
-		// Probably found a resource we dind't create.
+		// Probably found a resource we didn't create.
 		if vol == nil {
 			continue
 		}
@@ -199,15 +231,19 @@ func (s *Linstor) GetByName(name string) (*volume.Info, error) {
 }
 
 func (s *Linstor) GetByID(ID string) (*volume.Info, error) {
-	s.log.Printf("looking up resource by ID %s", ID)
+	s.log.WithFields(log.Fields{
+		"csiVolumeID": ID,
+	}).Debug("looking up resource by CSI volume ID")
+
 	r := lc.NewResourceDeployment(lc.ResourceDeploymentConfig{
-		Name:        "GetByID",
+		Name:        "CSIGetByID",
 		Controllers: s.DefaultControllers,
 		LogOut:      s.LogOut})
 	list, err := r.ListResourceDefinitions()
 	if err != nil {
 		return nil, err
 	}
+
 	for _, rd := range list {
 		if rd.RscName == s.prefix+ID {
 			vol, err := s.resDefToVolume(rd)
@@ -221,7 +257,10 @@ func (s *Linstor) GetByID(ID string) (*volume.Info, error) {
 }
 
 func (s *Linstor) Create(vol *volume.Info) error {
-	s.log.Printf("creating volume %+v", vol)
+	s.log.WithFields(log.Fields{
+		"volume": fmt.Sprintf("%+v", vol),
+	}).Info("creating volume")
+
 	r, err := s.resDeploymentFromVolumeInfo(vol)
 	if err != nil {
 		return err
@@ -231,7 +270,10 @@ func (s *Linstor) Create(vol *volume.Info) error {
 }
 
 func (s *Linstor) Delete(vol *volume.Info) error {
-	s.log.Printf("deleting volume %+v", vol)
+	s.log.WithFields(log.Fields{
+		"volume": fmt.Sprintf("%+v", vol),
+	}).Info("deleting volume")
+
 	r, err := s.resDeploymentFromVolumeInfo(vol)
 	if err != nil {
 		return err
@@ -241,7 +283,10 @@ func (s *Linstor) Delete(vol *volume.Info) error {
 }
 
 func (s *Linstor) Attach(vol *volume.Info, node string) error {
-	s.log.Printf("attaching volume %+v to node %s", vol, node)
+	s.log.WithFields(log.Fields{
+		"volume":     fmt.Sprintf("%+v", vol),
+		"targetNode": node,
+	}).Info("attaching volume")
 
 	// This is hackish, configure a volume copy that only makes new diskless asignments.
 	cfg, err := s.resDeploymentConfigFromVolumeInfo(vol)
@@ -256,7 +301,11 @@ func (s *Linstor) Attach(vol *volume.Info, node string) error {
 }
 
 func (s *Linstor) Detach(vol *volume.Info, node string) error {
-	s.log.Printf("detaching volume %+v from node %s", vol, node)
+	s.log.WithFields(log.Fields{
+		"volume":     fmt.Sprintf("%+v", vol),
+		"targetNode": node,
+	}).Info("detaching volume")
+
 	r, err := s.resDeploymentFromVolumeInfo(vol)
 	if err != nil {
 		return err
@@ -271,11 +320,16 @@ func (s *Linstor) NodeAvailable(node string) (bool, error) {
 		return false, nil
 	}
 
+	// TODO: Check if the node is available.
 	return true, nil
 }
 
 func (s *Linstor) GetAssignmentOnNode(vol *volume.Info, node string) (*volume.Assignment, error) {
-	s.log.Printf("getting assignment info of volume %+v from node %s", vol, node)
+	s.log.WithFields(log.Fields{
+		"volume":     fmt.Sprintf("%+v", vol),
+		"targetNode": node,
+	}).Debug("getting assignment info")
+
 	r, err := s.resDeploymentFromVolumeInfo(vol)
 	if err != nil {
 		return nil, err
@@ -285,14 +339,25 @@ func (s *Linstor) GetAssignmentOnNode(vol *volume.Info, node string) (*volume.As
 	if err != nil {
 		return nil, err
 	}
-	return &volume.Assignment{
+	va := &volume.Assignment{
 		Vol:  vol,
 		Node: node,
 		Path: devPath,
-	}, nil
+	}
+	s.log.WithFields(log.Fields{
+		"volumeAssignment": fmt.Sprintf("%+v", va),
+	}).Debug("found assignment info")
+
+	return va, nil
 }
 
 func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options []string) error {
+	s.log.WithFields(log.Fields{
+		"volume": fmt.Sprintf("%+v", vol),
+		"source": source,
+		"target": target,
+	}).Info("mounting volume")
+
 	r, err := s.resDeploymentFromVolumeInfo(vol)
 	if err != nil {
 		return err
@@ -315,6 +380,9 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 		MountOpts:          mntOpts,
 		FSOpts:             vol.Parameters[FSOptsKey],
 	}
+	s.log.WithFields(log.Fields{
+		"mounter": fmt.Sprintf("%+v", mounter),
+	}).Debug("configured mounter")
 
 	err = mounter.SafeFormat(source)
 	if err != nil {
@@ -325,12 +393,19 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 }
 
 func (s *Linstor) Unmount(target string) error {
+	s.log.WithFields(log.Fields{
+		"target": target,
+	}).Info("unmounting volume")
+
 	r := lc.NewResourceDeployment(lc.ResourceDeploymentConfig{
-		Name:   "Unmount",
+		Name:   "CSI Unmount",
 		LogOut: s.LogOut})
 	mounter := lc.FSUtil{
 		ResourceDeployment: &r,
 	}
+	s.log.WithFields(log.Fields{
+		"mounter": fmt.Sprintf("%+v", mounter),
+	}).Debug("configured mounter")
 
 	return mounter.UnMount(target)
 }

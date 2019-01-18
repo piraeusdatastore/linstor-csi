@@ -11,7 +11,12 @@ import:
   subpackages:
   - unix
 - package: github.com/LINBIT/golinstor
-  version: 0.11.0
+  version: 0.11.1
+- package: github.com/sirupsen/logrus
+  version: ~1.3.0
+- package: github.com/Sirupsen/logrus
+  repo: git@github.com:/sirupsen/logrus
+  vcs: git
 testImport:
 - package: github.com/kubernetes-csi/csi-test
   version: ~1.0.0-rc2

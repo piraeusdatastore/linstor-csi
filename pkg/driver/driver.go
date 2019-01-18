@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"math"
 	"net"
 	"net/url"
@@ -35,6 +34,7 @@ import (
 	"github.com/LINBIT/linstor-csi/pkg/volume"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/pborman/uuid"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -48,7 +48,7 @@ type Driver struct {
 	endpoint           string
 	nodeID             string
 	srv                *grpc.Server
-	log                *log.Logger
+	log                *log.Entry
 	storage            volume.CreateDeleter
 	assignments        volume.AttacherDettacher
 	mount              volume.Mount
@@ -64,7 +64,9 @@ type Config struct {
 	Node               string
 	DefaultControllers string
 	DefaultStoragePool string
+	Debug bool
 	LogOut             io.Writer
+	LogFmt             log.Formatter
 	Storage            volume.CreateDeleter
 	Assignments        volume.AttacherDettacher
 	Mount              volume.Mount
@@ -81,13 +83,30 @@ func NewDriver(cfg Config) (*Driver, error) {
 	d.version = Version
 	d.name = "io.drbd.linstor-csi"
 
-	// TODO: Need to validate this.
 	d.nodeID = cfg.Node
-	d.log = log.New(cfg.LogOut, d.name+": ", log.Ldate|log.Ltime|log.Lshortfile)
 
 	d.storage = cfg.Storage
 	d.assignments = cfg.Assignments
 	d.mount = cfg.Mount
+
+	if cfg.LogFmt != nil {
+		log.SetFormatter(cfg.LogFmt)
+	}
+	if cfg.LogOut == nil {
+		cfg.LogOut = ioutil.Discard
+	}
+	if cfg.Debug {
+		log.SetLevel(log.DebugLevel)
+		log.SetReportCaller(true)
+	}
+	log.SetOutput(cfg.LogOut)
+
+	d.log = log.WithFields(log.Fields{
+		"linstorCSIComponent": "driver",
+		"provisioner":         d.name,
+		"version":             d.version,
+		"nodeID":              d.nodeID,
+	})
 
 	return &d, nil
 }
@@ -375,8 +394,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 				req.Name, size, limit))
 	}
 
-	createdByMe := "LINSTOR CSI Driver"
-
+	createdByMe := d.name
 	// Handle case were a volume of the same name is already present.
 	existingVolume, err := d.storage.GetByName(req.Name)
 	if err != nil {
@@ -386,7 +404,10 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 
 	if existingVolume != nil {
 
-		d.log.Printf("found existing volume %s (%+v)", req.Name, existingVolume)
+		d.log.WithFields(log.Fields{
+			"requestedVolumeName": req.Name,
+			"existingVolume":      fmt.Sprintf("%+v", existingVolume),
+		}).Info("found existing volume")
 
 		if existingVolume.CreatedBy != createdByMe {
 			return &csi.CreateVolumeResponse{}, status.Error(
@@ -402,7 +423,12 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 					req.Name, createdByMe, existingVolume.SizeBytes, size))
 		}
 
-		d.log.Printf("%s already present, but matches request", req.Name)
+		d.log.WithFields(log.Fields{
+			"requestedVolumeName": req.Name,
+			"requestedSize":       size,
+			"expectedCreatedBy":   createdByMe,
+			"existingVolume":      fmt.Sprintf("%+v", existingVolume),
+		}).Info("volume already present, but matches request")
 
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
@@ -421,7 +447,10 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 	for k, v := range req.Parameters {
 		vol.Parameters[k] = v
 	}
-	d.log.Printf("creating new volume %s (%+v)", vol.Name, vol)
+	d.log.WithFields(log.Fields{
+		"newVolume": fmt.Sprintf("%+v", vol),
+	}).Debug("creating new volume")
+
 	err = d.storage.Create(vol)
 	if err != nil {
 		return &csi.CreateVolumeResponse{}, status.Error(
@@ -453,7 +482,9 @@ func (d Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) 
 		// Volume doesn't exist, and that's the point of this call after all.
 		return &csi.DeleteVolumeResponse{}, nil
 	}
-	d.log.Printf("found existing volume %s (%+v)", existingVolume.Name, existingVolume)
+	d.log.WithFields(log.Fields{
+		"existingVolume": fmt.Sprintf("%+v", existingVolume),
+	}).Info("found existing volume")
 
 	if err := d.storage.Delete(existingVolume); err != nil {
 		return nil, err
@@ -500,7 +531,9 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 				"ControllerPublishVolume failed for %s: volume not present in storage backend",
 				req.VolumeId))
 	}
-	d.log.Printf("found existing volume %s (%+v)", existingVolume.Name, existingVolume)
+	d.log.WithFields(log.Fields{
+		"existingVolume": fmt.Sprintf("%+v", existingVolume),
+	}).Info("found existing volume")
 
 	// Or have had their attributes changed.
 	if existingVolume.Readonly != req.Readonly {
@@ -579,7 +612,9 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 		return nil, status.Error(
 			codes.NotFound, fmt.Sprintf("ValidateVolumeCapabilities failed for %s: volume not present in storage backend", req.VolumeId))
 	}
-	d.log.Printf("found existing volume %s (%+v)", existingVolume.Name, existingVolume)
+	d.log.WithFields(log.Fields{
+		"existingVolume": fmt.Sprintf("%+v", existingVolume),
+	}).Info("found existing volume")
 
 	supportedCapabilities := []*csi.VolumeCapability{
 		{AccessType: &csi.VolumeCapability_Mount{
@@ -653,7 +688,7 @@ func (d Driver) ListSnapshots(context.Context, *csi.ListSnapshotsRequest) (*csi.
 
 // Run the server.
 func (d Driver) Run() error {
-	d.log.Printf("Preparing to start %s server version %s", d.name, d.version)
+	d.log.Debug("Preparing to start server")
 
 	u, err := url.Parse(d.endpoint)
 	if err != nil {
@@ -678,12 +713,32 @@ func (d Driver) Run() error {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
 
-	d.srv = grpc.NewServer()
+	//type UnaryServerInterceptor func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err error)
+	errHandler := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		resp, err := handler(ctx, req)
+
+		handlerLog := d.log.WithFields(log.Fields{
+			"method": info.FullMethod,
+			"req":    fmt.Sprintf("%+v", req),
+			"resp":   fmt.Sprintf("%+v", resp),
+		})
+
+		handlerLog.Debug("method called")
+		if err != nil {
+			handlerLog.WithError(err).Error("method failed")
+		}
+
+		return resp, err
+	}
+
+	d.srv = grpc.NewServer(grpc.UnaryInterceptor(errHandler))
 	csi.RegisterIdentityServer(d.srv, d)
 	csi.RegisterControllerServer(d.srv, d)
 	csi.RegisterNodeServer(d.srv, d)
 
-	d.log.Printf("server started (%s)", addr)
+	d.log.WithFields(log.Fields{
+		"address": addr,
+	}).Info("server started")
 	return d.srv.Serve(listener)
 }
 

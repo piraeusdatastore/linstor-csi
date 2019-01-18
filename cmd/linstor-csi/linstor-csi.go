@@ -20,8 +20,9 @@ package main
 
 import (
 	"flag"
-	"log"
 	"os"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/LINBIT/linstor-csi/pkg/client"
 	"github.com/LINBIT/linstor-csi/pkg/driver"
@@ -33,32 +34,46 @@ func main() {
 		endpoint    = flag.String("endpoint", "unix:///var/lib/kubelet/plugins/io.drbd.linstor-csi/csi.sock", "CSI endpoint")
 		storagePool = flag.String("storage-pool", "", "Linstor Storage Pool for use during testing")
 		node        = flag.String("node", "", "Node ID to pass to node service")
+		debug       = flag.Bool("debug-logging", false, "Enable debut log output")
 	)
 	flag.Parse()
+
+	// TODO: Take log outputs and options from the command line.
+	logOut := os.Stderr
+	logFmt := &log.TextFormatter{}
 
 	// TODO: This is messy, need to sort out what needs what configuration.
 	driverCfg := driver.Config{
 		Endpoint:           *endpoint,
 		Node:               *node,
-		LogOut:             os.Stderr,
+		LogOut:             logOut,
 		DefaultControllers: *controllers,
 		DefaultStoragePool: *storagePool,
+		Debug:              *debug,
 	}
-	linstorClient := client.NewLinstor(driverCfg.LogOut, "csi-volume-data")
-	linstorClient.DefaultControllers = *controllers
-	linstorClient.DefaultStoragePool = *storagePool
+	linstorClient := client.NewLinstor(client.LinstorConfig{
+		LogOut: logOut,
+		LogFmt: logFmt,
+		Debug:  *debug,
+
+		// Mostly just for testing
+		DefaultControllers: *controllers,
+		DefaultStoragePool: *storagePool,
+	})
 	driverCfg.Storage = linstorClient
 	driverCfg.Assignments = linstorClient
 	driverCfg.Mount = linstorClient
 
-	drv, err := driver.NewDriver(driverCfg)
+	log.SetFormatter(logFmt)
+	log.SetOutput(logOut)
 
+	drv, err := driver.NewDriver(driverCfg)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatal(err)
 	}
 	defer drv.Stop()
 
 	if err := drv.Run(); err != nil {
-		log.Fatalln(err)
+		log.Fatal(err)
 	}
 }

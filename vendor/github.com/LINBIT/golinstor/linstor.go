@@ -18,12 +18,13 @@
 
 package linstor
 
+//go:generate ./linstor-common/genconsts.py golang apiconsts.go
+
 import (
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"strconv"
@@ -31,6 +32,7 @@ import (
 	"time"
 
 	"github.com/satori/go.uuid"
+	log "github.com/sirupsen/logrus"
 )
 
 // ResourceDeployment contains all the information needed to query and assign/deploy
@@ -39,7 +41,7 @@ type ResourceDeployment struct {
 	ResourceDeploymentConfig
 	autoPlaced    bool
 	autoPlaceArgs []string
-	log           *log.Logger
+	log           *log.Entry
 }
 
 // ResourceDeploymentConfig is a configuration object for ResourceDeployment.
@@ -54,6 +56,7 @@ type ResourceDeploymentConfig struct {
 	DRSites             []string
 	DRSiteKey           string
 	AutoPlace           uint64
+	DisklessOnRemaining bool
 	DoNotPlaceWithRegex string
 	SizeKiB             uint64
 	StoragePool         string
@@ -62,6 +65,7 @@ type ResourceDeploymentConfig struct {
 	Controllers         string
 	Annotations         map[string]string
 	LogOut              io.Writer
+	LogFmt              log.Formatter
 }
 
 // NewResourceDeployment creates a new ResourceDeployment object. This tolerates
@@ -73,6 +77,7 @@ type ResourceDeploymentConfig struct {
 // If there are duplicates within ClientList or NodeList, they will be removed.
 // If there are duplicates between ClientList and NodeList, duplicates in the ClientList will be removed.
 // If no AutoPlace Value is given AND there is no NodeList and no ClientList, it will default to 1.
+// If no DisklessOnRemaining is given, no diskless assignments on non replica nodes will be made.
 // If no DoNotPlaceWithRegex, ReplicasOnSame, or ReplicasOnDifferent are provided resource assignment will occur without them.
 // If no SizeKiB is provided, it will be given a size of 4096kb.
 // If no StoragePool is provided, the default storage pool will be used.
@@ -113,6 +118,10 @@ func NewResourceDeployment(c ResourceDeploymentConfig) ResourceDeployment {
 		r.DisklessStoragePool = "DfltDisklessStorPool"
 	}
 
+	if r.DisklessOnRemaining {
+		r.autoPlaceArgs = append(r.autoPlaceArgs, "--diskless-on-remaining")
+	}
+
 	if r.DoNotPlaceWithRegex != "" {
 		r.autoPlaceArgs = append(r.autoPlaceArgs, "--do-not-place-with-regex", r.DoNotPlaceWithRegex)
 	}
@@ -134,7 +143,18 @@ func NewResourceDeployment(c ResourceDeploymentConfig) ResourceDeployment {
 		r.DRSiteKey = "DR-site"
 	}
 
-	r.log = log.New(r.LogOut, "golinstor: ", log.Ldate|log.Ltime|log.Lshortfile)
+	if r.LogFmt != nil {
+		log.SetFormatter(r.LogFmt)
+	}
+	if r.LogOut == nil {
+		r.LogOut = ioutil.Discard
+	}
+	log.SetOutput(r.LogOut)
+
+	r.log = log.WithFields(log.Fields{
+		"package":      "golinstor",
+		"resourceName": r.Name,
+	})
 
 	return r
 }
@@ -308,7 +328,10 @@ func (r ResourceDeployment) prependOpts(args ...string) []string {
 }
 
 func (r ResourceDeployment) traceCombinedOutput(name string, args ...string) ([]byte, error) {
-	r.log.Printf("(%q): %s %s", r.Name, name, strings.Join(args, " "))
+	r.log.WithFields(log.Fields{
+		"command": name,
+		"args":    strings.Join(args, " "),
+	}).Info("running external command")
 	return exec.Command(name, args...).CombinedOutput()
 }
 
@@ -628,7 +651,7 @@ func (r ResourceDeployment) Delete() error {
 	return nil
 }
 
-// Exists checks to see if a resource is defined in DRBD Manage.
+// Exists checks to see if a resource is defined in LINSTOR.
 func (r ResourceDeployment) Exists() (bool, error) {
 	l, err := r.listResources()
 	if err != nil {

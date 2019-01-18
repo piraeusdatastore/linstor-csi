@@ -29,6 +29,7 @@ func TestDriver(t *testing.T) {
 		Endpoint: *endpoint,
 		Node:     *node,
 		LogOut:   logFile,
+		Debug:    true,
 	}
 
 	mockStorageBackend := &client.MockStorage{}
@@ -37,9 +38,13 @@ func TestDriver(t *testing.T) {
 	driverCfg.Mount = mockStorageBackend
 
 	if *controllers != "" {
-		realStorageBackend := client.NewLinstor(driverCfg.LogOut, "csi-test-annotations")
-		realStorageBackend.DefaultControllers = *controllers
-		realStorageBackend.DefaultStoragePool = *storagePool
+		realStorageBackend := client.NewLinstor(client.LinstorConfig{
+			LogOut: logFile,
+
+			Debug:              true,
+			DefaultControllers: *controllers,
+			DefaultStoragePool: *storagePool,
+		})
 		driverCfg.Storage = realStorageBackend
 		driverCfg.Assignments = realStorageBackend
 		if *mountForReal {
