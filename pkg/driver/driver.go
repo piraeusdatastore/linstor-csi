@@ -64,7 +64,7 @@ type Config struct {
 	Node               string
 	DefaultControllers string
 	DefaultStoragePool string
-	Debug bool
+	Debug              bool
 	LogOut             io.Writer
 	LogFmt             log.Formatter
 	Storage            volume.CreateDeleter
@@ -75,10 +75,6 @@ type Config struct {
 // NewDriver build up a driver.
 func NewDriver(cfg Config) (*Driver, error) {
 	d := Driver{endpoint: cfg.Endpoint}
-
-	if cfg.LogOut == nil {
-		cfg.LogOut = ioutil.Discard
-	}
 
 	d.version = Version
 	d.name = "io.drbd.linstor-csi"
