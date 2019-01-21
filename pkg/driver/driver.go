@@ -74,16 +74,15 @@ type Config struct {
 
 // NewDriver build up a driver.
 func NewDriver(cfg Config) (*Driver, error) {
-	d := Driver{endpoint: cfg.Endpoint}
-
-	d.version = Version
-	d.name = "io.drbd.linstor-csi"
-
-	d.nodeID = cfg.Node
-
-	d.storage = cfg.Storage
-	d.assignments = cfg.Assignments
-	d.mount = cfg.Mount
+	d := Driver{
+		endpoint:    cfg.Endpoint,
+		version:     Version,
+		name:        "io.drbd.linstor-csi",
+		nodeID:      cfg.Node,
+		storage:     cfg.Storage,
+		assignments: cfg.Assignments,
+		mount:       cfg.Mount,
+	}
 
 	if cfg.LogFmt != nil {
 		log.SetFormatter(cfg.LogFmt)
