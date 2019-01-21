@@ -538,12 +538,10 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 	}
 
 	// Don't even attempt to put it on nodes that aren't avaible.
-	ok, err := d.assignments.NodeAvailable(req.NodeId)
-	if err != nil {
+	if ok, err := d.assignments.NodeAvailable(req.NodeId); err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf(
 			"ControllerPublishVolume failed for %s: %v", req.VolumeId, err))
-	}
-	if !ok {
+	} else if !ok {
 		return nil, status.Error(codes.NotFound, fmt.Sprintf(
 			"ControllerPublishVolume failed for %s node %s is not present in storage backend",
 			req.VolumeId, req.NodeId))
