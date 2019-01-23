@@ -47,17 +47,17 @@ func main() {
 		Endpoint:           *endpoint,
 		Node:               *node,
 		LogOut:             logOut,
-		DefaultControllers: *controllers,
+		Controllers:        *controllers,
 		DefaultStoragePool: *storagePool,
 		Debug:              *debug,
 	}
 	linstorClient := client.NewLinstor(client.LinstorConfig{
-		LogOut: logOut,
-		LogFmt: logFmt,
-		Debug:  *debug,
+		LogOut:      logOut,
+		LogFmt:      logFmt,
+		Debug:       *debug,
+		Controllers: *controllers,
 
 		// Mostly just for testing
-		DefaultControllers: *controllers,
 		DefaultStoragePool: *storagePool,
 	})
 	driverCfg.Storage = linstorClient

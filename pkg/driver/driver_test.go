@@ -42,7 +42,7 @@ func TestDriver(t *testing.T) {
 			LogOut: logFile,
 
 			Debug:              true,
-			DefaultControllers: *controllers,
+			Controllers:        *controllers,
 			DefaultStoragePool: *storagePool,
 		})
 		driverCfg.Storage = realStorageBackend

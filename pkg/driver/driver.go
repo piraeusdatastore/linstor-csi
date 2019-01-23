@@ -52,7 +52,7 @@ type Driver struct {
 	storage            volume.CreateDeleter
 	assignments        volume.AttacherDettacher
 	mount              volume.Mount
-	defaultControllers string
+	controllers        string
 	defaultStoragePool string
 	version            string
 	name               string
@@ -62,7 +62,7 @@ type Driver struct {
 type Config struct {
 	Endpoint           string
 	Node               string
-	DefaultControllers string
+	Controllers        string
 	DefaultStoragePool string
 	Debug              bool
 	LogOut             io.Writer

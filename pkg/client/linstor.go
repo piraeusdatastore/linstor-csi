@@ -42,7 +42,6 @@ const (
 	StoragePoolKey         = "storagepool"
 	DisklessStoragePoolKey = "disklessstoragepool"
 	EncryptionKey          = "encryption"
-	ControllersKey         = "controllers"
 	BlockSizeKey           = "blocksize"
 	ForceKey               = "force"
 	FSKey                  = "filesystem"
@@ -53,7 +52,7 @@ const (
 )
 
 type Linstor struct {
-	DefaultControllers string
+	Controllers        string
 	DefaultStoragePool string
 	LogOut             io.Writer
 	log                *log.Entry
@@ -62,12 +61,12 @@ type Linstor struct {
 }
 
 type LinstorConfig struct {
-	LogOut io.Writer
-	LogFmt log.Formatter
-	Debug  bool
+	LogOut      io.Writer
+	LogFmt      log.Formatter
+	Debug       bool
+	Controllers string
 
 	// Mostly just for testing
-	DefaultControllers string
 	DefaultStoragePool string
 }
 
@@ -78,7 +77,7 @@ func NewLinstor(cfg LinstorConfig) *Linstor {
 	// Used to namespace csi volumes and meet linstor naming requirements.
 	l.prefix = "csi-"
 
-	l.DefaultControllers = cfg.DefaultControllers
+	l.Controllers = cfg.Controllers
 	l.DefaultStoragePool = cfg.DefaultStoragePool
 	l.LogOut = cfg.LogOut
 
@@ -98,7 +97,7 @@ func NewLinstor(cfg LinstorConfig) *Linstor {
 		"linstorCSIComponent": "client",
 		"annotationsKey":      l.annotationsKey,
 		"resourcePrefix":      l.prefix,
-		"defaultControllers":  l.DefaultControllers,
+		"controllers":         l.Controllers,
 		"defaultStoragePool":  l.DefaultStoragePool,
 	})
 
@@ -140,7 +139,7 @@ func (s *Linstor) resDeploymentConfigFromVolumeInfo(vol *volume.Info) (*lc.Resou
 
 	cfg.LogOut = s.LogOut
 
-	cfg.Controllers = s.DefaultControllers
+	cfg.Controllers = s.Controllers
 	cfg.StoragePool = s.DefaultStoragePool
 
 	// Use ID's with prefix here to conform to linstor naming rules.
@@ -172,8 +171,6 @@ func (s *Linstor) resDeploymentConfigFromVolumeInfo(vol *volume.Info) (*lc.Resou
 			cfg.AutoPlace = autoplace
 		case DoNotPlaceWithRegexKey:
 			cfg.DoNotPlaceWithRegex = v
-		case ControllersKey:
-			cfg.Controllers = v
 		case EncryptionKey:
 			if strings.ToLower(v) == "yes" {
 				cfg.Encryption = true
@@ -208,7 +205,7 @@ func (s *Linstor) GetByName(name string) (*volume.Info, error) {
 
 	r := lc.NewResourceDeployment(lc.ResourceDeploymentConfig{
 		Name:        "CSIGetByName",
-		Controllers: s.DefaultControllers,
+		Controllers: s.Controllers,
 		LogOut:      s.LogOut})
 	list, err := r.ListResourceDefinitions()
 	if err != nil {
@@ -237,7 +234,7 @@ func (s *Linstor) GetByID(ID string) (*volume.Info, error) {
 
 	r := lc.NewResourceDeployment(lc.ResourceDeploymentConfig{
 		Name:        "CSIGetByID",
-		Controllers: s.DefaultControllers,
+		Controllers: s.Controllers,
 		LogOut:      s.LogOut})
 	list, err := r.ListResourceDefinitions()
 	if err != nil {
