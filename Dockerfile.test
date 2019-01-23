@@ -1,5 +1,5 @@
 FROM drbd.io/linstor-client
-RUN apt-get update -y && apt-get upgrade -y && apt-get install curl gcc xfsprogs -y
+RUN apt-get update -y && apt-get dist-upgrade -y && apt-get install curl gcc xfsprogs -y
 RUN curl -O https://storage.googleapis.com/golang/go1.11.2.linux-amd64.tar.gz
 RUN tar -C /usr/local/ -xvf go1.11.2.linux-amd64.tar.gz
 RUN mkdir -p /usr/local/go/src/github.com/LINBIT/linstor-csi/
