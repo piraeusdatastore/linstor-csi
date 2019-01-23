@@ -709,15 +709,18 @@ func (d Driver) Run() error {
 	errHandler := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		resp, err := handler(ctx, req)
 
-		handlerLog := d.log.WithFields(log.Fields{
-			"method": info.FullMethod,
-			"req":    fmt.Sprintf("%+v", req),
-			"resp":   fmt.Sprintf("%+v", resp),
-		})
-
-		handlerLog.Debug("method called")
-		if err != nil {
-			handlerLog.WithError(err).Error("method failed")
+		if err == nil {
+			d.log.WithFields(log.Fields{
+				"method": info.FullMethod,
+				"req":    fmt.Sprintf("%+v", req),
+				"resp":   fmt.Sprintf("%+v", resp),
+			}).Debug("method called")
+		} else {
+			d.log.WithFields(log.Fields{
+				"method": info.FullMethod,
+				"req":    fmt.Sprintf("%+v", req),
+				"resp":   fmt.Sprintf("%+v", resp),
+			}).WithError(err).Error("method failed")
 		}
 
 		return resp, err
