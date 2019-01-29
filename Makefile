@@ -24,7 +24,10 @@ VERSION=$(shell git describe --tags --always --dirty)
 LATESTTAG=$(shell git describe --abbrev=0 --tags | tr -d 'v')
 LDFLAGS = -X github.com/LINBIT/linstor-csi/pkg/driver.Version=${VERSION}
 DOCKERREGISTRY = drbd.io
+DOCKERREGISTRY_PUBLIC = quay.io
 DOCKERREGPATH = $(DOCKERREGISTRY)/$(PROJECT_NAME)
+DOCKERREGPATH_PUBLIC = $(DOCKERREGISTRY_PUBLIC)/linbit/$(PROJECT_NAME)
+
 
 RM = rm
 RM_FLAGS = -vf
@@ -48,9 +51,10 @@ staticrelease: get
 	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0  $(GO) build -a -ldflags '$(LDFLAGS) -extldflags "-static"' -o $(PROJECT_NAME)-$(OS)-$(ARCH) cmd/$(PROJECT_NAME)/$(PROJECT_NAME).go
 dockerimage: distclean
 	docker build -t $(DOCKERREGPATH) .
+	docker tag $(DOCKERREGPATH) $(DOCKERREGPATH_PUBLIC)
 
 .PHONY: dockerpath
-	@echo $(DOCKERREGPATH)
+	@echo $(DOCKERREGPATH) $(DOCKERREGPATH_PUBLIC)
 
 clean:
 	$(RM) $(RM_FLAGS) $(PROJECT_NAME)-$(OS)-$(ARCH)
