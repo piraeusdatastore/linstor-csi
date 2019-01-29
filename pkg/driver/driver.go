@@ -33,6 +33,7 @@ import (
 
 	"github.com/LINBIT/linstor-csi/pkg/volume"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/haySwim/data"
 	"github.com/pborman/uuid"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -373,20 +374,13 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 		return &csi.CreateVolumeResponse{}, missingAttr("ValidateVolumeCapabilities", req.Name, "VolumeCapabilities")
 	}
 
-	// TODO: This needs to be a function.
-	size := req.CapacityRange.GetRequiredBytes()
-	linstorMinimumVolumeSizeBytes := int64(4096)
-	if size < linstorMinimumVolumeSizeBytes {
-		size = linstorMinimumVolumeSizeBytes
-	}
-	limit := req.CapacityRange.GetLimitBytes()
-	unlimited := limit == int64(0)
-	if size > limit && !unlimited {
+	requiredKiB, err := d.storage.AllocationSizeKiB(req.CapacityRange.GetRequiredBytes(), req.CapacityRange.GetLimitBytes())
+	if err != nil {
 		return &csi.CreateVolumeResponse{}, status.Error(
-			codes.Internal, fmt.Sprintf(
-				"CreateVolume failed for %s: wanted %d bytes of storage, but size is limited to %d bytes",
-				req.Name, size, limit))
+			codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
 	}
+
+	volumeSize := data.NewKibiByte(data.KiB * data.ByteSize(requiredKiB))
 
 	createdByMe := d.name
 	// Handle case were a volume of the same name is already present.
@@ -410,24 +404,23 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 					req.Name, createdByMe))
 		}
 
-		if existingVolume.SizeBytes != size {
+		if existingVolume.SizeBytes != int64(volumeSize.InclusiveBytes()) {
 			return &csi.CreateVolumeResponse{}, status.Error(
 				codes.AlreadyExists, fmt.Sprintf(
-					"CreateVolume failed for %s: volume already present, created by %s, but size differs (existing: %d, wanted:%d",
-					req.Name, createdByMe, existingVolume.SizeBytes, size))
+					"CreateVolume failed for %s: volume already present, created by %s, but size differs (existing: %d, wanted: %d",
+					req.Name, createdByMe, existingVolume.SizeBytes, int64(volumeSize.InclusiveBytes())))
 		}
 
 		d.log.WithFields(log.Fields{
 			"requestedVolumeName": req.Name,
-			"requestedSize":       size,
+			"volumeSize":          volumeSize,
 			"expectedCreatedBy":   createdByMe,
 			"existingVolume":      fmt.Sprintf("%+v", existingVolume),
 		}).Info("volume already present, but matches request")
 
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
-				VolumeId: existingVolume.ID,
-				// TODO: Make sure this doesn't exceede LimitBytes.
+				VolumeId:      existingVolume.ID,
 				CapacityBytes: existingVolume.SizeBytes,
 			}}, nil
 	}
@@ -435,7 +428,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 	// Spec says volume ID and name must differ.
 	volumeID := uuid.New()
 	vol := &volume.Info{
-		Name: req.Name, ID: volumeID, SizeBytes: size, CreatedBy: createdByMe,
+		Name: req.Name, ID: volumeID, SizeBytes: int64(volumeSize.InclusiveBytes()), CreatedBy: createdByMe,
 		CreationTime: time.Now(),
 		Parameters:   make(map[string]string)}
 	for k, v := range req.Parameters {
@@ -443,6 +436,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 	}
 	d.log.WithFields(log.Fields{
 		"newVolume": fmt.Sprintf("%+v", vol),
+		"size":      volumeSize,
 	}).Debug("creating new volume")
 
 	err = d.storage.Create(vol)
@@ -453,9 +447,8 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			VolumeId: volumeID,
-			// TODO: Make sure this doesn't exceede LimitBytes.
-			CapacityBytes: size,
+			VolumeId:      volumeID,
+			CapacityBytes: int64(volumeSize.InclusiveBytes()),
 		}}, nil
 }
 

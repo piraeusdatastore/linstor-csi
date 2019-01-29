@@ -28,6 +28,7 @@ import (
 
 	lc "github.com/LINBIT/golinstor"
 	"github.com/LINBIT/linstor-csi/pkg/volume"
+	"github.com/haySwim/data"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -109,6 +110,35 @@ func NewLinstor(cfg LinstorConfig) *Linstor {
 
 func (s *Linstor) ListAll(parameters map[string]string) ([]*volume.Info, error) {
 	return nil, nil
+}
+
+// AllocationSizeKiB returns LINSTOR's smallest possible number of KiB that can
+// satisfy the requiredBytes.
+func (s *Linstor) AllocationSizeKiB(requiredBytes, limitBytes int64) (int64, error) {
+
+	requestedSize := data.ByteSize(requiredBytes)
+	minVolumeSize := data.ByteSize(4096)
+	maxVolumeSize := data.ByteSize(limitBytes)
+	unlimited := maxVolumeSize == 0
+	if minVolumeSize > maxVolumeSize && !unlimited {
+		return 0, fmt.Errorf("LINSTOR's minimum volume size exceeds the maximum size limit of the requested volume")
+	}
+	if requestedSize < minVolumeSize {
+		requestedSize = minVolumeSize
+	}
+
+	// make sure there are enough KiBs to fit the required number of bytes,
+	// e.g. 1025 bytes require 2 KiB worth of space to be allocated.
+	volumeSize := data.NewKibiByte(data.NewKibiByte(requestedSize).InclusiveBytes())
+
+	limit := data.NewByte(maxVolumeSize)
+
+	if volumeSize.InclusiveBytes() > limit.InclusiveBytes() && !unlimited {
+		return int64(volumeSize.Value()),
+			fmt.Errorf("got request for %d Bytes of storage (needed to allocate %s), but size is limited to %s",
+				requiredBytes, volumeSize, limit)
+	}
+	return int64(volumeSize.Value()), nil
 }
 
 func (s *Linstor) resDefToVolume(resDef lc.ResDef) (*volume.Info, error) {

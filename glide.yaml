@@ -17,6 +17,8 @@ import:
 - package: github.com/Sirupsen/logrus
   repo: git@github.com:/sirupsen/logrus
   vcs: git
+- package: github.com/haySwim/data
+  version: v0.2.0
 testImport:
 - package: github.com/kubernetes-csi/csi-test
   version: ~1.0.0-rc2

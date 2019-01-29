@@ -58,6 +58,8 @@ type Querier interface {
 	GetByName(name string) (*Info, error)
 	//GetByID should return nil when volume is not found.
 	GetByID(ID string) (*Info, error)
+	// AllocationSizeKiB returns the number of KiB required to provision required bytes.
+	AllocationSizeKiB(requiredBytes, limitBytes int64) (int64, error)
 }
 
 type Mount interface {

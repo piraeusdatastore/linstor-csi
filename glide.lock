@@ -1,5 +1,5 @@
-hash: b257aa94f0bfc239f7744a042357edab742a5c281c1c25964be44ebf8c52d26b
-updated: 2019-01-17T16:13:14.845953836-08:00
+hash: a44f8f2196d869eadb9d97da3d34bb43ba7470034a87b47fddcd08eb5a2dd1c7
+updated: 2019-01-30T09:17:46.157923616-08:00
 imports:
 - name: github.com/container-storage-interface/spec
   version: ed0bb0e1557548aa028307f48728767cfe8f6345
@@ -15,6 +15,8 @@ imports:
   - ptypes/duration
   - ptypes/timestamp
   - ptypes/wrappers
+- name: github.com/haySwim/data
+  version: 1407f3b2612ce6d0a60da2b620fadeaa168a38c2
 - name: github.com/konsorten/go-windows-terminal-sequences
   version: 5c8c8bd35d3832f5d134ae1e1e375b69a4d25242
 - name: github.com/LINBIT/golinstor
@@ -23,12 +25,12 @@ imports:
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/satori/go.uuid
   version: f58768cc1a7a7e77a3bd49e98cdd21419399b6a3
+- name: github.com/sirupsen/logrus
+  version: e1e72e9de974bd926e5c56f83753fba2df402ce5
 - name: github.com/Sirupsen/logrus
   version: 78fb3852d92683dc28da6cc3d5f965100677c27d
   repo: git@github.com:/sirupsen/logrus
   vcs: git
-- name: github.com/sirupsen/logrus
-  version: e1e72e9de974bd926e5c56f83753fba2df402ce5
 - name: golang.org/x/crypto
   version: de0752318171da717af4ce24d0a2e8626afaeb11
   subpackages:

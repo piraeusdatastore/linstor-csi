@@ -31,6 +31,10 @@ func (s *MockStorage) ListAll(parameters map[string]string) ([]*volume.Info, err
 	return s.createdVolumes, nil
 }
 
+func (s *MockStorage) AllocationSizeKiB(requiredBytes, limitBytes int64) (int64, error) {
+	return requiredBytes / 1024, nil
+}
+
 func (s *MockStorage) GetByName(name string) (*volume.Info, error) {
 	for _, vol := range s.createdVolumes {
 		if vol.Name == name {
