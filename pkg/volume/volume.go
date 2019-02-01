@@ -62,7 +62,7 @@ type Querier interface {
 	AllocationSizeKiB(requiredBytes, limitBytes int64) (int64, error)
 }
 
-type Mount interface {
+type Mounter interface {
 	Mount(vol *Info, source, target, fsType string, options []string) error
 	Unmount(target string) error
 }

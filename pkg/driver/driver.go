@@ -46,23 +46,17 @@ var Version = "UNKNOWN"
 
 // Driver fullfils CSI controller, node, and indentity server interfaces.
 type Driver struct {
-	endpoint           string
-	nodeID             string
-	srv                *grpc.Server
-	log                *log.Entry
-	storage            volume.CreateDeleter
-	assignments        volume.AttacherDettacher
-	mount              volume.Mount
-	controllers        string
-	defaultStoragePool string
-	version            string
-	name               string
+	Config
+	srv     *grpc.Server
+	log     *log.Entry
+	version string
+	name    string
 }
 
 // Config provides sensible defaults for creating Drivers
 type Config struct {
 	Endpoint           string
-	Node               string
+	NodeID             string
 	Controllers        string
 	DefaultStoragePool string
 	Debug              bool
@@ -70,11 +64,12 @@ type Config struct {
 	LogFmt             log.Formatter
 	Storage            volume.CreateDeleter
 	Assignments        volume.AttacherDettacher
-	Mount              volume.Mount
+	Mounter            volume.Mounter
 }
 
 // NewDriver build up a driver.
 func NewDriver(cfg Config) (*Driver, error) {
+
 	if cfg.LogFmt != nil {
 		log.SetFormatter(cfg.LogFmt)
 	}
@@ -88,19 +83,15 @@ func NewDriver(cfg Config) (*Driver, error) {
 	log.SetOutput(cfg.LogOut)
 
 	d := Driver{
-		endpoint:    cfg.Endpoint,
-		version:     Version,
-		name:        "io.drbd.linstor-csi",
-		nodeID:      cfg.Node,
-		storage:     cfg.Storage,
-		assignments: cfg.Assignments,
-		mount:       cfg.Mount,
+		Config:  cfg,
+		name:    "io.drbd.linstor-csi",
+		version: Version,
 	}
 	d.log = log.WithFields(log.Fields{
 		"linstorCSIComponent": "driver",
 		"provisioner":         d.name,
 		"version":             d.version,
-		"nodeID":              d.nodeID,
+		"nodeID":              d.NodeID,
 	})
 
 	return &d, nil
@@ -177,17 +168,17 @@ func (d Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeReq
 		fsType = mnt.FsType
 	}
 
-	existingVolume, err := d.storage.GetByID(req.GetVolumeId())
+	existingVolume, err := d.Storage.GetByID(req.GetVolumeId())
 	if err != nil {
 		return nil, err
 	}
 
-	assignedTo, err := d.assignments.GetAssignmentOnNode(existingVolume, d.nodeID)
+	assignedTo, err := d.Assignments.GetAssignmentOnNode(existingVolume, d.NodeID)
 	if err != nil {
 		return nil, err
 	}
 
-	err = d.mount.Mount(existingVolume, assignedTo.Path, req.StagingTargetPath, fsType, mntOpts)
+	err = d.Mounter.Mount(existingVolume, assignedTo.Path, req.StagingTargetPath, fsType, mntOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +215,7 @@ func (d Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolum
 		return &csi.NodeUnstageVolumeResponse{}, missingAttr("NodeUnstageVolume", req.VolumeId, "StagingTargetPath")
 	}
 
-	err := d.mount.Unmount(req.StagingTargetPath)
+	err := d.Mounter.Unmount(req.StagingTargetPath)
 	if err != nil {
 		return nil, err
 	}
@@ -279,12 +270,12 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		fsType = mnt.FsType
 	}
 
-	existingVolume, err := d.storage.GetByID(req.GetVolumeId())
+	existingVolume, err := d.Storage.GetByID(req.GetVolumeId())
 	if err != nil {
 		return nil, err
 	}
 
-	err = d.mount.Mount(existingVolume, req.StagingTargetPath, req.TargetPath, fsType, mntOpts)
+	err = d.Mounter.Mount(existingVolume, req.StagingTargetPath, req.TargetPath, fsType, mntOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +306,7 @@ func (d Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishV
 		return nil, missingAttr("NodeUnpublishVolume", req.VolumeId, "TargetPath")
 	}
 
-	err := d.mount.Unmount(req.TargetPath)
+	err := d.Mounter.Unmount(req.TargetPath)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +341,7 @@ func (d Driver) NodeGetCapabilities(context.Context, *csi.NodeGetCapabilitiesReq
 // ControllerPublishVolume.
 func (d Driver) NodeGetInfo(context.Context, *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	return &csi.NodeGetInfoResponse{
-		NodeId: d.nodeID,
+		NodeId: d.NodeID,
 		// TODO: I think we're limited by the number of linux block devices, which
 		// is a massive number, but I'm not sure if something up the stack limits us.
 		MaxVolumesPerNode: math.MaxInt64,
@@ -374,7 +365,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 		return &csi.CreateVolumeResponse{}, missingAttr("ValidateVolumeCapabilities", req.Name, "VolumeCapabilities")
 	}
 
-	requiredKiB, err := d.storage.AllocationSizeKiB(req.CapacityRange.GetRequiredBytes(), req.CapacityRange.GetLimitBytes())
+	requiredKiB, err := d.Storage.AllocationSizeKiB(req.CapacityRange.GetRequiredBytes(), req.CapacityRange.GetLimitBytes())
 	if err != nil {
 		return &csi.CreateVolumeResponse{}, status.Error(
 			codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
@@ -384,7 +375,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 
 	createdByMe := d.name
 	// Handle case were a volume of the same name is already present.
-	existingVolume, err := d.storage.GetByName(req.Name)
+	existingVolume, err := d.Storage.GetByName(req.Name)
 	if err != nil {
 		return &csi.CreateVolumeResponse{}, status.Error(
 			codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
@@ -439,7 +430,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 		"size":      volumeSize,
 	}).Debug("creating new volume")
 
-	err = d.storage.Create(vol)
+	err = d.Storage.Create(vol)
 	if err != nil {
 		return &csi.CreateVolumeResponse{}, status.Error(
 			codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
@@ -461,7 +452,7 @@ func (d Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) 
 		return nil, missingAttr("DeleteVolume", req.VolumeId, "VolumeId")
 	}
 
-	existingVolume, err := d.storage.GetByID(req.GetVolumeId())
+	existingVolume, err := d.Storage.GetByID(req.GetVolumeId())
 	if err != nil {
 		return nil, err
 	}
@@ -473,7 +464,7 @@ func (d Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) 
 		"existingVolume": fmt.Sprintf("%+v", existingVolume),
 	}).Info("found existing volume")
 
-	if err := d.storage.Delete(existingVolume); err != nil {
+	if err := d.Storage.Delete(existingVolume); err != nil {
 		return nil, err
 	}
 	return &csi.DeleteVolumeResponse{}, nil
@@ -506,7 +497,7 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 	}
 
 	// Don't try to assign volumes that don't exist.
-	existingVolume, err := d.storage.GetByID(req.VolumeId)
+	existingVolume, err := d.Storage.GetByID(req.VolumeId)
 	if err != nil {
 		return nil, status.Error(
 			codes.Internal, fmt.Sprintf(
@@ -531,7 +522,7 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 	}
 
 	// Don't even attempt to put it on nodes that aren't avaible.
-	if ok, err := d.assignments.NodeAvailable(req.NodeId); err != nil {
+	if ok, err := d.Assignments.NodeAvailable(req.NodeId); err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf(
 			"ControllerPublishVolume failed for %s: %v", req.VolumeId, err))
 	} else if !ok {
@@ -540,7 +531,7 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 			req.VolumeId, req.NodeId))
 	}
 
-	err = d.assignments.Attach(existingVolume, req.NodeId)
+	err = d.Assignments.Attach(existingVolume, req.NodeId)
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf(
 			"ControllerPublishVolume failed for %s: %v", req.VolumeId, err))
@@ -588,7 +579,7 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 		return nil, missingAttr("ValidateVolumeCapabilities", req.VolumeId, "VolumeCapabilities")
 	}
 
-	existingVolume, err := d.storage.GetByID(req.VolumeId)
+	existingVolume, err := d.Storage.GetByID(req.VolumeId)
 	if err != nil {
 		return nil, status.Error(
 			codes.Internal, fmt.Sprintf("ValidateVolumeCapabilities failed for %s: %v", req.VolumeId, err))
@@ -675,7 +666,7 @@ func (d Driver) ListSnapshots(context.Context, *csi.ListSnapshotsRequest) (*csi.
 func (d Driver) Run() error {
 	d.log.Debug("Preparing to start server")
 
-	u, err := url.Parse(d.endpoint)
+	u, err := url.Parse(d.Endpoint)
 	if err != nil {
 		return fmt.Errorf("unable to parse address: %q", err)
 	}

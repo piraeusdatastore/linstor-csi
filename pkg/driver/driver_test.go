@@ -10,13 +10,13 @@ import (
 	"github.com/kubernetes-csi/csi-test/pkg/sanity"
 )
 
-var controllers = flag.String("controllers", "",
-	"Run suite against a real LINSTOR cluster with the specificed controller endpoints")
-var node = flag.String("node", "fake.node",
-	"Node ID to pass to tests, if you're running against a real LINSTOR cluster this needs to match the name of one of the real satellites")
-var storagePool = flag.String("storage-pool", "", "Linstor Storage Pool for use during testing")
-var endpoint = flag.String("Endpoint", "unix:///tmp/csi.sock", "Unix socket for CSI communication")
-var mountForReal = flag.Bool("mount-for-real", false, "Actually try to mount volumes, needs to be ran on on a kubelet (indicted by the node flag) with it's /dev dir bind mounted into the container")
+var (
+	controllers  = flag.String("controllers", "", "Run suite against a real LINSTOR cluster with the specificed controller endpoints")
+	node         = flag.String("node", "fake.node", "Node ID to pass to tests, if you're running against a real LINSTOR cluster this needs to match the name of one of the real satellites")
+	storagePool  = flag.String("storage-pool", "", "Linstor Storage Pool for use during testing")
+	endpoint     = flag.String("Endpoint", "unix:///tmp/csi.sock", "Unix socket for CSI communication")
+	mountForReal = flag.Bool("mount-for-real", false, "Actually try to mount volumes, needs to be ran on on a kubelet (indicted by the node flag) with it's /dev dir bind mounted into the container")
+)
 
 func TestDriver(t *testing.T) {
 
@@ -27,7 +27,7 @@ func TestDriver(t *testing.T) {
 
 	driverCfg := Config{
 		Endpoint: *endpoint,
-		Node:     *node,
+		NodeID:   *node,
 		LogOut:   logFile,
 		Debug:    true,
 	}
@@ -35,7 +35,7 @@ func TestDriver(t *testing.T) {
 	mockStorageBackend := &client.MockStorage{}
 	driverCfg.Storage = mockStorageBackend
 	driverCfg.Assignments = mockStorageBackend
-	driverCfg.Mount = mockStorageBackend
+	driverCfg.Mounter = mockStorageBackend
 
 	if *controllers != "" {
 		realStorageBackend := client.NewLinstor(client.LinstorConfig{
@@ -48,7 +48,7 @@ func TestDriver(t *testing.T) {
 		driverCfg.Storage = realStorageBackend
 		driverCfg.Assignments = realStorageBackend
 		if *mountForReal {
-			driverCfg.Mount = realStorageBackend
+			driverCfg.Mounter = realStorageBackend
 		}
 	}
 

@@ -42,15 +42,6 @@ func main() {
 	logOut := os.Stderr
 	logFmt := &log.TextFormatter{}
 
-	// TODO: This is messy, need to sort out what needs what configuration.
-	driverCfg := driver.Config{
-		Endpoint:           *endpoint,
-		Node:               *node,
-		LogOut:             logOut,
-		Controllers:        *controllers,
-		DefaultStoragePool: *storagePool,
-		Debug:              *debug,
-	}
 	linstorClient := client.NewLinstor(client.LinstorConfig{
 		LogOut:      logOut,
 		LogFmt:      logFmt,
@@ -60,14 +51,20 @@ func main() {
 		// Mostly just for testing
 		DefaultStoragePool: *storagePool,
 	})
-	driverCfg.Storage = linstorClient
-	driverCfg.Assignments = linstorClient
-	driverCfg.Mount = linstorClient
 
+	// Setup loggin incase there are errors external to the driver/client.
 	log.SetFormatter(logFmt)
 	log.SetOutput(logOut)
 
-	drv, err := driver.NewDriver(driverCfg)
+	drv, err := driver.NewDriver(driver.Config{
+		Endpoint:    *endpoint,
+		NodeID:      *node,
+		LogOut:      logOut,
+		Debug:       *debug,
+		Storage:     linstorClient,
+		Assignments: linstorClient,
+		Mounter:     linstorClient,
+	})
 	if err != nil {
 		log.Fatal(err)
 	}

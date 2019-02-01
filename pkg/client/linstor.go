@@ -53,12 +53,10 @@ const (
 )
 
 type Linstor struct {
-	Controllers        string
-	DefaultStoragePool string
-	LogOut             io.Writer
-	log                *log.Entry
-	prefix             string
-	annotationsKey     string
+	LinstorConfig
+	log            *log.Entry
+	prefix         string
+	annotationsKey string
 }
 
 type LinstorConfig struct {
@@ -66,20 +64,17 @@ type LinstorConfig struct {
 	LogFmt      log.Formatter
 	Debug       bool
 	Controllers string
-
 	// Mostly just for testing
 	DefaultStoragePool string
 }
 
 func NewLinstor(cfg LinstorConfig) *Linstor {
-	l := &Linstor{}
+	l := &Linstor{LinstorConfig: cfg}
 
 	l.annotationsKey = "csi-volume-annotations"
 	// Used to namespace csi volumes and meet linstor naming requirements.
 	l.prefix = "csi-"
 
-	l.Controllers = cfg.Controllers
-	l.DefaultStoragePool = cfg.DefaultStoragePool
 	l.LogOut = cfg.LogOut
 
 	if cfg.LogFmt != nil {
