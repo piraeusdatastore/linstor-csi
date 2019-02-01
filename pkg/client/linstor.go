@@ -197,7 +197,7 @@ func (s *Linstor) resDeploymentConfigFromVolumeInfo(vol *volume.Info) (*lc.Resou
 		case DoNotPlaceWithRegexKey:
 			cfg.DoNotPlaceWithRegex = v
 		case EncryptionKey:
-			if strings.ToLower(v) == "yes" {
+			if strings.ToLower(v) == "true" {
 				cfg.Encryption = true
 			}
 		}
