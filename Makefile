@@ -68,7 +68,7 @@ $(PROJECT_NAME)-$(LATESTTAG).tar.gz: staticrelease
 	dh_clean || true
 	mv $(PROJECT_NAME)-$(OS)-$(ARCH) $(PROJECT_NAME)
 	tar --transform="s,^,$(PROJECT_NAME)-$(LATESTTAG)/," --owner=0 --group=0 -czf $@ \
-		linstor-external-provisioner Makefile Dockerfile debian linstor-external-provisioner.spec
+		$(PROJECT_NAME) Makefile Dockerfile
 
 # consistency with the other linbit projects
 debrelease: $(PROJECT_NAME)-$(LATESTTAG).tar.gz
