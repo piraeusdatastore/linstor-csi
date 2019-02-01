@@ -64,8 +64,6 @@ type LinstorConfig struct {
 	LogFmt      log.Formatter
 	Debug       bool
 	Controllers string
-	// Mostly just for testing
-	DefaultStoragePool string
 }
 
 func NewLinstor(cfg LinstorConfig) *Linstor {
@@ -94,7 +92,6 @@ func NewLinstor(cfg LinstorConfig) *Linstor {
 		"annotationsKey":      l.annotationsKey,
 		"resourcePrefix":      l.prefix,
 		"controllers":         l.Controllers,
-		"defaultStoragePool":  l.DefaultStoragePool,
 	})
 
 	l.log.WithFields(log.Fields{
@@ -165,7 +162,6 @@ func (s *Linstor) resDeploymentConfigFromVolumeInfo(vol *volume.Info) (*lc.Resou
 	cfg.LogOut = s.LogOut
 
 	cfg.Controllers = s.Controllers
-	cfg.StoragePool = s.DefaultStoragePool
 
 	// Use ID's with prefix here to conform to linstor naming rules.
 	cfg.Name = s.prefix + vol.ID

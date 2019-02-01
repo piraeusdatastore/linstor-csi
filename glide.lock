@@ -1,5 +1,5 @@
-hash: a44f8f2196d869eadb9d97da3d34bb43ba7470034a87b47fddcd08eb5a2dd1c7
-updated: 2019-01-30T09:17:46.157923616-08:00
+hash: 1553544426e9d93f39d3b292e3ae51f748949073f8671e8c88f767d5eafd996f
+updated: 2019-02-01T13:37:09.103333717-08:00
 imports:
 - name: github.com/container-storage-interface/spec
   version: ed0bb0e1557548aa028307f48728767cfe8f6345
@@ -107,6 +107,10 @@ imports:
   - status
   - tap
 testImports:
+- name: github.com/haySwim/csi-test
+  version: 7bb26eb266767ee20972e6494697910f980e87bb
+  subpackages:
+  - pkg/sanity
 - name: github.com/hpcloud/tail
   version: a1dbeea552b7c8df4b542c66073e393de198a800
   subpackages:
@@ -117,7 +121,6 @@ testImports:
 - name: github.com/kubernetes-csi/csi-test
   version: 8cb0e4a9103d3e36086dd8d39977e7486be277fd
   subpackages:
-  - pkg/sanity
   - utils
 - name: github.com/onsi/ginkgo
   version: 2e1be8f7d90e9d3e3e58b0ce470f2f14d075406f

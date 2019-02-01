@@ -20,7 +20,7 @@ import:
 - package: github.com/haySwim/data
   version: v0.2.0
 testImport:
-- package: github.com/kubernetes-csi/csi-test
-  version: ~1.0.0-rc2
+- package: github.com/haySwim/csi-test
+  version: master
   subpackages:
   - pkg/sanity

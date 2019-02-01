@@ -32,7 +32,6 @@ func main() {
 	var (
 		controllers = flag.String("controllers", "", "Controller endpoints for LINSTOR")
 		endpoint    = flag.String("endpoint", "unix:///var/lib/kubelet/plugins/io.drbd.linstor-csi/csi.sock", "CSI endpoint")
-		storagePool = flag.String("storage-pool", "", "Linstor Storage Pool for use during testing")
 		node        = flag.String("node", "", "Node ID to pass to node service")
 		debug       = flag.Bool("debug-logging", false, "Enable debut log output")
 	)
@@ -47,9 +46,6 @@ func main() {
 		LogFmt:      logFmt,
 		Debug:       *debug,
 		Controllers: *controllers,
-
-		// Mostly just for testing
-		DefaultStoragePool: *storagePool,
 	})
 
 	// Setup loggin incase there are errors external to the driver/client.

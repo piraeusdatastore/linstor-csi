@@ -7,13 +7,13 @@ import (
 	"testing"
 
 	"github.com/LINBIT/linstor-csi/pkg/client"
-	"github.com/kubernetes-csi/csi-test/pkg/sanity"
+	"github.com/haySwim/csi-test/pkg/sanity"
 )
 
 var (
 	controllers  = flag.String("controllers", "", "Run suite against a real LINSTOR cluster with the specificed controller endpoints")
 	node         = flag.String("node", "fake.node", "Node ID to pass to tests, if you're running against a real LINSTOR cluster this needs to match the name of one of the real satellites")
-	storagePool  = flag.String("storage-pool", "", "Linstor Storage Pool for use during testing")
+	paramsFile   = flag.String("parameter-file", "", "File containing paramemers to pass to storage backend during testsing")
 	endpoint     = flag.String("Endpoint", "unix:///tmp/csi.sock", "Unix socket for CSI communication")
 	mountForReal = flag.Bool("mount-for-real", false, "Actually try to mount volumes, needs to be ran on on a kubelet (indicted by the node flag) with it's /dev dir bind mounted into the container")
 )
@@ -41,9 +41,8 @@ func TestDriver(t *testing.T) {
 		realStorageBackend := client.NewLinstor(client.LinstorConfig{
 			LogOut: logFile,
 
-			Debug:              true,
-			Controllers:        *controllers,
-			DefaultStoragePool: *storagePool,
+			Debug:       true,
+			Controllers: *controllers,
 		})
 		driverCfg.Storage = realStorageBackend
 		driverCfg.Assignments = realStorageBackend
@@ -73,14 +72,10 @@ func TestDriver(t *testing.T) {
 	defer os.RemoveAll(mntStageDir)
 
 	cfg := &sanity.Config{
-		StagingPath: mntStageDir,
-		TargetPath:  mntDir,
-		Address:     *endpoint,
-
-		// TODO: Use a parameters file here. Pass the file via flags.
-		TestVolumeParameters: map[string]string{
-			"autoPlace": "1",
-		},
+		StagingPath:              mntStageDir,
+		TargetPath:               mntDir,
+		Address:                  *endpoint,
+		TestVolumeParametersFile: *paramsFile,
 	}
 
 	// Now call the test suite
