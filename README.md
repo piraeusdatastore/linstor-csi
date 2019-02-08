@@ -5,14 +5,8 @@ that implement CSI, such as Kubernetes.
 
 # Building
 
-This project is written in Go. If you haven't built a Go program before,
-please refer to this [helpful guide](https://golang.org/doc/install).
-
-Requires Go 1.11 or higher and a configured GOPATH, once that is is done. Please
-ensure that this project is cloned into the proper directory for the go tools
-(`$GOPATH/github.com/LINBIT/linstor-csi/`) and run `make`.
-
-This will create a binary named `linstor-csi` in the root of the project.
+If you wish to create a docker image for a local registry
+run `make dockerimage DOCKERREGISTRY=example.com`.
 
 # Deployment
 
@@ -36,16 +30,19 @@ foremost guide on setting up and administering LINSTOR.
 
 ## Kubernetes
 
-After the plugin has been deployed you're free to create storage classes
+After the plugin has been deployed, you're free to create storage classes
 that point to the name of the external provisioner associateed with the CSI plugin
 and have your users start provisioning volumes from them. Please see
-the class.yaml file in the `examples/k8s/` dir for a basic example.
+the `class.yaml` file in the `examples/k8s/` dir for a basic example.
 
 Ensure that all kubelets that are expected to use LINSTOR volumes have a running
 LINSTOR satellite that is configured to work with the LINSTOR controller
 configured in the plugin's deployment files and that the storage pool indicated
 in the storage class has been properly configured. This pool does not need to be
-present on the Kubelets themselves.
+present on the Kubelets themselves for volumes attached over the network.
+
+Most of the documentation for using this project with Kubernetes is located
+[here](https://docs.linbit.com/docs/users-guide-9.0/#ch-kubernetes).
 
 # License
 
