@@ -55,7 +55,6 @@ const (
 type Linstor struct {
 	LinstorConfig
 	log            *log.Entry
-	prefix         string
 	annotationsKey string
 }
 
@@ -70,9 +69,6 @@ func NewLinstor(cfg LinstorConfig) *Linstor {
 	l := &Linstor{LinstorConfig: cfg}
 
 	l.annotationsKey = "csi-volume-annotations"
-	// Used to namespace csi volumes and meet linstor naming requirements.
-	l.prefix = "csi-"
-
 	l.LogOut = cfg.LogOut
 
 	if cfg.LogFmt != nil {
@@ -90,7 +86,6 @@ func NewLinstor(cfg LinstorConfig) *Linstor {
 	l.log = log.WithFields(log.Fields{
 		"linstorCSIComponent": "client",
 		"annotationsKey":      l.annotationsKey,
-		"resourcePrefix":      l.prefix,
 		"controllers":         l.Controllers,
 	})
 
@@ -163,8 +158,8 @@ func (s *Linstor) resDeploymentConfigFromVolumeInfo(vol *volume.Info) (*lc.Resou
 
 	cfg.Controllers = s.Controllers
 
-	// Use ID's with prefix here to conform to linstor naming rules.
-	cfg.Name = s.prefix + vol.ID
+	// At this time vol.ID has to be a valid LINSTOR Name
+	cfg.Name = vol.ID
 
 	// TODO: Make don't extend volume size by 1 Kib, unless you have to.
 	cfg.SizeKiB = uint64(vol.SizeBytes/1024 + 1)
@@ -263,7 +258,7 @@ func (s *Linstor) GetByID(ID string) (*volume.Info, error) {
 	}
 
 	for _, rd := range list {
-		if rd.RscName == s.prefix+ID {
+		if rd.RscName == ID {
 			vol, err := s.resDefToVolume(rd)
 			if err != nil {
 				return nil, err

@@ -20,6 +20,7 @@ package driver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -29,6 +30,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/LINBIT/linstor-csi/pkg/volume"
@@ -47,10 +49,11 @@ var Version = "UNKNOWN"
 // Driver fullfils CSI controller, node, and indentity server interfaces.
 type Driver struct {
 	Config
-	srv     *grpc.Server
-	log     *log.Entry
-	version string
-	name    string
+	srv            *grpc.Server
+	log            *log.Entry
+	version        string
+	name           string
+	fallbackPrefix string
 }
 
 // Config provides sensible defaults for creating Drivers
@@ -83,9 +86,10 @@ func NewDriver(cfg Config) (*Driver, error) {
 	log.SetOutput(cfg.LogOut)
 
 	d := Driver{
-		Config:  cfg,
-		name:    "io.drbd.linstor-csi",
-		version: Version,
+		Config:         cfg,
+		name:           "io.drbd.linstor-csi",
+		version:        Version,
+		fallbackPrefix: "csi-",
 	}
 	d.log = log.WithFields(log.Fields{
 		"linstorCSIComponent": "driver",
@@ -416,8 +420,24 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 			}}, nil
 	}
 
-	// Spec says volume ID and name must differ.
-	volumeID := uuid.New()
+	// volumeID is the "ID" this volume is refered to. It is part of the CreateVolumeResponse and is the final LINSTOR/DRBD resource name
+	genRandom := false
+	volumeID, err := linstorifyResourceName(req.Name)
+	if err != nil {
+		genRandom = true
+	} else {
+		// We already handled the idempotency/existing case
+		// This is to make sure that nobody else created a resource with that name (e.g., another user/plugin)
+		existingVolume, err = d.Storage.GetByID(volumeID)
+		if existingVolume != nil || err != nil {
+			genRandom = true
+		}
+	}
+
+	if genRandom {
+		volumeID = d.fallbackPrefix + uuid.New()
+	}
+
 	vol := &volume.Info{
 		Name: req.Name, ID: volumeID, SizeBytes: int64(volumeSize.InclusiveBytes()), CreatedBy: createdByMe,
 		CreationTime: time.Now(),
@@ -731,4 +751,54 @@ func missingAttr(methodCall, volumeID, attr string) error {
 		volumeID = "an unknown volume"
 	}
 	return status.Error(codes.InvalidArgument, fmt.Sprintf("%s failed for %s: it requires a %s and none was provided", methodCall, volumeID, attr))
+}
+
+// validResourceName returns an error if the input string is not a valid LINSTOR name
+func validResourceName(resName string) error {
+	if resName == "all" {
+		return errors.New("Not allowed to use 'all' as resource name")
+	}
+
+	b, err := regexp.MatchString("[[:alpha:]]", resName)
+	if err != nil {
+		return err
+	} else if !b {
+		return errors.New("Resource name did not contain at least one alphabetic (A-Za-z) character")
+	}
+
+	re := "^[A-Za-z_][A-Za-z0-9\\-_]{1,47}$"
+	b, err = regexp.MatchString(re, resName)
+	if err != nil {
+		return err
+	} else if !b {
+		// without open coding it (ugh!) as good as it gets
+		return fmt.Errorf("Resource name did not match: '%s'", re)
+	}
+
+	return nil
+}
+
+// linstorifyResourceName tries to generate a valid LINSTOR name if the input currently is not.
+// If the input is already valid, it just returns this name.
+// This tries to preserve the original meaning as close as possible, but does not try extra hard.
+// Do *not* expect this function to be injective.
+// Do *not* expect this function to be stable. This means you need to save the output, the output of the function might change without notice.
+func linstorifyResourceName(name string) (string, error) {
+	if err := validResourceName(name); err == nil {
+		return name, nil
+	}
+
+	re := regexp.MustCompile("[^A-Za-z0-9\\-_]")
+	newName := re.ReplaceAllLiteralString(name, "_")
+	if err := validResourceName(newName); err == nil {
+		return newName, err
+	}
+
+	// fulfill at least the minimal requirement
+	newName = "LS_" + newName
+	if err := validResourceName(newName); err == nil {
+		return newName, nil
+	}
+
+	return "", fmt.Errorf("Could not linstorify name (%s)", name)
 }
