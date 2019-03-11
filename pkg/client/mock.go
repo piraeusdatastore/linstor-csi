@@ -68,6 +68,10 @@ func (s *MockStorage) Delete(vol *volume.Info) error {
 	return nil
 }
 
+func (s *MockStorage) CanonicalizeVolumeName(suggestedName string) string {
+	return suggestedName
+}
+
 func (s *MockStorage) Attach(vol *volume.Info, node string) error {
 	s.assignedVolumes = append(s.assignedVolumes, &volume.Assignment{Vol: vol, Node: node, Path: "/dev/null"})
 	return nil

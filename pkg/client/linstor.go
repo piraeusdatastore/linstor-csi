@@ -20,15 +20,18 @@ package client
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"regexp"
 	"strconv"
 	"strings"
 
 	lc "github.com/LINBIT/golinstor"
 	"github.com/LINBIT/linstor-csi/pkg/volume"
 	"github.com/haySwim/data"
+	"github.com/pborman/uuid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -56,6 +59,7 @@ type Linstor struct {
 	LinstorConfig
 	log            *log.Entry
 	annotationsKey string
+	fallbackPrefix string
 }
 
 type LinstorConfig struct {
@@ -69,6 +73,7 @@ func NewLinstor(cfg LinstorConfig) *Linstor {
 	l := &Linstor{LinstorConfig: cfg}
 
 	l.annotationsKey = "csi-volume-annotations"
+	l.fallbackPrefix = "csi-"
 	l.LogOut = cfg.LogOut
 
 	if cfg.LogFmt != nil {
@@ -327,6 +332,22 @@ func (s *Linstor) Detach(vol *volume.Info, node string) error {
 	return r.Unassign(node)
 }
 
+func (s *Linstor) CanonicalizeVolumeName(suggestedName string) string {
+	name, err := linstorifyResourceName(suggestedName)
+	if err != nil {
+		return s.fallbackPrefix + uuid.New()
+	} else {
+		// We already handled the idempotency/existing case
+		// This is to make sure that nobody else created a resource with that name (e.g., another user/plugin)
+		existingVolume, err := s.GetByID(name)
+		if existingVolume != nil || err != nil {
+			return s.fallbackPrefix + uuid.New()
+		}
+	}
+
+	return name
+}
+
 func (s *Linstor) NodeAvailable(node string) (bool, error) {
 	// Hard coding magic string to pass csi-test.
 	if node == "some-fake-node-id" {
@@ -421,4 +442,54 @@ func (s *Linstor) Unmount(target string) error {
 	}).Debug("configured mounter")
 
 	return mounter.UnMount(target)
+}
+
+// validResourceName returns an error if the input string is not a valid LINSTOR name
+func validResourceName(resName string) error {
+	if resName == "all" {
+		return errors.New("Not allowed to use 'all' as resource name")
+	}
+
+	b, err := regexp.MatchString("[[:alpha:]]", resName)
+	if err != nil {
+		return err
+	} else if !b {
+		return errors.New("Resource name did not contain at least one alphabetic (A-Za-z) character")
+	}
+
+	re := "^[A-Za-z_][A-Za-z0-9\\-_]{1,47}$"
+	b, err = regexp.MatchString(re, resName)
+	if err != nil {
+		return err
+	} else if !b {
+		// without open coding it (ugh!) as good as it gets
+		return fmt.Errorf("Resource name did not match: '%s'", re)
+	}
+
+	return nil
+}
+
+// linstorifyResourceName tries to generate a valid LINSTOR name if the input currently is not.
+// If the input is already valid, it just returns this name.
+// This tries to preserve the original meaning as close as possible, but does not try extra hard.
+// Do *not* expect this function to be injective.
+// Do *not* expect this function to be stable. This means you need to save the output, the output of the function might change without notice.
+func linstorifyResourceName(name string) (string, error) {
+	if err := validResourceName(name); err == nil {
+		return name, nil
+	}
+
+	re := regexp.MustCompile("[^A-Za-z0-9\\-_]")
+	newName := re.ReplaceAllLiteralString(name, "_")
+	if err := validResourceName(newName); err == nil {
+		return newName, err
+	}
+
+	// fulfill at least the minimal requirement
+	newName = "LS_" + newName
+	if err := validResourceName(newName); err == nil {
+		return newName, nil
+	}
+
+	return "", fmt.Errorf("Could not linstorify name (%s)", name)
 }

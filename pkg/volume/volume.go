@@ -42,6 +42,11 @@ type CreateDeleter interface {
 	Querier
 	Create(vol *Info) error
 	Delete(vol *Info) error
+
+	// CanonicalizeVolumeName tries to return a relatively similar version
+	// of the suggestedName if the storage backend cannot use the suggestedName
+	// in its original form.
+	CanonicalizeVolumeName(suggestedName string) string
 }
 
 type AttacherDettacher interface {
