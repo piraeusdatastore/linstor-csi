@@ -12,8 +12,6 @@ github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 # github.com/google/uuid v1.0.0
 github.com/google/uuid
-# github.com/haySwim/csi-test v1.1.1-0.20190201214141-0b235eb35f72
-github.com/haySwim/csi-test/pkg/sanity
 # github.com/haySwim/data v0.2.0
 github.com/haySwim/data
 # github.com/hpcloud/tail v1.0.0
@@ -25,9 +23,11 @@ github.com/hpcloud/tail/winfile
 # github.com/konsorten/go-windows-terminal-sequences v1.0.2
 github.com/konsorten/go-windows-terminal-sequences
 # github.com/kubernetes-csi/csi-test v1.1.1
+github.com/kubernetes-csi/csi-test/pkg/sanity
 github.com/kubernetes-csi/csi-test/utils
 # github.com/onsi/ginkgo v1.7.0
 github.com/onsi/ginkgo
+github.com/onsi/ginkgo/reporters
 github.com/onsi/ginkgo/config
 github.com/onsi/ginkgo/internal/codelocation
 github.com/onsi/ginkgo/internal/failer
@@ -35,7 +35,6 @@ github.com/onsi/ginkgo/internal/remote
 github.com/onsi/ginkgo/internal/suite
 github.com/onsi/ginkgo/internal/testingtproxy
 github.com/onsi/ginkgo/internal/writer
-github.com/onsi/ginkgo/reporters
 github.com/onsi/ginkgo/reporters/stenographer
 github.com/onsi/ginkgo/reporters/stenographer/support/go-colorable
 github.com/onsi/ginkgo/types

@@ -662,6 +662,13 @@ func (d Driver) ListSnapshots(context.Context, *csi.ListSnapshotsRequest) (*csi.
 	return &csi.ListSnapshotsResponse{}, nil
 }
 
+func (d Driver) NodeExpandVolume(context.Context, *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
+	panic("not implemented")
+}
+func (d Driver) ControllerExpandVolume(context.Context, *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
+	panic("not implemented")
+}
+
 // Run the server.
 func (d Driver) Run() error {
 	d.log.Debug("Preparing to start server")

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/LINBIT/linstor-csi/pkg/client"
-	"github.com/haySwim/csi-test/pkg/sanity"
+	"github.com/kubernetes-csi/csi-test/pkg/sanity"
 )
 
 var (
