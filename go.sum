@@ -2,6 +2,8 @@ cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMT
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/LINBIT/golinstor v0.11.1 h1:11PUUsGYYWrr2yrVPhArQmnm33Ac3gNRRvi+9zss9o8=
 github.com/LINBIT/golinstor v0.11.1/go.mod h1:gd/yvYTsue2KkwOSDC3vTzDueCKkEzEFOr52lKufm2g=
+github.com/LINBIT/golinstor v0.12.1 h1:+PK7YD/Ue5X28HgrlqC84DbT8IxgKbznNGwL4RQVX3I=
+github.com/LINBIT/golinstor v0.12.1/go.mod h1:1T3nucKp6RLSrI11pzXtJRzhotBUFbyFmF6H89HPmyc=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/container-storage-interface/spec v1.1.0 h1:qPsTqtR1VUPvMPeK0UnCZMtXaKGyyLPG8gj/wG6VqMs=
 github.com/container-storage-interface/spec v1.1.0/go.mod h1:6URME8mwIBbpVyZV93Ce5St17xBiQJQY67NDsuohiy4=
