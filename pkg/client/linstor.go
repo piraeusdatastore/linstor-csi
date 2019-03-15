@@ -37,6 +37,7 @@ import (
 
 const (
 	NodeListKey            = "nodelist"
+	LayerListKey           = "layerlist"
 	ClientListKey          = "clientlist"
 	ReplicasOnSameKey      = "replicasonsame"
 	ReplicasOnDifferentKey = "replicasondifferent"
@@ -173,6 +174,8 @@ func (s *Linstor) resDeploymentConfigFromVolumeInfo(vol *volume.Info) (*lc.Resou
 		switch strings.ToLower(k) {
 		case NodeListKey:
 			cfg.NodeList = strings.Split(v, " ")
+		case LayerListKey:
+			cfg.LayerList = strings.Split(v, " ")
 		case ReplicasOnSameKey:
 			cfg.ReplicasOnSame = strings.Split(v, " ")
 		case ReplicasOnDifferentKey:
