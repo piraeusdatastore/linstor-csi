@@ -57,6 +57,7 @@ dockerimage: distclean
 	docker tag $(DOCKERREGPATH_PUBLIC):$(DOCKER_TAG) $(DOCKERREGPATH_PUBLIC):latest
 
 .PHONY: dockerpath
+dockerpath:
 	@echo $(DOCKERREGPATH):$(DOCKER_TAG) $(DOCKERREGPATH):latest $(DOCKERREGPATH_PUBLIC):$(DOCKER_TAG) $(DOCKERREGPATH_PUBLIC):latest
 
 clean:
