@@ -171,8 +171,7 @@ func (s *Linstor) resDeploymentConfigFromVolumeInfo(vol *volume.Info) (*lc.Resou
 	// At this time vol.ID has to be a valid LINSTOR Name
 	cfg.Name = vol.ID
 
-	// TODO: Make don't extend volume size by 1 Kib, unless you have to.
-	cfg.SizeKiB = uint64(vol.SizeBytes/1024 + 1)
+	cfg.SizeKiB = uint64(data.NewKibiByte(data.ByteSize(vol.SizeBytes)).Value())
 
 	for k, v := range vol.Parameters {
 		switch strings.ToLower(k) {
