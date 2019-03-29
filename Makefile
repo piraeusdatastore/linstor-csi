@@ -38,16 +38,13 @@ glide:
 	glide update  --strip-vendor
 	glide-vc --only-code --no-tests --use-lock-file
 
-get:
-	go get ./... &> /dev/null
-
-build: get
+build:
 	go build -ldflags '$(LDFLAGS)' cmd/$(PROJECT_NAME)/$(PROJECT_NAME).go
 
-release: get
+release:
 	GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -ldflags '$(LDFLAGS)' -o $(PROJECT_NAME)-$(OS)-$(ARCH)
 
-staticrelease: get
+staticrelease:
 	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0  $(GO) build -a -ldflags '$(LDFLAGS) -extldflags "-static"' -o $(PROJECT_NAME)-$(OS)-$(ARCH) cmd/$(PROJECT_NAME)/$(PROJECT_NAME).go
 
 dockerimage: distclean
