@@ -324,6 +324,7 @@ func (s *Linstor) Attach(vol *volume.Info, node string) error {
 	return lc.NewResourceDeployment(*cfg).Assign()
 }
 
+// Detach removes a volume from the node.
 func (s *Linstor) Detach(vol *volume.Info, node string) error {
 	s.log.WithFields(log.Fields{
 		"volume":     fmt.Sprintf("%+v", vol),

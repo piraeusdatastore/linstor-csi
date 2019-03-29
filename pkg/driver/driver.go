@@ -533,11 +533,36 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 // know if the operation failed or not, it can choose to call
 // ControllerUnpublishVolume again.
 func (d Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
-	if req.VolumeId == "" {
-		return nil, missingAttr("ControllerUnpublishVolume", req.VolumeId, "VolumeId")
+	if req.GetVolumeId() == "" {
+		return nil, missingAttr("ControllerUnpublishVolume", req.GetVolumeId(), "VolumeId")
+	}
+	if req.GetNodeId() == "" {
+		return nil, missingAttr("ControllerUnpublishVolume", req.GetNodeId(), "NodeId")
 	}
 
-	// TODO: Mount Stuff.
+	vol, err := d.Storage.GetByID(req.VolumeId)
+	if err != nil {
+		return nil, status.Error(
+			codes.Internal, fmt.Sprintf(
+				"ControllerUnpublishVolume failed for %s: %v", req.GetVolumeId(), err))
+	}
+	// If it's not there, it's as detached as we can make it, right?
+	if vol == nil {
+		d.log.WithFields(log.Fields{
+			"volumeId": req.GetVolumeId(),
+			"nodeId":   req.GetNodeId(),
+		}).Info("volume to be unpublished was not found in storage backend")
+		return &csi.ControllerUnpublishVolumeResponse{}, nil
+	}
+	d.log.WithFields(log.Fields{
+		"volume": fmt.Sprintf("%+v", vol),
+		"nodeId": req.GetNodeId(),
+	}).Info("found existing volume to unpublish")
+
+	if err := d.Assignments.Detach(vol, req.GetNodeId()); err != nil {
+		return nil, status.Error(codes.Internal, fmt.Sprintf(
+			"ControllerpublishVolume failed for %s: %v", req.GetVolumeId(), err))
+	}
 
 	return &csi.ControllerUnpublishVolumeResponse{}, nil
 }
