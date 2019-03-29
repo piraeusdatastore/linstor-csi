@@ -2,6 +2,7 @@ package driver
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -11,11 +12,12 @@ import (
 )
 
 var (
-	controllers  = flag.String("controllers", "", "Run suite against a real LINSTOR cluster with the specificed controller endpoints")
-	node         = flag.String("node", "fake.node", "Node ID to pass to tests, if you're running against a real LINSTOR cluster this needs to match the name of one of the real satellites")
-	paramsFile   = flag.String("parameter-file", "", "File containing paramemers to pass to storage backend during testsing")
-	endpoint     = flag.String("Endpoint", "unix:///tmp/csi.sock", "Unix socket for CSI communication")
-	mountForReal = flag.Bool("mount-for-real", false, "Actually try to mount volumes, needs to be ran on on a kubelet (indicted by the node flag) with it's /dev dir bind mounted into the container")
+	controllers     = flag.String("controllers", "", "Run suite against a real LINSTOR cluster with the specificed controller endpoints")
+	node            = flag.String("node", "fake.node", "Node ID to pass to tests, if you're running against a real LINSTOR cluster this needs to match the name of one of the real satellites")
+	paramsFile      = flag.String("parameter-file", "", "File containing paramemers to pass to storage backend during testsing")
+	endpoint        = flag.String("Endpoint", "unix:///tmp/csi.sock", "Unix socket for CSI communication")
+	mountForReal    = flag.Bool("mount-for-real", false, "Actually try to mount volumes, needs to be ran on on a kubelet (indicted by the node flag) with it's /dev dir bind mounted into the container")
+	snapshotForReal = flag.Bool("snapshot-for-real", false, "Actually try to take snapshots, needs to be ran with against a storage pool (passed via paramsFile) that supports snaphosts")
 )
 
 func TestDriver(t *testing.T) {
@@ -36,6 +38,7 @@ func TestDriver(t *testing.T) {
 	driverCfg.Storage = mockStorageBackend
 	driverCfg.Assignments = mockStorageBackend
 	driverCfg.Mounter = mockStorageBackend
+	driverCfg.Snapshots = mockStorageBackend
 
 	if *controllers != "" {
 		realStorageBackend := client.NewLinstor(client.LinstorConfig{
@@ -48,6 +51,9 @@ func TestDriver(t *testing.T) {
 		driverCfg.Assignments = realStorageBackend
 		if *mountForReal {
 			driverCfg.Mounter = realStorageBackend
+		}
+		if *snapshotForReal {
+			driverCfg.Snapshots = realStorageBackend
 		}
 	}
 
@@ -72,12 +78,34 @@ func TestDriver(t *testing.T) {
 	defer os.RemoveAll(mntStageDir)
 
 	cfg := &sanity.Config{
-		StagingPath:              mntStageDir,
-		TargetPath:               mntDir,
+		TargetPath:               mntDir + "/csi-target",
+		StagingPath:              mntStageDir + "/csi-staging",
 		Address:                  *endpoint,
 		TestVolumeParametersFile: *paramsFile,
+		CreateTargetDir: func(targetPath string) (string, error) {
+			return targetPath, createTargetDir(targetPath)
+		},
+		CreateStagingDir: func(targetPath string) (string, error) {
+			return targetPath, createTargetDir(targetPath)
+		},
 	}
 
 	// Now call the test suite
 	sanity.Test(t, cfg)
+}
+
+// Make a custom function, so we don't have to worry about the test complaining
+// the directories it created exist.
+func createTargetDir(targetPath string) error {
+	fileInfo, err := os.Stat(targetPath)
+	if err != nil && os.IsNotExist(err) {
+		return os.MkdirAll(targetPath, 0755)
+	} else if err != nil {
+		return err
+	}
+	if !fileInfo.IsDir() {
+		return fmt.Errorf("Target location %s is not a directory", targetPath)
+	}
+
+	return nil
 }

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: linstor-snap-restore
+spec:
+  storageClassName: linstor-basic-storage
+  dataSource:
+    name: linstor-snapshot-test
+    kind: VolumeSnapshot
+    apiGroup: snapshot.storage.k8s.io
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Mi

@@ -25,13 +25,14 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -62,7 +63,9 @@ type ResourceDeploymentConfig struct {
 	StoragePool         string
 	DisklessStoragePool string
 	Encryption          bool
+	MigrateOnAttach     bool
 	Controllers         string
+	LayerList           []string
 	Annotations         map[string]string
 	LogOut              io.Writer
 	LogFmt              log.Formatter
@@ -83,6 +86,7 @@ type ResourceDeploymentConfig struct {
 // If no StoragePool is provided, the default storage pool will be used.
 // If no DisklessStoragePool is provided, the default diskless storage pool will be used.
 // If no Encryption is specified, none will be used.
+// If no MigrateOnAttach is specified, none will be used.
 // If no Controllers are specified, none will be used.
 // If no LogOut is specified, ioutil.Discard will be used.
 // TODO: Document DR stuff.
@@ -292,6 +296,25 @@ type nodeInfo []struct {
 	} `json:"nodes"`
 }
 
+type SnapshotInfo []struct {
+	SnapshotDfns []Snapshot `json:"snapshot_dfns"`
+}
+
+type Snapshot struct {
+	SnapshotDfnFlags []string `json:"snapshot_dfn_flags"`
+	UUID             string   `json:"uuid"`
+	RscName          string   `json:"rsc_name"`
+	Nodes            []struct {
+		NodeName string `json:"node_name"`
+	} `json:"snapshots"`
+	SnapshotName    string `json:"snapshot_name"`
+	SnapshotVlmDfns []struct {
+		VlmNr   int `json:"vlm_nr"`
+		VlmSize int `json:"vlm_size"`
+	} `json:"snapshot_vlm_dfns"`
+	RscDfnUUID string `json:"rsc_dfn_uuid"`
+}
+
 func (s returnStatuses) validate() error {
 	for _, message := range s {
 		if !linstorSuccess(message.RetCode) {
@@ -306,9 +329,7 @@ func (s returnStatuses) validate() error {
 }
 
 func linstorSuccess(retcode uint64) bool {
-	const maskError = 0xC000000000000000 // includes warnings and info (i.e., everything != SUCCESS)
-
-	return (retcode & maskError) == 0
+	return (retcode & MaskError) == 0
 }
 
 // CreateAndAssign deploys the resource, created a new one if it doesn't exist.
@@ -329,8 +350,7 @@ func (r ResourceDeployment) prependOpts(args ...string) []string {
 
 func (r ResourceDeployment) traceCombinedOutput(name string, args ...string) ([]byte, error) {
 	r.log.WithFields(log.Fields{
-		"command": name,
-		"args":    strings.Join(args, " "),
+		"command": fmt.Sprintf("%s %s", name, strings.Join(args, " ")),
 	}).Info("running external command")
 	return exec.Command(name, args...).CombinedOutput()
 }
@@ -418,14 +438,19 @@ func (r ResourceDeployment) Create() error {
 	}
 
 	if !defPresent {
-		if err := r.linstor("resource-definition", "create", r.Name); err != nil {
+		args := []string{"resource-definition", "create", r.Name}
+		if len(r.LayerList) != 0 {
+			args = append(args, "--layer-list", strings.Join(r.LayerList, ","))
+		}
+
+		if err := r.linstor(args...); err != nil {
 			return fmt.Errorf("unable to reserve resource name %s :%v", r.Name, err)
 		}
 
 		// Store annotations in the res def's aux props.
 		for k, v := range r.Annotations {
-			if err := r.linstor("resource-definition", "set-property", "--aux", r.Name, k, v); err != nil {
-				return fmt.Errorf("unable to reserve resource name %s: %v", r.Name, err)
+			if err := r.SetAuxProp(k, v); err != nil {
+				return err
 			}
 		}
 	}
@@ -443,6 +468,155 @@ func (r ResourceDeployment) Create() error {
 	}
 
 	return nil
+}
+
+// SnapshotCreate makes a snapshot of the ResourceDeployment on all nodes where
+// it is deployed. If the snapshot already exsits, return it as is.
+func (r ResourceDeployment) SnapshotCreate(name string) (*Snapshot, error) {
+	snapshots, err := r.SnapshotList()
+	if err != nil {
+		return nil, fmt.Errorf("unable to create snapshot: %v", err)
+	}
+
+	// Return already existing snapshots.
+	if snap := r.GetSnapByName(snapshots, name); snap != nil {
+		return snap, nil
+	}
+
+	// Snapshot apparently not already present, try to create it.
+	out, err := r.traceCombinedOutput("linstor", r.prependOpts("snapshot", "create", r.Name, name)...)
+	if err != nil {
+		return nil, fmt.Errorf("%v: %s", err, out)
+	}
+
+	// Try to retrive just created snapshot.
+	snapshots, err = r.SnapshotList()
+	if err != nil {
+		return nil, fmt.Errorf("unable to create snapshot: %v", err)
+	}
+	snap := r.GetSnapByName(snapshots, name)
+	if snap == nil {
+		return nil, fmt.Errorf("snapshot not present after apparently successful creation")
+	}
+
+	return snap, nil
+}
+
+func (r ResourceDeployment) GetSnapByName(snapshots []Snapshot, name string) *Snapshot {
+	for _, snap := range snapshots {
+		if snap.SnapshotName == name && snap.RscName == r.Name {
+			return &snap
+		}
+	}
+	return nil
+}
+
+func (r ResourceDeployment) GetSnapByID(snapshots []Snapshot, id string) *Snapshot {
+	for _, snap := range snapshots {
+		if snap.UUID == id {
+			return &snap
+		}
+	}
+	return nil
+}
+
+func (r ResourceDeployment) NewResourceFromSnapshot(snapshotID string) error {
+	defPresent, _, err := r.checkDefined()
+	if err != nil {
+		return err
+	}
+
+	if defPresent {
+		return fmt.Errorf("resource definition %s already defined", r.Name)
+	}
+	if err := r.linstor("resource-definition", "create", r.Name); err != nil {
+		return fmt.Errorf("unable to reserve resource name %s :%v", r.Name, err)
+	}
+
+	// Store annotations in the res def's aux props.
+	for k, v := range r.Annotations {
+		if err := r.SetAuxProp(k, v); err != nil {
+			return err
+		}
+	}
+
+	snapshots, err := r.SnapshotList()
+	if err != nil {
+		return fmt.Errorf("unable to create resource from snapshot: %v", err)
+	}
+	snap := r.GetSnapByID(snapshots, snapshotID)
+	if snap == nil {
+		return fmt.Errorf("unable to locate snapshot: %s", snapshotID)
+	}
+
+	if err := r.linstor(
+		"snapshot", "volume-definition", "restore",
+		"--from-resource", snap.RscName,
+		"--from-snapshot", snap.SnapshotName,
+		"--to-resource", r.Name); err != nil {
+		return fmt.Errorf("unable to restore volume-definition:%v", err)
+	}
+	if err := r.linstor(
+		"snapshot", "resource", "restore",
+		"--from-resource", snap.RscName,
+		"--from-snapshot", snap.SnapshotName,
+		"--to-resource", r.Name); err != nil {
+		return fmt.Errorf("unable to restore resource-definition:%v", err)
+	}
+
+	return nil
+}
+
+func (r ResourceDeployment) NewResourceFromResource(sourceRes ResourceDeployment) error {
+	snap, err := sourceRes.SnapshotCreate(fmt.Sprintf("tmp-%s", uuid.NewV4()))
+	if err != nil {
+		return err
+	}
+	defer sourceRes.SnapshotDelete(snap.UUID)
+
+	if err := r.NewResourceFromSnapshot(snap.UUID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SnapshotDelete deletes a snapshot with the given ID.
+func (r ResourceDeployment) SnapshotDelete(id string) error {
+	snapshots, err := r.SnapshotList()
+	if err != nil {
+		return fmt.Errorf("unable to create snapshot: %v", err)
+	}
+
+	snap := r.GetSnapByID(snapshots, id)
+	if snap == nil {
+		return nil
+	}
+
+	out, err := r.traceCombinedOutput("linstor", r.prependOpts("snapshot", "delete", r.Name, snap.SnapshotName)...)
+	if err != nil {
+		return fmt.Errorf("%v: %s", err, out)
+	}
+
+	return nil
+}
+
+// SnapshotList returns a list of all snapshots known to LINSTOR.
+func (r ResourceDeployment) SnapshotList() ([]Snapshot, error) {
+	list := SnapshotInfo{}
+	out, err := r.traceCombinedOutput("linstor", r.prependOpts("snapshot", "list")...)
+	if err != nil {
+		return []Snapshot{}, fmt.Errorf("%v: %s", err, out)
+	}
+
+	if !json.Valid(out) {
+		return []Snapshot{}, fmt.Errorf("invalid json from 'linstor -m snapshot list'")
+	}
+	if err := json.Unmarshal(out, &list); err != nil {
+		return []Snapshot{}, fmt.Errorf("couldn't Unmarshal '%s' :%v", out, err)
+	}
+
+	return list[0].SnapshotDfns, nil
 }
 
 func (r ResourceDeployment) checkDefined() (bool, bool, error) {
@@ -504,6 +678,42 @@ func (r ResourceDeployment) Assign() error {
 		}
 	}
 	return nil
+}
+
+// Attach assigns a resource on a single node disklessly or diskfully.
+// If migrateOnAttach is true the migration will be be performed directly
+// after assignment.
+func (r ResourceDeployment) Attach(node string, asClient bool) error {
+	if err := r.deployToList([]string{node}, asClient); err != nil {
+		return err
+	}
+
+	if r.MigrateOnAttach && asClient {
+		return r.migrateTo(node)
+	}
+
+	return nil
+}
+
+// Make node diskfull without changing the total number of replicas.
+func (r ResourceDeployment) migrateTo(node string) error {
+	diskfulNodes, err := r.deployedNodes()
+	if err != nil {
+		return err
+	}
+	numDiskful := len(diskfulNodes)
+	if numDiskful == 0 {
+		return fmt.Errorf("resource %s has no healthy diskful assignments, unable to migrate", r.Name)
+	}
+
+	// We don't need to make this nodes diskfull it it happens to be diskful anyhow.
+	if contains(diskfulNodes, node) {
+		return nil
+	}
+
+	migrationSource := diskfulNodes[rand.Intn(numDiskful)]
+	args := []string{"resource", "toggle-disk", node, r.Name, "--storage-pool", r.StoragePool, "--migrate-from", migrationSource}
+	return r.linstor(args...)
 }
 
 func (r ResourceDeployment) deployToList(list []string, asClients bool) error {
@@ -600,7 +810,7 @@ func (r ResourceDeployment) deployedNodes() ([]string, error) {
 func doDeployedNodes(l resList, resName string) ([]string, error) {
 	var deployed []string
 	for _, res := range l[0].Resources {
-		if res.Name == resName && !contains(res.RscFlags, "DISKLESS") {
+		if res.Name == resName && !contains(res.RscFlags, FlagDiskless) {
 			deployed = append(deployed, res.NodeName)
 		}
 	}
@@ -645,9 +855,32 @@ func (r ResourceDeployment) Delete() error {
 		return nil
 	}
 
+	// If a resource has snapshots, then LINSTOR will refuse to delete it.
+	// So we should need to clear those out.
+	snaps, err := r.SnapshotList()
+	if err != nil {
+		return fmt.Errorf("failed to delete resource %s: %v", r.Name, err)
+	}
+	for _, snap := range snaps {
+		if snap.RscName == r.Name {
+			if err := r.SnapshotDelete(snap.UUID); err != nil {
+				return fmt.Errorf("failed to delete resource %s: %v", r.Name, err)
+			}
+		}
+	}
+
 	if err := r.linstor("resource-definition", "delete", r.Name); err != nil {
 		return fmt.Errorf("failed to delete resource %s: %v", r.Name, err)
 	}
+	return nil
+}
+
+// SetAuxProp adds an aux prop to the resource.
+func (r ResourceDeployment) SetAuxProp(key, value string) error {
+	if err := r.linstor("resource-definition", "set-property", "--aux", r.Name, key, value); err != nil {
+		return fmt.Errorf("unable to set aux prop for resource %s :%v", r.Name, err)
+	}
+
 	return nil
 }
 
@@ -704,7 +937,7 @@ func (r ResourceDeployment) IsClient(nodeName string) bool {
 func (r ResourceDeployment) doIsClient(list resList, nodeName string) bool {
 	// Traverse all resources to find our resource on nodeName.
 	for _, res := range list[0].Resources {
-		if r.Name == res.Name && nodeName == res.NodeName && contains(res.RscFlags, "DISKLESS") {
+		if r.Name == res.Name && nodeName == res.NodeName && contains(res.RscFlags, FlagDiskless) {
 			return true
 		}
 	}

@@ -29,6 +29,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/LINBIT/linstor-csi/pkg/volume"
@@ -64,6 +65,7 @@ type Config struct {
 	Storage            volume.CreateDeleter
 	Assignments        volume.AttacherDettacher
 	Mounter            volume.Mounter
+	Snapshots          volume.SnapshotCreateDeleter
 }
 
 // NewDriver build up a driver.
@@ -372,7 +374,6 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 
 	volumeSize := data.NewKibiByte(data.KiB * data.ByteSize(requiredKiB))
 
-	createdByMe := d.name
 	// Handle case were a volume of the same name is already present.
 	existingVolume, err := d.Storage.GetByName(req.Name)
 	if err != nil {
@@ -387,24 +388,24 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 			"existingVolume":      fmt.Sprintf("%+v", existingVolume),
 		}).Info("found existing volume")
 
-		if existingVolume.CreatedBy != createdByMe {
+		if existingVolume.CreatedBy != d.name {
 			return &csi.CreateVolumeResponse{}, status.Error(
 				codes.AlreadyExists, fmt.Sprintf(
 					"CreateVolume failed for %s: volume already present and wasn't created by %s",
-					req.Name, createdByMe))
+					req.Name, d.name))
 		}
 
 		if existingVolume.SizeBytes != int64(volumeSize.InclusiveBytes()) {
 			return &csi.CreateVolumeResponse{}, status.Error(
 				codes.AlreadyExists, fmt.Sprintf(
 					"CreateVolume failed for %s: volume already present, created by %s, but size differs (existing: %d, wanted: %d",
-					req.Name, createdByMe, existingVolume.SizeBytes, int64(volumeSize.InclusiveBytes())))
+					req.Name, d.name, existingVolume.SizeBytes, int64(volumeSize.InclusiveBytes())))
 		}
 
 		d.log.WithFields(log.Fields{
 			"requestedVolumeName": req.Name,
 			"volumeSize":          volumeSize,
-			"expectedCreatedBy":   createdByMe,
+			"expectedCreatedBy":   d.name,
 			"existingVolume":      fmt.Sprintf("%+v", existingVolume),
 		}).Info("volume already present, but matches request")
 
@@ -415,32 +416,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 			}}, nil
 	}
 
-	// volumeID is the "ID" this volume is referred to. It is part of the CreateVolumeResponse and is the final LINSTOR/DRBD resource name
-	volumeID := d.Storage.CanonicalizeVolumeName(req.Name)
-
-	vol := &volume.Info{
-		Name: req.Name, ID: volumeID, SizeBytes: int64(volumeSize.InclusiveBytes()), CreatedBy: createdByMe,
-		CreationTime: time.Now(),
-		Parameters:   make(map[string]string)}
-	for k, v := range req.Parameters {
-		vol.Parameters[k] = v
-	}
-	d.log.WithFields(log.Fields{
-		"newVolume": fmt.Sprintf("%+v", vol),
-		"size":      volumeSize,
-	}).Debug("creating new volume")
-
-	err = d.Storage.Create(vol)
-	if err != nil {
-		return &csi.CreateVolumeResponse{}, status.Error(
-			codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
-	}
-
-	return &csi.CreateVolumeResponse{
-		Volume: &csi.Volume{
-			VolumeId:      volumeID,
-			CapacityBytes: int64(volumeSize.InclusiveBytes()),
-		}}, nil
+	return d.createNewVolume(req)
 }
 
 // DeleteVolume will be called by the CO to deprovision a volume.
@@ -645,21 +621,156 @@ func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Controll
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
 				}}},
+			{Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
+				}}},
+			{Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
+				}}},
+			{Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
+				}}},
 			// TODO: Add ListVolumes.
 		},
 	}, nil
 }
 
-func (d Driver) CreateSnapshot(context.Context, *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
-	return &csi.CreateSnapshotResponse{}, nil
+func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
+	if req.GetSourceVolumeId() == "" {
+		return nil, missingAttr("CreateSnapshot", req.SourceVolumeId, "SourceVolumeId")
+	}
+	if req.GetName() == "" {
+		return nil, missingAttr("CreateSnapshot", req.Name, "Name")
+	}
+
+	existingSnap, err := d.Snapshots.GetSnapByName(req.GetName())
+	if err != nil {
+		return nil, fmt.Errorf("failed to check for existing snapshot: %v", err)
+	}
+
+	if existingSnap != nil {
+		// Needed for idempotentcy.
+		d.log.WithFields(log.Fields{
+			"requestedSnapshotName":         req.GetName(),
+			"requestedSnapshotSourceVolume": req.GetSourceVolumeId(),
+			"existingSnapshot":              fmt.Sprintf("%+v", existingSnap),
+		}).Info("found existing snapshot")
+		if existingSnap.CsiSnap.SourceVolumeId == req.GetSourceVolumeId() {
+			return &csi.CreateSnapshotResponse{Snapshot: existingSnap.CsiSnap}, nil
+		}
+		return nil, status.Errorf(codes.AlreadyExists, "can't use %q for snapshot name for volume %q, snapshot name is in use for volume %q",
+			existingSnap.Name, req.GetSourceVolumeId(), existingSnap.CsiSnap.SourceVolumeId)
+	}
+
+	snap, err := d.Snapshots.SnapCreate(&volume.SnapInfo{
+		Name:    d.Snapshots.CanonicalizeSnapshotName(req.GetName()),
+		CsiSnap: &csi.Snapshot{SourceVolumeId: req.GetSourceVolumeId()},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create snapshot: %v", err)
+	}
+
+	return &csi.CreateSnapshotResponse{Snapshot: snap.CsiSnap}, nil
 }
 
-func (d Driver) DeleteSnapshot(context.Context, *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
+func (d Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
+	if req.GetSnapshotId() == "" {
+		return nil, missingAttr("DeleteSnapshot", req.SnapshotId, "SnapshotId")
+	}
+
+	snap, err := d.Snapshots.GetSnapByID(req.GetSnapshotId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "unable to find snapshot %s: %v",
+			req.GetSnapshotId(), err)
+	}
+	if snap == nil {
+		d.log.WithFields(log.Fields{
+			"snapshotId": req.GetSnapshotId(),
+		}).Info("unable to find snapshot, it may already be deleted")
+		return &csi.DeleteSnapshotResponse{}, nil
+	}
+
+	if err := d.Snapshots.SnapDelete(snap); err != nil {
+		return nil, status.Errorf(codes.Internal, "unable to delete snapshot %s: %v",
+			req.GetSnapshotId(), err)
+	}
 	return &csi.DeleteSnapshotResponse{}, nil
 }
 
-func (d Driver) ListSnapshots(context.Context, *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
-	return &csi.ListSnapshotsResponse{}, nil
+// ListSnapshots https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#listsnapshots
+func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
+	snapshots := []*volume.SnapInfo{}
+
+	// Handle case where a single snapshot is requsted.
+	if req.GetSnapshotId() != "" {
+		snap, err := d.Snapshots.GetSnapByID(req.GetSnapshotId())
+		if err != nil {
+			return nil, fmt.Errorf("failed to list snapshots: %v", err)
+		}
+		if snap == nil {
+			return &csi.ListSnapshotsResponse{}, nil
+		}
+		d.log.WithFields(log.Fields{
+			"requestedSnapshot": req.GetSnapshotId(),
+			"napshot":           fmt.Sprintf("%+v", snap),
+		}).Info("found single snapshot")
+		snapshots = []*volume.SnapInfo{snap}
+
+		// Handle case where a single volumes snapshots are requested.
+	} else if req.GetSourceVolumeId() != "" {
+		vol, err := d.Storage.GetByID(req.GetSourceVolumeId())
+		if err != nil {
+			return nil, fmt.Errorf("failed to list snapshots: %v", err)
+		}
+		if vol == nil {
+			return &csi.ListSnapshotsResponse{}, nil
+		}
+
+		snapshots = vol.Snapshots
+
+		// Regular list of all snapshots.
+	} else {
+		snaps, err := d.Snapshots.ListSnaps()
+		if err != nil {
+			return nil, fmt.Errorf("failed to list snapshots: %v", err)
+		}
+		snapshots = snaps
+	}
+
+	// Handle pagination.
+	var (
+		start     int32
+		end       int32
+		nextToken string
+	)
+	totalSnaps := int32(len(snapshots))
+	if req.GetMaxEntries() == 0 || (totalSnaps <= req.GetMaxEntries()) {
+		end = totalSnaps
+	} else {
+		end = req.GetMaxEntries()
+		nextToken = strconv.Itoa(int(end))
+	}
+
+	if req.GetStartingToken() != "" {
+		i, err := strconv.ParseInt(req.GetStartingToken(), 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed snapshot starting token: %v", err)
+		}
+		start = int32(i)
+	} else {
+		start = int32(0)
+	}
+	snapshots = snapshots[start:end]
+
+	entries := make([]*csi.ListSnapshotsResponse_Entry, 0, len(snapshots))
+
+	for _, snap := range snapshots {
+		entries = append(entries, &csi.ListSnapshotsResponse_Entry{Snapshot: snap.CsiSnap})
+	}
+	return &csi.ListSnapshotsResponse{Entries: entries, NextToken: nextToken}, nil
 }
 
 func (d Driver) NodeExpandVolume(context.Context, *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
@@ -731,6 +842,96 @@ func (d Driver) Run() error {
 // Stop the server.
 func (d Driver) Stop() error {
 	return fmt.Errorf("Not implemented")
+}
+
+func (d Driver) createNewVolume(req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
+	// volumeID is the "ID" this volume is referred to. It is part of the CreateVolumeResponse and is the final LINSTOR/DRBD resource name
+	volumeID := d.Storage.CanonicalizeVolumeName(req.Name)
+
+	requiredKiB, err := d.Storage.AllocationSizeKiB(req.CapacityRange.GetRequiredBytes(), req.CapacityRange.GetLimitBytes())
+	if err != nil {
+		return &csi.CreateVolumeResponse{}, status.Error(
+			codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
+	}
+
+	volumeSize := data.NewKibiByte(data.KiB * data.ByteSize(requiredKiB))
+
+	vol := &volume.Info{
+		Name: req.Name, ID: volumeID, SizeBytes: int64(volumeSize.InclusiveBytes()), CreatedBy: d.name,
+		CreationTime: time.Now(),
+		Parameters:   make(map[string]string),
+		Snapshots:    []*volume.SnapInfo{},
+	}
+	for k, v := range req.Parameters {
+		vol.Parameters[k] = v
+	}
+	d.log.WithFields(log.Fields{
+		"newVolume": fmt.Sprintf("%+v", vol),
+		"size":      volumeSize,
+	}).Debug("creating new volume")
+
+	// We're cloning from a volume or snapshot.
+	if req.GetVolumeContentSource() != nil {
+		if req.GetVolumeContentSource().GetSnapshot() != nil {
+			snapshotId := req.GetVolumeContentSource().GetSnapshot().GetSnapshotId()
+			if snapshotId == "" {
+				return &csi.CreateVolumeResponse{}, status.Error(codes.InvalidArgument, fmt.Sprintf("CreateVolume failed for %s: empty snapshotId", req.Name))
+			}
+
+			snap, err := d.Snapshots.GetSnapByID(snapshotId)
+			if err != nil {
+				return &csi.CreateVolumeResponse{}, status.Error(
+					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
+			}
+			if snap == nil {
+				return &csi.CreateVolumeResponse{}, status.Error(
+					codes.NotFound, fmt.Sprintf("CreateVolume failed for %s: snapshot not found in storage backend", req.Name))
+			}
+			sourceVol, err := d.Storage.GetByID(snap.CsiSnap.SourceVolumeId)
+			if err != nil {
+				return &csi.CreateVolumeResponse{}, status.Error(
+					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
+			}
+			if sourceVol == nil {
+				return &csi.CreateVolumeResponse{}, status.Error(
+					codes.NotFound, fmt.Sprintf("CreateVolume failed for %s: source volume not found in storage backend", req.Name))
+			}
+
+			if err := d.Snapshots.VolFromSnap(snap, vol); err != nil {
+				return &csi.CreateVolumeResponse{}, status.Error(
+					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
+			}
+			// We're cloning from a whole volume.
+		} else if req.GetVolumeContentSource().GetVolume() != nil {
+			sourceVol, err := d.Storage.GetByID(req.GetVolumeContentSource().GetVolume().GetVolumeId())
+			if err != nil {
+				return &csi.CreateVolumeResponse{}, status.Error(
+					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
+			}
+			if sourceVol == nil {
+				return &csi.CreateVolumeResponse{}, status.Error(
+					codes.NotFound, fmt.Sprintf("CreateVolume failed for %s: source volume not found in storage backend", req.Name))
+			}
+			if err := d.Snapshots.VolFromVol(sourceVol, vol); err != nil {
+				return &csi.CreateVolumeResponse{}, status.Error(
+					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
+			}
+		} else {
+			return &csi.CreateVolumeResponse{}, status.Error(
+				codes.InvalidArgument, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
+		}
+		// Regular new volume.
+	} else {
+		if err := d.Storage.Create(vol); err != nil {
+			return &csi.CreateVolumeResponse{}, status.Error(
+				codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
+		}
+	}
+	return &csi.CreateVolumeResponse{
+		Volume: &csi.Volume{
+			VolumeId:      volumeID,
+			CapacityBytes: int64(volumeSize.InclusiveBytes()),
+		}}, nil
 }
 
 func missingAttr(methodCall, volumeID, attr string) error {

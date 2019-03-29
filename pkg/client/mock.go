@@ -20,6 +20,9 @@ package client
 
 import (
 	"github.com/LINBIT/linstor-csi/pkg/volume"
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	ptypes "github.com/golang/protobuf/ptypes"
+	"github.com/pborman/uuid"
 )
 
 type MockStorage struct {
@@ -59,16 +62,96 @@ func (s *MockStorage) Create(vol *volume.Info) error {
 }
 
 func (s *MockStorage) Delete(vol *volume.Info) error {
-	for _, v := range s.createdVolumes {
-		if v.Name == vol.Name {
-			// Close enough for testing...
-			v = nil
+	for i, v := range s.createdVolumes {
+		if v != nil && (v.Name == vol.Name) {
+			// csi-test counts numbers of snapshots, so we have to actually delete it.
+			s.createdVolumes[i] = s.createdVolumes[len(s.createdVolumes)-1]
+			s.createdVolumes[len(s.createdVolumes)-1] = nil
+			s.createdVolumes = s.createdVolumes[:len(s.createdVolumes)-1]
 		}
 	}
 	return nil
 }
 
+func (s *MockStorage) SnapCreate(snap *volume.SnapInfo) (*volume.SnapInfo, error) {
+
+	// Fill in missing snapshot fields on creation, keep original SourceVolumeId.
+	snap.CsiSnap = &csi.Snapshot{
+		SnapshotId:     uuid.New(),
+		SourceVolumeId: snap.CsiSnap.SourceVolumeId,
+		CreationTime:   ptypes.TimestampNow(),
+		ReadyToUse:     true,
+	}
+
+	vol, _ := s.GetByID(snap.CsiSnap.SourceVolumeId)
+	vol.Snapshots = append(vol.Snapshots, snap)
+
+	return snap, nil
+}
+
+func (s *MockStorage) SnapDelete(snap *volume.SnapInfo) error {
+	for _, vol := range s.createdVolumes {
+		for i, ss := range vol.Snapshots {
+			if snap.CsiSnap.SnapshotId == ss.CsiSnap.SnapshotId {
+				// csi-test counts numbers of snapshots, so we have to actually delete it.
+				vol.Snapshots[i] = vol.Snapshots[len(vol.Snapshots)-1]
+				vol.Snapshots[len(vol.Snapshots)-1] = nil
+				vol.Snapshots = vol.Snapshots[:len(vol.Snapshots)-1]
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
+func (s *MockStorage) GetSnapByName(name string) (*volume.SnapInfo, error) {
+	for _, vol := range s.createdVolumes {
+		for _, ss := range vol.Snapshots {
+			if ss.Name == name {
+				return ss, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
+func (s *MockStorage) ListSnaps() ([]*volume.SnapInfo, error) {
+	snaps := []*volume.SnapInfo{}
+	for _, vol := range s.createdVolumes {
+		for _, ss := range vol.Snapshots {
+			snaps = append(snaps, ss)
+		}
+	}
+	volume.SnapSort(snaps)
+	return snaps, nil
+}
+
+func (s *MockStorage) GetSnapByID(ID string) (*volume.SnapInfo, error) {
+	for _, vol := range s.createdVolumes {
+		for _, ss := range vol.Snapshots {
+			if ss.CsiSnap.SnapshotId == ID {
+				return ss, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
+func (s *MockStorage) VolFromSnap(snap *volume.SnapInfo, vol *volume.Info) error {
+	s.createdVolumes = append(s.createdVolumes, vol)
+	return nil
+}
+
+func (s *MockStorage) VolFromVol(sourceVol, vol *volume.Info) error {
+	s.createdVolumes = append(s.createdVolumes, vol)
+	return nil
+}
+
 func (s *MockStorage) CanonicalizeVolumeName(suggestedName string) string {
+	return suggestedName
+}
+
+func (s *MockStorage) CanonicalizeSnapshotName(suggestedName string) string {
 	return suggestedName
 }
 

@@ -19,8 +19,8 @@ of the LINSTOR cluster that you wish this plugin to interact with.
 
 You will need to enable the following feature gates on both the kube-apiserver
 and all kubelets for this plugin to be operational: `CSINodeInfo=true`,
-`CSIDriverRegistry=true`. Please ensure that your version of Kubernetes is
-recent enough to enable these gates.
+`CSIDriverRegistry=true,VolumeSnapshotDataSource=true`. Please ensure that your
+version of Kubernetes is recent enough to enable these gates.
 
 # Usage
 

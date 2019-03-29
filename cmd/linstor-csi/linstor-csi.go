@@ -60,6 +60,7 @@ func main() {
 		Storage:     linstorClient,
 		Assignments: linstorClient,
 		Mounter:     linstorClient,
+		Snapshots:   linstorClient,
 	})
 	if err != nil {
 		log.Fatal(err)

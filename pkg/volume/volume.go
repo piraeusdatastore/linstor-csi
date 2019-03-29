@@ -18,7 +18,12 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 package volume
 
-import "time"
+import (
+	"sort"
+	"time"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
+)
 
 // Info provides the everything need to manipulate volumes.
 type Info struct {
@@ -29,6 +34,23 @@ type Info struct {
 	SizeBytes    int64             `json:"sizeBytes"`
 	Readonly     bool              `json:"readonly"`
 	Parameters   map[string]string `json:"parameters"`
+	Snapshots    []*SnapInfo       `json:"snapshots"`
+}
+
+// SnapInfo provides everything needed to manipulate snapshots.
+type SnapInfo struct {
+	Name    string        `json:"name"`
+	CsiSnap *csi.Snapshot `json:"csiSnapshot"`
+}
+
+// SnapSort sorts a list of snaphosts.
+func SnapSort(snaps []*SnapInfo) {
+	sort.Slice(snaps, func(j, k int) bool {
+		if snaps[j].CsiSnap.CreationTime.Seconds == snaps[k].CsiSnap.CreationTime.Seconds {
+			return snaps[j].CsiSnap.CreationTime.Nanos < snaps[k].CsiSnap.CreationTime.Nanos
+		}
+		return snaps[j].CsiSnap.CreationTime.Seconds < snaps[k].CsiSnap.CreationTime.Seconds
+	})
 }
 
 type Assignment struct {
@@ -47,6 +69,24 @@ type CreateDeleter interface {
 	// of the suggestedName if the storage backend cannot use the suggestedName
 	// in its original form.
 	CanonicalizeVolumeName(suggestedName string) string
+}
+
+// SnapshotCreateDeleter handles the creation and deletion of snapshots.
+type SnapshotCreateDeleter interface {
+	SnapCreate(snap *SnapInfo) (*SnapInfo, error)
+	SnapDelete(snap *SnapInfo) error
+	GetSnapByName(name string) (*SnapInfo, error)
+	GetSnapByID(ID string) (*SnapInfo, error)
+	// List Snapshots should return a sorted list of snapshots.
+	ListSnaps() ([]*SnapInfo, error)
+	// CanonicalizeSnapshotName tries to return a relatively similar version
+	// of the suggestedName if the storage backend cannot use the suggestedName
+	// in its original form.
+	CanonicalizeSnapshotName(suggestedName string) string
+	// VolFromSnap creats a new volume based on the provided snapshot.
+	VolFromSnap(snap *SnapInfo, vol *Info) error
+	// VolFromVol creats a new volume based on the provided volume.
+	VolFromVol(sourceVol, vol *Info) error
 }
 
 type AttacherDettacher interface {
