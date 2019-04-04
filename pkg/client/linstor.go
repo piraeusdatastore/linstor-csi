@@ -390,6 +390,14 @@ func (s *Linstor) Detach(vol *volume.Info, node string) error {
 		return err
 	}
 
+	if !r.IsClient(node) {
+		s.log.WithFields(logrus.Fields{
+			"volume":     fmt.Sprintf("%+v", vol),
+			"targetNode": node,
+		}).Info("volume is diskfull on node, refusing to detach")
+		return nil
+	}
+
 	return r.Unassign(node)
 }
 
