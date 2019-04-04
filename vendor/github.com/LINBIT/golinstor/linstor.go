@@ -697,7 +697,7 @@ func (r ResourceDeployment) Attach(node string, asClient bool) error {
 
 // Make node diskfull without changing the total number of replicas.
 func (r ResourceDeployment) migrateTo(node string) error {
-	diskfulNodes, err := r.deployedNodes()
+	diskfulNodes, err := r.DeployedNodes()
 	if err != nil {
 		return err
 	}
@@ -750,7 +750,7 @@ func (r ResourceDeployment) enableProxy() error {
 	}
 
 	// Figure out deployed nodes before assigning proxy resources.
-	deployedNodes, err := r.deployedNodes()
+	deployedNodes, err := r.DeployedNodes()
 	if err != nil {
 		return err
 	}
@@ -799,7 +799,8 @@ func doProxyNodes(list nodeInfo, sites []string, key string) ([]string, error) {
 	return proxySiteNodes, nil
 }
 
-func (r ResourceDeployment) deployedNodes() ([]string, error) {
+// DeployedNodes returns a list of nodes where the reource is deployed diskfully.
+func (r ResourceDeployment) DeployedNodes() ([]string, error) {
 	list, err := r.listResources()
 	if err != nil {
 		return []string{}, nil

@@ -1,4 +1,4 @@
-# github.com/LINBIT/golinstor v0.13.0
+# github.com/LINBIT/golinstor v0.13.1
 github.com/LINBIT/golinstor
 # github.com/container-storage-interface/spec v1.1.0
 github.com/container-storage-interface/spec/lib/go/csi

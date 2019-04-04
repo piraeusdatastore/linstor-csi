@@ -69,6 +69,10 @@ type CreateDeleter interface {
 	// of the suggestedName if the storage backend cannot use the suggestedName
 	// in its original form.
 	CanonicalizeVolumeName(suggestedName string) string
+
+	// AccessibleTopologies returns the list of key value pairs volume topologies
+	// for the volume or nil if not applicable.
+	AccessibleTopologies(vol *Info) ([]*csi.Topology, error)
 }
 
 // SnapshotCreateDeleter handles the creation and deletion of snapshots.

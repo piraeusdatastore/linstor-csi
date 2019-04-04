@@ -52,6 +52,7 @@ const (
 	BlockSizeKey           = "blocksize"
 	ForceKey               = "force"
 	FSKey                  = "filesystem"
+	UseLocalStorageKey     = "podWithLocalVolume"
 	// These have to be camel case. Maybe move them into resource config for
 	// consistency?
 	MountOptsKey = "mountOpts"
@@ -334,6 +335,29 @@ func (s *Linstor) Delete(vol *volume.Info) error {
 	}
 
 	return r.Delete()
+}
+
+func (s *Linstor) AccessibleTopologies(vol *volume.Info) ([]*csi.Topology, error) {
+	if vol.Parameters[UseLocalStorageKey] != "true" {
+		return nil, nil
+	}
+
+	r, err := s.resDeploymentFromVolumeInfo(vol)
+	if err != nil {
+		return nil, err
+	}
+
+	nodes, err := r.DeployedNodes()
+	if err != nil {
+		return nil, err
+	}
+
+	topos := []*csi.Topology{}
+	for _, n := range nodes {
+		topos = append(topos, &csi.Topology{Segments: map[string]string{"kubernetes.io/hostname": n}})
+	}
+
+	return topos, nil
 }
 
 func (s *Linstor) Attach(vol *volume.Info, node string) error {

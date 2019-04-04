@@ -73,6 +73,10 @@ func (s *MockStorage) Delete(vol *volume.Info) error {
 	return nil
 }
 
+func (s *MockStorage) AccessibleTopologies(vol *volume.Info) ([]*csi.Topology, error) {
+	return nil, nil
+}
+
 func (s *MockStorage) SnapCreate(snap *volume.SnapInfo) (*volume.SnapInfo, error) {
 
 	// Fill in missing snapshot fields on creation, keep original SourceVolumeId.

@@ -190,13 +190,14 @@ func (d Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest
 func (d Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
 	return &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
-			{
-				Type: &csi.PluginCapability_Service_{
-					Service: &csi.PluginCapability_Service{
-						Type: csi.PluginCapability_Service_CONTROLLER_SERVICE,
-					},
-				},
-			},
+			{Type: &csi.PluginCapability_Service_{
+				Service: &csi.PluginCapability_Service{
+					Type: csi.PluginCapability_Service_CONTROLLER_SERVICE,
+				}}},
+			{Type: &csi.PluginCapability_Service_{
+				Service: &csi.PluginCapability_Service{
+					Type: csi.PluginCapability_Service_VOLUME_ACCESSIBILITY_CONSTRAINTS,
+				}}},
 		},
 	}, nil
 }
@@ -425,7 +426,8 @@ func (d Driver) NodeGetInfo(context.Context, *csi.NodeGetInfoRequest) (*csi.Node
 		NodeId: d.nodeID,
 		// TODO: I think we're limited by the number of linux block devices, which
 		// is a massive number, but I'm not sure if something up the stack limits us.
-		MaxVolumesPerNode: math.MaxInt64,
+		MaxVolumesPerNode:  math.MaxInt64,
+		AccessibleTopology: &csi.Topology{},
 	}, nil
 }
 
@@ -489,10 +491,18 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 			"existingVolume":      fmt.Sprintf("%+v", existingVolume),
 		}).Info("volume already present, but matches request")
 
+		topos, err := d.Storage.AccessibleTopologies(existingVolume)
+		if err != nil {
+			return &csi.CreateVolumeResponse{}, status.Errorf(
+				codes.Internal, "CreateVolume failed for %s: unable to determine volume topology: %v",
+				req.Name, err)
+		}
+
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
-				VolumeId:      existingVolume.ID,
-				CapacityBytes: existingVolume.SizeBytes,
+				VolumeId:           existingVolume.ID,
+				CapacityBytes:      existingVolume.SizeBytes,
+				AccessibleTopology: topos,
 			}}, nil
 	}
 
@@ -1032,10 +1042,19 @@ func (d Driver) createNewVolume(req *csi.CreateVolumeRequest) (*csi.CreateVolume
 				codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
 		}
 	}
+
+	topos, err := d.Storage.AccessibleTopologies(vol)
+	if err != nil {
+		return &csi.CreateVolumeResponse{}, status.Errorf(
+			codes.Internal, "CreateVolume failed for %s: unable to determine volume topology: %v",
+			req.Name, err)
+	}
+
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			VolumeId:      volumeID,
-			CapacityBytes: int64(volumeSize.InclusiveBytes()),
+			VolumeId:           volumeID,
+			CapacityBytes:      int64(volumeSize.InclusiveBytes()),
+			AccessibleTopology: topos,
 		}}, nil
 }
 
