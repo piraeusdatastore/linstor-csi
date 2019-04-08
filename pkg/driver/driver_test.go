@@ -27,40 +27,35 @@ func TestDriver(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	driverCfg := Config{
-		Endpoint: *endpoint,
-		NodeID:   *node,
-		LogOut:   logFile,
-		Debug:    true,
+	driver, err := NewDriver(
+		Endpoint(*endpoint), NodeID(*node), LogOut(logFile),
+		Debug, Name("io.drbd.linstor-csi-test"),
+	)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	mockStorageBackend := &client.MockStorage{}
-	driverCfg.Storage = mockStorageBackend
-	driverCfg.Assignments = mockStorageBackend
-	driverCfg.Mounter = mockStorageBackend
-	driverCfg.Snapshots = mockStorageBackend
-
-	if *controllers != "" {
-		realStorageBackend := client.NewLinstor(client.LinstorConfig{
-			LogOut: logFile,
-
-			Debug:       true,
-			Controllers: *controllers,
-		})
-		driverCfg.Storage = realStorageBackend
-		driverCfg.Assignments = realStorageBackend
-		if *mountForReal {
-			driverCfg.Mounter = realStorageBackend
-		}
-		if *snapshotForReal {
-			driverCfg.Snapshots = realStorageBackend
-		}
-	}
-
-	driver, _ := NewDriver(driverCfg)
-	driver.name = "io.drbd.linstor-csi-test"
 	driver.version = "linstor-csi-test-version"
 	defer driver.Stop()
+
+	if *controllers != "" {
+		realStorageBackend, err := client.NewLinstor(
+			client.Debug, client.Controllers(*controllers), client.LogOut(logFile),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Coljures that return functions that set linstor backends on the driver.
+		Storage(realStorageBackend)(driver)
+		Assignments(realStorageBackend)(driver)
+
+		if *mountForReal {
+			Mounter(realStorageBackend)(driver)
+		}
+		if *snapshotForReal {
+			Snapshots(realStorageBackend)(driver)
+		}
+	}
 
 	// run your driver
 	go driver.Run()
@@ -78,16 +73,9 @@ func TestDriver(t *testing.T) {
 	defer os.RemoveAll(mntStageDir)
 
 	cfg := &sanity.Config{
-		TargetPath:               mntDir + "/csi-target",
-		StagingPath:              mntStageDir + "/csi-staging",
-		Address:                  *endpoint,
-		TestVolumeParametersFile: *paramsFile,
-		CreateTargetDir: func(targetPath string) (string, error) {
-			return targetPath, createTargetDir(targetPath)
-		},
-		CreateStagingDir: func(targetPath string) (string, error) {
-			return targetPath, createTargetDir(targetPath)
-		},
+		StagingPath: mntStageDir,
+		TargetPath:  mntDir,
+		Address:     *endpoint,
 	}
 
 	// Now call the test suite

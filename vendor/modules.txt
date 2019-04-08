@@ -1,15 +1,14 @@
-# github.com/LINBIT/golinstor v0.13.0
+# github.com/LINBIT/golinstor v0.13.1
 github.com/LINBIT/golinstor
-# github.com/container-storage-interface/spec v1.1.0
-github.com/container-storage-interface/spec/lib/go/csi
-# github.com/golang/protobuf v1.3.0
-github.com/golang/protobuf/ptypes
+# github.com/container-storage-interface/spec v0.3.0
+github.com/container-storage-interface/spec/lib/go/csi/v0
+# github.com/golang/protobuf v1.2.0
 github.com/golang/protobuf/proto
-github.com/golang/protobuf/protoc-gen-go/descriptor
-github.com/golang/protobuf/ptypes/timestamp
 github.com/golang/protobuf/ptypes/wrappers
+github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
+github.com/golang/protobuf/ptypes/timestamp
 # github.com/google/uuid v1.0.0
 github.com/google/uuid
 # github.com/haySwim/data v0.2.0
@@ -22,12 +21,11 @@ github.com/hpcloud/tail/watch
 github.com/hpcloud/tail/winfile
 # github.com/konsorten/go-windows-terminal-sequences v1.0.2
 github.com/konsorten/go-windows-terminal-sequences
-# github.com/kubernetes-csi/csi-test v1.1.2-0.20190326145326-7e4a8e2872dc
+# github.com/kubernetes-csi/csi-test v0.3.0-1
 github.com/kubernetes-csi/csi-test/pkg/sanity
 github.com/kubernetes-csi/csi-test/utils
 # github.com/onsi/ginkgo v1.8.0
 github.com/onsi/ginkgo
-github.com/onsi/ginkgo/reporters
 github.com/onsi/ginkgo/config
 github.com/onsi/ginkgo/internal/codelocation
 github.com/onsi/ginkgo/internal/failer
@@ -35,6 +33,7 @@ github.com/onsi/ginkgo/internal/remote
 github.com/onsi/ginkgo/internal/suite
 github.com/onsi/ginkgo/internal/testingtproxy
 github.com/onsi/ginkgo/internal/writer
+github.com/onsi/ginkgo/reporters
 github.com/onsi/ginkgo/reporters/stenographer
 github.com/onsi/ginkgo/reporters/stenographer/support/go-colorable
 github.com/onsi/ginkgo/types
@@ -61,10 +60,8 @@ github.com/onsi/gomega/matchers/support/goraph/util
 github.com/pborman/uuid
 # github.com/satori/go.uuid v1.2.0
 github.com/satori/go.uuid
-# github.com/sirupsen/logrus v1.3.0
+# github.com/sirupsen/logrus v1.4.1
 github.com/sirupsen/logrus
-# golang.org/x/crypto v0.0.0-20190228161510-8dd112bcdc25
-golang.org/x/crypto/ssh/terminal
 # golang.org/x/net v0.0.0-20180906233101-161cd47e91fd
 golang.org/x/net/context
 golang.org/x/net/trace
@@ -78,7 +75,6 @@ golang.org/x/net/html
 golang.org/x/net/html/atom
 # golang.org/x/sys v0.0.0-20190228124157-a34e9553db1e
 golang.org/x/sys/unix
-golang.org/x/sys/windows
 # golang.org/x/text v0.3.0
 golang.org/x/text/secure/bidirule
 golang.org/x/text/unicode/bidi
@@ -98,7 +94,7 @@ golang.org/x/text/language
 golang.org/x/text/internal/utf8internal
 golang.org/x/text/runes
 golang.org/x/text/internal/tag
-# google.golang.org/genproto v0.0.0-20180831171423-11092d34479b
+# google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
 google.golang.org/genproto/googleapis/rpc/status
 # google.golang.org/grpc v1.19.0
 google.golang.org/grpc

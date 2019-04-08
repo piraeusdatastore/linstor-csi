@@ -41,30 +41,32 @@ func main() {
 	logOut := os.Stderr
 	logFmt := &log.TextFormatter{}
 
-	linstorClient := client.NewLinstor(client.LinstorConfig{
-		LogOut:      logOut,
-		LogFmt:      logFmt,
-		Debug:       *debug,
-		Controllers: *controllers,
-	})
-
-	// Setup loggin incase there are errors external to the driver/client.
+	// Setup logging incase there are errors external to the driver/client.
 	log.SetFormatter(logFmt)
 	log.SetOutput(logOut)
 
-	drv, err := driver.NewDriver(driver.Config{
-		Endpoint:    *endpoint,
-		NodeID:      *node,
-		LogOut:      logOut,
-		Debug:       *debug,
-		Storage:     linstorClient,
-		Assignments: linstorClient,
-		Mounter:     linstorClient,
-		Snapshots:   linstorClient,
-	})
+	linstorClient, err := client.NewLinstor(
+		client.LogOut(logOut), client.LogFmt(logFmt),
+		client.Controllers(*controllers),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	drv, err := driver.NewDriver(
+		driver.Endpoint(*endpoint), driver.NodeID(*node), driver.LogOut(logOut),
+		driver.Storage(linstorClient), driver.Assignments(linstorClient),
+		driver.Mounter(linstorClient), driver.Snapshots(linstorClient),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if *debug {
+		client.Debug(linstorClient)
+		driver.Debug(drv)
+	}
+
 	defer drv.Stop()
 
 	if err := drv.Run(); err != nil {

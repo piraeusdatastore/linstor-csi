@@ -1,0 +1,8 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: linstor-basic-storage
+provisioner: io.drbd.linstor-csi
+parameters:
+  autoPlace: "2"
+  storagePool: "my-storage-pool"

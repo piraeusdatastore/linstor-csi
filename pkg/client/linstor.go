@@ -27,14 +27,14 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	lc "github.com/LINBIT/golinstor"
 	"github.com/LINBIT/linstor-csi/pkg/volume"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	ptypes "github.com/golang/protobuf/ptypes"
+	"github.com/container-storage-interface/spec/lib/go/csi/v0"
 	"github.com/haySwim/data"
 	"github.com/pborman/uuid"
-	log "github.com/sirupsen/logrus"
+	logrus "github.com/sirupsen/logrus"
 )
 
 const (
@@ -52,6 +52,7 @@ const (
 	BlockSizeKey           = "blocksize"
 	ForceKey               = "force"
 	FSKey                  = "filesystem"
+	UseLocalStorageKey     = "podWithLocalVolume"
 	// These have to be camel case. Maybe move them into resource config for
 	// consistency?
 	MountOptsKey = "mountOpts"
@@ -59,48 +60,78 @@ const (
 )
 
 type Linstor struct {
-	LinstorConfig
-	log            *log.Entry
+	log            *logrus.Entry
 	annotationsKey string
 	fallbackPrefix string
+	logOut         io.Writer
+	controllers    string
 }
 
-type LinstorConfig struct {
-	LogOut      io.Writer
-	LogFmt      log.Formatter
-	Debug       bool
-	Controllers string
-}
-
-func NewLinstor(cfg LinstorConfig) *Linstor {
-	l := &Linstor{LinstorConfig: cfg}
-
-	l.annotationsKey = "csi-volume-annotations"
-	l.fallbackPrefix = "csi-"
-	l.LogOut = cfg.LogOut
-
-	if cfg.LogFmt != nil {
-		log.SetFormatter(cfg.LogFmt)
+// NewLinstor returns a high-level linstor client for CSI applications to interact with
+// By default, it will try to connect with localhost:3370. See Controllers func
+// for chancing this setting.
+func NewLinstor(options ...func(*Linstor) error) (*Linstor, error) {
+	l := &Linstor{
+		annotationsKey: "csi-volume-annotations",
+		fallbackPrefix: "csi-",
+		controllers:    "localhost:3370",
+		log:            logrus.NewEntry(logrus.New()),
 	}
-	if cfg.LogOut == nil {
-		cfg.LogOut = ioutil.Discard
-	}
-	if cfg.Debug {
-		log.SetLevel(log.DebugLevel)
-		log.SetReportCaller(true)
-	}
-	log.SetOutput(cfg.LogOut)
 
-	l.log = log.WithFields(log.Fields{
-		"linstorCSIComponent": "client",
+	l.log.Logger.SetFormatter(&logrus.TextFormatter{})
+	l.log.Logger.SetOutput(ioutil.Discard)
+
+	// run all option functions.
+	for _, opt := range options {
+		err := opt(l)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Add in fields that may have been configured above.
+	l.log = l.log.WithFields(logrus.Fields{
 		"annotationsKey":      l.annotationsKey,
-		"controllers":         l.Controllers,
+		"linstorCSIComponent": "client",
+		"controllers":         l.controllers,
 	})
 
-	l.log.WithFields(log.Fields{
+	l.log.WithFields(logrus.Fields{
 		"resourceDeployment": fmt.Sprintf("%+v", l),
 	}).Debug("generated new ResourceDeployment")
-	return l
+	return l, nil
+}
+
+// Controllers is the list of Linstor controllers to communicate with.
+func Controllers(controllers ...string) func(*Linstor) error {
+	return func(l *Linstor) error {
+		l.controllers = strings.Join(controllers, ",")
+		return nil
+	}
+}
+
+// LogOut sets the Linstor client to write logs to the provided io.Writer
+// instead of discarding logs.
+func LogOut(out io.Writer) func(*Linstor) error {
+	return func(l *Linstor) error {
+		l.log.Logger.SetOutput(out)
+		return nil
+	}
+}
+
+// LogFmt sets the format of the log outpout via the provided logrus.Formatter.
+func LogFmt(fmt logrus.Formatter) func(*Linstor) error {
+	return func(l *Linstor) error {
+		l.log.Logger.SetFormatter(fmt)
+		return nil
+	}
+}
+
+// Debug sets debugging log behavor.
+func Debug(l *Linstor) error {
+	l.log.Logger.SetLevel(logrus.DebugLevel)
+	l.log.Logger.SetReportCaller(true)
+	return nil
 }
 
 func (s *Linstor) ListAll(parameters map[string]string) ([]*volume.Info, error) {
@@ -151,7 +182,7 @@ func (s *Linstor) resDefToVolume(resDef lc.ResDef) (*volume.Info, error) {
 			if vol.Name == "" {
 				return nil, fmt.Errorf("Failed to extract resource name from %+v", vol)
 			}
-			s.log.WithFields(log.Fields{
+			s.log.WithFields(logrus.Fields{
 				"resourceDefinition": fmt.Sprintf("%+v", resDef),
 				"volume":             fmt.Sprintf("%+v", vol),
 			}).Debug("converted resource definition to volume")
@@ -164,9 +195,9 @@ func (s *Linstor) resDefToVolume(resDef lc.ResDef) (*volume.Info, error) {
 func (s *Linstor) resDeploymentConfigFromVolumeInfo(vol *volume.Info) (*lc.ResourceDeploymentConfig, error) {
 	cfg := &lc.ResourceDeploymentConfig{}
 
-	cfg.LogOut = s.LogOut
+	cfg.LogOut = s.logOut
 
-	cfg.Controllers = s.Controllers
+	cfg.Controllers = s.controllers
 
 	// At this time vol.ID has to be a valid LINSTOR Name
 	cfg.Name = vol.ID
@@ -226,14 +257,14 @@ func (s *Linstor) resDeploymentFromVolumeInfo(vol *volume.Info) (*lc.ResourceDep
 }
 
 func (s *Linstor) GetByName(name string) (*volume.Info, error) {
-	s.log.WithFields(log.Fields{
+	s.log.WithFields(logrus.Fields{
 		"csiVolumeName": name,
 	}).Debug("looking up resource by CSI volume name")
 
 	r := lc.NewResourceDeployment(lc.ResourceDeploymentConfig{
 		Name:        "CSIGetByName",
-		Controllers: s.Controllers,
-		LogOut:      s.LogOut})
+		Controllers: s.controllers,
+		LogOut:      s.logOut})
 	list, err := r.ListResourceDefinitions()
 	if err != nil {
 		return nil, err
@@ -255,14 +286,14 @@ func (s *Linstor) GetByName(name string) (*volume.Info, error) {
 }
 
 func (s *Linstor) GetByID(ID string) (*volume.Info, error) {
-	s.log.WithFields(log.Fields{
+	s.log.WithFields(logrus.Fields{
 		"csiVolumeID": ID,
 	}).Debug("looking up resource by CSI volume ID")
 
 	r := lc.NewResourceDeployment(lc.ResourceDeploymentConfig{
 		Name:        "CSIGetByID",
-		Controllers: s.Controllers,
-		LogOut:      s.LogOut})
+		Controllers: s.controllers,
+		LogOut:      s.logOut})
 	list, err := r.ListResourceDefinitions()
 	if err != nil {
 		return nil, err
@@ -281,7 +312,7 @@ func (s *Linstor) GetByID(ID string) (*volume.Info, error) {
 }
 
 func (s *Linstor) Create(vol *volume.Info) error {
-	s.log.WithFields(log.Fields{
+	s.log.WithFields(logrus.Fields{
 		"volume": fmt.Sprintf("%+v", vol),
 	}).Info("creating volume")
 
@@ -294,7 +325,7 @@ func (s *Linstor) Create(vol *volume.Info) error {
 }
 
 func (s *Linstor) Delete(vol *volume.Info) error {
-	s.log.WithFields(log.Fields{
+	s.log.WithFields(logrus.Fields{
 		"volume": fmt.Sprintf("%+v", vol),
 	}).Info("deleting volume")
 
@@ -306,8 +337,31 @@ func (s *Linstor) Delete(vol *volume.Info) error {
 	return r.Delete()
 }
 
+func (s *Linstor) AccessibleTopologies(vol *volume.Info) ([]*csi.Topology, error) {
+	if vol.Parameters[UseLocalStorageKey] != "true" {
+		return nil, nil
+	}
+
+	r, err := s.resDeploymentFromVolumeInfo(vol)
+	if err != nil {
+		return nil, err
+	}
+
+	nodes, err := r.DeployedNodes()
+	if err != nil {
+		return nil, err
+	}
+
+	topos := []*csi.Topology{}
+	for _, n := range nodes {
+		topos = append(topos, &csi.Topology{Segments: map[string]string{"kubernetes.io/hostname": n}})
+	}
+
+	return topos, nil
+}
+
 func (s *Linstor) Attach(vol *volume.Info, node string) error {
-	s.log.WithFields(log.Fields{
+	s.log.WithFields(logrus.Fields{
 		"volume":     fmt.Sprintf("%+v", vol),
 		"targetNode": node,
 	}).Info("attaching volume")
@@ -326,7 +380,7 @@ func (s *Linstor) Attach(vol *volume.Info, node string) error {
 
 // Detach removes a volume from the node.
 func (s *Linstor) Detach(vol *volume.Info, node string) error {
-	s.log.WithFields(log.Fields{
+	s.log.WithFields(logrus.Fields{
 		"volume":     fmt.Sprintf("%+v", vol),
 		"targetNode": node,
 	}).Info("detaching volume")
@@ -334,6 +388,14 @@ func (s *Linstor) Detach(vol *volume.Info, node string) error {
 	r, err := s.resDeploymentFromVolumeInfo(vol)
 	if err != nil {
 		return err
+	}
+
+	if !r.IsClient(node) {
+		s.log.WithFields(logrus.Fields{
+			"volume":     fmt.Sprintf("%+v", vol),
+			"targetNode": node,
+		}).Info("volume is diskfull on node, refusing to detach")
+		return nil
 	}
 
 	return r.Unassign(node)
@@ -358,14 +420,16 @@ func (s *Linstor) SnapCreate(snap *volume.SnapInfo) (*volume.SnapInfo, error) {
 
 	// Fill in missing snapshot fields on creation, keep original SourceVolumeId.
 	snap.CsiSnap = &csi.Snapshot{
-		SnapshotId:     linSnap.UUID,
+		Id:             linSnap.UUID,
 		SourceVolumeId: snap.CsiSnap.SourceVolumeId,
 		SizeBytes:      int64(data.NewKibiByte(data.KiB * data.ByteSize(linSnap.SnapshotVlmDfns[0].VlmSize)).InclusiveBytes()),
-		CreationTime:   ptypes.TimestampNow(),
-		ReadyToUse:     true,
+		CreatedAt:      time.Now().UnixNano(),
+		Status: &csi.SnapshotStatus{
+			Type: csi.SnapshotStatus_READY,
+		},
 	}
 
-	s.log.WithFields(log.Fields{
+	s.log.WithFields(logrus.Fields{
 		"linstorSnapshot": fmt.Sprintf("%+v", linSnap),
 		"csiSnapshot":     fmt.Sprintf("%+v", *snap),
 	}).Debug("created new snapshot")
@@ -379,7 +443,7 @@ func (s *Linstor) SnapCreate(snap *volume.SnapInfo) (*volume.SnapInfo, error) {
 	if err := r.SetAuxProp(s.annotationsKey, string(serializedVol)); err != nil {
 		// We should at least try to delete the snapshot here, even though it succeeded
 		// without error it's going be unregistered as far as the CO is concerned.
-		if err := r.SnapshotDelete(snap.CsiSnap.SnapshotId); err != nil {
+		if err := r.SnapshotDelete(snap.CsiSnap.Id); err != nil {
 			s.log.WithError(err).Error("failed to clean up snapshot after recording its metadata failed")
 		}
 		return nil, fmt.Errorf("unable to record new snapshot metadata: %v", err)
@@ -400,7 +464,7 @@ func (s *Linstor) SnapDelete(snap *volume.SnapInfo) error {
 		return err
 	}
 
-	if err := r.SnapshotDelete(snap.CsiSnap.SnapshotId); err != nil {
+	if err := r.SnapshotDelete(snap.CsiSnap.Id); err != nil {
 		return fmt.Errorf("failed to remove snaphsot: %v", err)
 	}
 
@@ -417,7 +481,7 @@ func (s *Linstor) SnapDelete(snap *volume.SnapInfo) error {
 		return err
 	}
 	if err := r.SetAuxProp(s.annotationsKey, string(serializedVol)); err != nil {
-		if err := r.SnapshotDelete(snap.CsiSnap.SnapshotId); err != nil {
+		if err := r.SnapshotDelete(snap.CsiSnap.Id); err != nil {
 			s.log.WithError(err).Error("failed to update snapshot list after recording its metadata failed")
 		}
 		return fmt.Errorf("unable to record new snapshot metadata: %v", err)
@@ -428,7 +492,7 @@ func (s *Linstor) SnapDelete(snap *volume.SnapInfo) error {
 
 // VolFromSnap creates the volume using the data contained within the snapshot.
 func (s *Linstor) VolFromSnap(snap *volume.SnapInfo, vol *volume.Info) error {
-	s.log.WithFields(log.Fields{
+	s.log.WithFields(logrus.Fields{
 		"volume":   fmt.Sprintf("%+v", vol),
 		"snapshot": fmt.Sprintf("%+v", snap),
 	}).Info("creating volume from snapshot")
@@ -438,11 +502,11 @@ func (s *Linstor) VolFromSnap(snap *volume.SnapInfo, vol *volume.Info) error {
 		return err
 	}
 
-	return r.NewResourceFromSnapshot(snap.CsiSnap.SnapshotId)
+	return r.NewResourceFromSnapshot(snap.CsiSnap.Id)
 }
 
 func (s *Linstor) VolFromVol(sourceVol, vol *volume.Info) error {
-	s.log.WithFields(log.Fields{
+	s.log.WithFields(logrus.Fields{
 		"volume":       fmt.Sprintf("%+v", vol),
 		"sourceVolume": fmt.Sprintf("%+v", sourceVol),
 	}).Info("creating volume from snapshot")
@@ -498,8 +562,8 @@ func (s *Linstor) CanonicalizeSnapshotName(suggestedName string) string {
 func (s *Linstor) ListVolumes() ([]*volume.Info, error) {
 	r := lc.NewResourceDeployment(lc.ResourceDeploymentConfig{
 		Name:        "CSIVolumeList",
-		Controllers: s.Controllers,
-		LogOut:      s.LogOut})
+		Controllers: s.controllers,
+		LogOut:      s.logOut})
 
 	allResDefs, err := r.ListResourceDefinitions()
 	if err != nil {
@@ -515,7 +579,7 @@ func (s *Linstor) ListVolumes() ([]*volume.Info, error) {
 		// Linstor names are CSI IDs.
 		vol, err := s.resDefToVolume(rd)
 		if err != nil {
-			s.log.WithFields(log.Fields{
+			s.log.WithFields(logrus.Fields{
 				"resourceDefinition": fmt.Sprintf("%+v", rd),
 			}).WithError(err).Error("failed to internally represent volume but continuing — likely non-CSI volume")
 			continue
@@ -557,7 +621,7 @@ func (s *Linstor) GetSnapByID(ID string) (*volume.SnapInfo, error) {
 func (s *Linstor) doGetSnapByID(vols []*volume.Info, ID string) *volume.SnapInfo {
 	for _, vol := range vols {
 		for _, snap := range vol.Snapshots {
-			if snap.CsiSnap.SnapshotId == ID {
+			if snap.CsiSnap.Id == ID {
 				return snap
 			}
 		}
@@ -568,14 +632,14 @@ func (s *Linstor) doGetSnapByID(vols []*volume.Info, ID string) *volume.SnapInfo
 func (s *Linstor) ListSnaps() ([]*volume.SnapInfo, error) {
 	r := lc.NewResourceDeployment(lc.ResourceDeploymentConfig{
 		Name:        "CSISnapList",
-		Controllers: s.Controllers,
-		LogOut:      s.LogOut})
+		Controllers: s.controllers,
+		LogOut:      s.logOut})
 
 	allSnaps, err := r.SnapshotList()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list snapshots: %v", err)
 	}
-	s.log.WithFields(log.Fields{
+	s.log.WithFields(logrus.Fields{
 		"allLinstorSnapshots": fmt.Sprintf("%+v", allSnaps),
 	}).Debug("retrived all linstor snapshots")
 
@@ -591,7 +655,7 @@ func (s *Linstor) ListSnaps() ([]*volume.SnapInfo, error) {
 		if snapCreatedByMe != nil {
 			snaps = append(snaps, snapCreatedByMe)
 		} else {
-			s.log.WithFields(log.Fields{
+			s.log.WithFields(logrus.Fields{
 				"missingSnapshot": fmt.Sprintf("%+v", snap),
 			}).Info("unable to look up snap by it's UUID, potentially not made by me")
 
@@ -612,7 +676,7 @@ func (s *Linstor) NodeAvailable(node string) (bool, error) {
 }
 
 func (s *Linstor) GetAssignmentOnNode(vol *volume.Info, node string) (*volume.Assignment, error) {
-	s.log.WithFields(log.Fields{
+	s.log.WithFields(logrus.Fields{
 		"volume":     fmt.Sprintf("%+v", vol),
 		"targetNode": node,
 	}).Debug("getting assignment info")
@@ -631,7 +695,7 @@ func (s *Linstor) GetAssignmentOnNode(vol *volume.Info, node string) (*volume.As
 		Node: node,
 		Path: devPath,
 	}
-	s.log.WithFields(log.Fields{
+	s.log.WithFields(logrus.Fields{
 		"volumeAssignment": fmt.Sprintf("%+v", va),
 	}).Debug("found assignment info")
 
@@ -639,7 +703,7 @@ func (s *Linstor) GetAssignmentOnNode(vol *volume.Info, node string) (*volume.As
 }
 
 func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options []string) error {
-	s.log.WithFields(log.Fields{
+	s.log.WithFields(logrus.Fields{
 		"volume": fmt.Sprintf("%+v", vol),
 		"source": source,
 		"target": target,
@@ -667,7 +731,7 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 		MountOpts:          mntOpts,
 		FSOpts:             vol.Parameters[FSOptsKey],
 	}
-	s.log.WithFields(log.Fields{
+	s.log.WithFields(logrus.Fields{
 		"mounter": fmt.Sprintf("%+v", mounter),
 	}).Debug("configured mounter")
 
@@ -680,17 +744,17 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 }
 
 func (s *Linstor) Unmount(target string) error {
-	s.log.WithFields(log.Fields{
+	s.log.WithFields(logrus.Fields{
 		"target": target,
 	}).Info("unmounting volume")
 
 	r := lc.NewResourceDeployment(lc.ResourceDeploymentConfig{
 		Name:   "CSI Unmount",
-		LogOut: s.LogOut})
+		LogOut: s.logOut})
 	mounter := lc.FSUtil{
 		ResourceDeployment: &r,
 	}
-	s.log.WithFields(log.Fields{
+	s.log.WithFields(logrus.Fields{
 		"mounter": fmt.Sprintf("%+v", mounter),
 	}).Debug("configured mounter")
 

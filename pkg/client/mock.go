@@ -19,9 +19,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 package client
 
 import (
+	"time"
+
 	"github.com/LINBIT/linstor-csi/pkg/volume"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	ptypes "github.com/golang/protobuf/ptypes"
+	"github.com/container-storage-interface/spec/lib/go/csi/v0"
 	"github.com/pborman/uuid"
 )
 
@@ -73,14 +74,19 @@ func (s *MockStorage) Delete(vol *volume.Info) error {
 	return nil
 }
 
-func (s *MockStorage) SnapCreate(snap *volume.SnapInfo) (*volume.SnapInfo, error) {
+func (s *MockStorage) AccessibleTopologies(vol *volume.Info) ([]*csi.Topology, error) {
+	return nil, nil
+}
 
+func (s *MockStorage) SnapCreate(snap *volume.SnapInfo) (*volume.SnapInfo, error) {
 	// Fill in missing snapshot fields on creation, keep original SourceVolumeId.
 	snap.CsiSnap = &csi.Snapshot{
-		SnapshotId:     uuid.New(),
+		Id:             uuid.New(),
 		SourceVolumeId: snap.CsiSnap.SourceVolumeId,
-		CreationTime:   ptypes.TimestampNow(),
-		ReadyToUse:     true,
+		CreatedAt:      time.Now().UnixNano(),
+		Status: &csi.SnapshotStatus{
+			Type: csi.SnapshotStatus_READY,
+		},
 	}
 
 	vol, _ := s.GetByID(snap.CsiSnap.SourceVolumeId)
@@ -92,7 +98,7 @@ func (s *MockStorage) SnapCreate(snap *volume.SnapInfo) (*volume.SnapInfo, error
 func (s *MockStorage) SnapDelete(snap *volume.SnapInfo) error {
 	for _, vol := range s.createdVolumes {
 		for i, ss := range vol.Snapshots {
-			if snap.CsiSnap.SnapshotId == ss.CsiSnap.SnapshotId {
+			if snap.CsiSnap.Id == ss.CsiSnap.Id {
 				// csi-test counts numbers of snapshots, so we have to actually delete it.
 				vol.Snapshots[i] = vol.Snapshots[len(vol.Snapshots)-1]
 				vol.Snapshots[len(vol.Snapshots)-1] = nil
@@ -129,7 +135,7 @@ func (s *MockStorage) ListSnaps() ([]*volume.SnapInfo, error) {
 func (s *MockStorage) GetSnapByID(ID string) (*volume.SnapInfo, error) {
 	for _, vol := range s.createdVolumes {
 		for _, ss := range vol.Snapshots {
-			if ss.CsiSnap.SnapshotId == ID {
+			if ss.CsiSnap.Id == ID {
 				return ss, nil
 			}
 		}

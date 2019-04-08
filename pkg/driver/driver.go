@@ -32,10 +32,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/LINBIT/linstor-csi/pkg/client"
 	"github.com/LINBIT/linstor-csi/pkg/volume"
-	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/container-storage-interface/spec/lib/go/csi/v0"
 	"github.com/haySwim/data"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -46,56 +47,135 @@ var Version = "UNKNOWN"
 
 // Driver fullfils CSI controller, node, and indentity server interfaces.
 type Driver struct {
-	Config
-	srv     *grpc.Server
-	log     *log.Entry
-	version string
-	name    string
-}
-
-// Config provides sensible defaults for creating Drivers
-type Config struct {
-	Endpoint           string
-	NodeID             string
-	Controllers        string
-	DefaultStoragePool string
-	Debug              bool
-	LogOut             io.Writer
-	LogFmt             log.Formatter
-	Storage            volume.CreateDeleter
-	Assignments        volume.AttacherDettacher
-	Mounter            volume.Mounter
-	Snapshots          volume.SnapshotCreateDeleter
+	Storage     volume.CreateDeleter
+	Assignments volume.AttacherDettacher
+	Mounter     volume.Mounter
+	Snapshots   volume.SnapshotCreateDeleter
+	srv         *grpc.Server
+	log         *logrus.Entry
+	version     string
+	name        string
+	endpoint    string
+	nodeID      string
 }
 
 // NewDriver build up a driver.
-func NewDriver(cfg Config) (*Driver, error) {
+func NewDriver(options ...func(*Driver) error) (*Driver, error) {
+	// Set up default noop-ish storage backend.
+	mockStorage := &client.MockStorage{}
 
-	if cfg.LogFmt != nil {
-		log.SetFormatter(cfg.LogFmt)
+	d := &Driver{
+		name:        "io.drbd.linstor-csi",
+		version:     Version,
+		nodeID:      "localhost",
+		Storage:     mockStorage,
+		Assignments: mockStorage,
+		Mounter:     mockStorage,
+		Snapshots:   mockStorage,
+		log:         logrus.NewEntry(logrus.New()),
 	}
-	if cfg.LogOut == nil {
-		cfg.LogOut = ioutil.Discard
-	}
-	if cfg.Debug {
-		log.SetLevel(log.DebugLevel)
-		log.SetReportCaller(true)
-	}
-	log.SetOutput(cfg.LogOut)
 
-	d := Driver{
-		Config:  cfg,
-		name:    "io.drbd.linstor-csi",
-		version: Version,
+	d.log.Logger.SetOutput(ioutil.Discard)
+	d.log.Logger.SetFormatter(&logrus.TextFormatter{})
+
+	d.endpoint = fmt.Sprintf("unix:///var/lib/kubelet/plugins/%s/csi.sock", d.name)
+
+	for _, opt := range options {
+		err := opt(d)
+		if err != nil {
+			return nil, err
+		}
 	}
-	d.log = log.WithFields(log.Fields{
+
+	// Add in fields that may have been configured above.
+	d.log = d.log.WithFields(logrus.Fields{
 		"linstorCSIComponent": "driver",
-		"provisioner":         d.name,
 		"version":             d.version,
-		"nodeID":              d.NodeID,
+		"provisioner":         d.name,
+		"nodeID":              d.nodeID,
 	})
 
-	return &d, nil
+	return d, nil
+}
+
+// Storage configures the volume service backend.
+func Storage(s volume.CreateDeleter) func(*Driver) error {
+	return func(d *Driver) error {
+		d.Storage = s
+		return nil
+	}
+}
+
+// Assignments configures the volume attachment service backend.
+func Assignments(a volume.AttacherDettacher) func(*Driver) error {
+	return func(d *Driver) error {
+		d.Assignments = a
+		return nil
+	}
+}
+
+// Snapshots configures the volume snapshot service backend.
+func Snapshots(s volume.SnapshotCreateDeleter) func(*Driver) error {
+	return func(d *Driver) error {
+		d.Snapshots = s
+		return nil
+	}
+}
+
+// Mounter configures the volume mounting service backend.
+func Mounter(m volume.Mounter) func(*Driver) error {
+	return func(d *Driver) error {
+		d.Mounter = m
+		return nil
+	}
+}
+
+// NodeID configures the driver node ID.
+func NodeID(nodeID string) func(*Driver) error {
+	return func(d *Driver) error {
+		d.nodeID = nodeID
+		return nil
+	}
+}
+
+// Endpoint configures the driver name.
+func Endpoint(ep string) func(*Driver) error {
+	return func(d *Driver) error {
+		d.endpoint = ep
+		return nil
+	}
+}
+
+// Name configures the driver name.
+func Name(name string) func(*Driver) error {
+	return func(d *Driver) error {
+		d.name = name
+		return nil
+	}
+}
+
+// LogOut sets the driver to write logs to the provided io.writer
+// instead of discarding logs.
+func LogOut(out io.Writer) func(*Driver) error {
+	return func(d *Driver) error {
+		d.log.Logger.SetOutput(out)
+		return nil
+	}
+}
+
+// LogFmt sets the format of the log outpout via the provided logrus.Formatter.
+func LogFmt(fmt logrus.Formatter) func(*Driver) error {
+	return func(d *Driver) error {
+		d.log.Logger.SetFormatter(fmt)
+		return nil
+	}
+}
+
+// Debug sets debugging log behavor.
+func Debug(d *Driver) error {
+	d.log.Logger.SetLevel(logrus.DebugLevel)
+	d.log.Logger.SetReportCaller(true)
+	return nil
 }
 
 // GetPluginInfo returns driver info
@@ -110,13 +190,14 @@ func (d Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest
 func (d Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
 	return &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
-			{
-				Type: &csi.PluginCapability_Service_{
-					Service: &csi.PluginCapability_Service{
-						Type: csi.PluginCapability_Service_CONTROLLER_SERVICE,
-					},
-				},
-			},
+			{Type: &csi.PluginCapability_Service_{
+				Service: &csi.PluginCapability_Service{
+					Type: csi.PluginCapability_Service_CONTROLLER_SERVICE,
+				}}},
+			{Type: &csi.PluginCapability_Service_{
+				Service: &csi.PluginCapability_Service{
+					Type: csi.PluginCapability_Service_ACCESSIBILITY_CONSTRAINTS,
+				}}},
 		},
 	}, nil
 }
@@ -174,7 +255,7 @@ func (d Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeReq
 		return nil, err
 	}
 
-	assignedTo, err := d.Assignments.GetAssignmentOnNode(existingVolume, d.NodeID)
+	assignedTo, err := d.Assignments.GetAssignmentOnNode(existingVolume, d.nodeID)
 	if err != nil {
 		return nil, err
 	}
@@ -315,12 +396,6 @@ func (d Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishV
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-// NodeGetVolumeStats is unimplemented, there's no danger of it getting called
-// until we update the node capabilities to say that we can do this.
-func (d Driver) NodeGetVolumeStats(context.Context, *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
-	return &csi.NodeGetVolumeStatsResponse{}, nil
-}
-
 // NodeGetCapabilities allows the CO to check the supported capabilities of
 // node service provided by the Plugin.
 func (d Driver) NodeGetCapabilities(context.Context, *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
@@ -342,11 +417,19 @@ func (d Driver) NodeGetCapabilities(context.Context, *csi.NodeGetCapabilitiesReq
 // ControllerPublishVolume.
 func (d Driver) NodeGetInfo(context.Context, *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	return &csi.NodeGetInfoResponse{
-		NodeId: d.NodeID,
+		NodeId: d.nodeID,
 		// TODO: I think we're limited by the number of linux block devices, which
 		// is a massive number, but I'm not sure if something up the stack limits us.
-		MaxVolumesPerNode: math.MaxInt64,
+		MaxVolumesPerNode:  math.MaxInt64,
+		AccessibleTopology: &csi.Topology{},
 	}, nil
+}
+
+func (d Driver) NodeGetId(ctx context.Context, req *csi.NodeGetIdRequest) (*csi.NodeGetIdResponse, error) {
+	return &csi.NodeGetIdResponse{
+		NodeId: d.nodeID,
+	}, nil
+
 }
 
 // CreateVolume will be called by the CO to provision a new volume on
@@ -383,7 +466,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 
 	if existingVolume != nil {
 
-		d.log.WithFields(log.Fields{
+		d.log.WithFields(logrus.Fields{
 			"requestedVolumeName": req.Name,
 			"existingVolume":      fmt.Sprintf("%+v", existingVolume),
 		}).Info("found existing volume")
@@ -402,17 +485,25 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 					req.Name, d.name, existingVolume.SizeBytes, int64(volumeSize.InclusiveBytes())))
 		}
 
-		d.log.WithFields(log.Fields{
+		d.log.WithFields(logrus.Fields{
 			"requestedVolumeName": req.Name,
 			"volumeSize":          volumeSize,
 			"expectedCreatedBy":   d.name,
 			"existingVolume":      fmt.Sprintf("%+v", existingVolume),
 		}).Info("volume already present, but matches request")
 
+		topos, err := d.Storage.AccessibleTopologies(existingVolume)
+		if err != nil {
+			return &csi.CreateVolumeResponse{}, status.Errorf(
+				codes.Internal, "CreateVolume failed for %s: unable to determine volume topology: %v",
+				req.Name, err)
+		}
+
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
-				VolumeId:      existingVolume.ID,
-				CapacityBytes: existingVolume.SizeBytes,
+				Id:                 existingVolume.ID,
+				CapacityBytes:      existingVolume.SizeBytes,
+				AccessibleTopology: topos,
 			}}, nil
 	}
 
@@ -436,7 +527,7 @@ func (d Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) 
 		// Volume doesn't exist, and that's the point of this call after all.
 		return &csi.DeleteVolumeResponse{}, nil
 	}
-	d.log.WithFields(log.Fields{
+	d.log.WithFields(logrus.Fields{
 		"existingVolume": fmt.Sprintf("%+v", existingVolume),
 	}).Info("found existing volume")
 
@@ -485,7 +576,7 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 				"ControllerPublishVolume failed for %s: volume not present in storage backend",
 				req.VolumeId))
 	}
-	d.log.WithFields(log.Fields{
+	d.log.WithFields(logrus.Fields{
 		"existingVolume": fmt.Sprintf("%+v", existingVolume),
 	}).Info("found existing volume")
 
@@ -548,13 +639,13 @@ func (d Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Controll
 	}
 	// If it's not there, it's as detached as we can make it, right?
 	if vol == nil {
-		d.log.WithFields(log.Fields{
+		d.log.WithFields(logrus.Fields{
 			"volumeId": req.GetVolumeId(),
 			"nodeId":   req.GetNodeId(),
 		}).Info("volume to be unpublished was not found in storage backend")
 		return &csi.ControllerUnpublishVolumeResponse{}, nil
 	}
-	d.log.WithFields(log.Fields{
+	d.log.WithFields(logrus.Fields{
 		"volume": fmt.Sprintf("%+v", vol),
 		"nodeId": req.GetNodeId(),
 	}).Info("found existing volume to unpublish")
@@ -589,17 +680,9 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 		return nil, status.Error(
 			codes.NotFound, fmt.Sprintf("ValidateVolumeCapabilities failed for %s: volume not present in storage backend", req.VolumeId))
 	}
-	d.log.WithFields(log.Fields{
+	d.log.WithFields(logrus.Fields{
 		"existingVolume": fmt.Sprintf("%+v", existingVolume),
 	}).Info("found existing volume")
-
-	supportedCapabilities := []*csi.VolumeCapability{
-		{AccessType: &csi.VolumeCapability_Mount{
-			Mount: &csi.VolumeCapability_MountVolume{}},
-			AccessMode: &csi.VolumeCapability_AccessMode{
-				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER},
-		},
-	}
 
 	for _, reqCap := range req.VolumeCapabilities {
 		if reqCap.GetAccessMode().GetMode() != csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER {
@@ -607,9 +690,8 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 		}
 	}
 	return &csi.ValidateVolumeCapabilitiesResponse{
-		Confirmed: &csi.ValidateVolumeCapabilitiesResponse_Confirmed{
-			VolumeCapabilities: supportedCapabilities,
-		}}, nil
+		Supported: true,
+	}, nil
 }
 
 // ListVolumes SHALL return the information about all the volumes that it
@@ -652,10 +734,6 @@ func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Controll
 				}}},
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
-					Type: csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
-				}}},
-			{Type: &csi.ControllerServiceCapability_Rpc{
-				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
 				}}},
 			// TODO: Add ListVolumes.
@@ -678,7 +756,7 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 
 	if existingSnap != nil {
 		// Needed for idempotentcy.
-		d.log.WithFields(log.Fields{
+		d.log.WithFields(logrus.Fields{
 			"requestedSnapshotName":         req.GetName(),
 			"requestedSnapshotSourceVolume": req.GetSourceVolumeId(),
 			"existingSnapshot":              fmt.Sprintf("%+v", existingSnap),
@@ -712,7 +790,7 @@ func (d Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotReque
 			req.GetSnapshotId(), err)
 	}
 	if snap == nil {
-		d.log.WithFields(log.Fields{
+		d.log.WithFields(logrus.Fields{
 			"snapshotId": req.GetSnapshotId(),
 		}).Info("unable to find snapshot, it may already be deleted")
 		return &csi.DeleteSnapshotResponse{}, nil
@@ -738,7 +816,7 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 		if snap == nil {
 			return &csi.ListSnapshotsResponse{}, nil
 		}
-		d.log.WithFields(log.Fields{
+		d.log.WithFields(logrus.Fields{
 			"requestedSnapshot": req.GetSnapshotId(),
 			"napshot":           fmt.Sprintf("%+v", snap),
 		}).Info("found single snapshot")
@@ -782,11 +860,17 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 	if req.GetStartingToken() != "" {
 		i, err := strconv.ParseInt(req.GetStartingToken(), 10, 32)
 		if err != nil {
-			return nil, fmt.Errorf("failed snapshot starting token: %v", err)
+			return nil, status.Error(
+				codes.Aborted, fmt.Sprintf("Invalid token"))
 		}
 		start = int32(i)
 	} else {
 		start = int32(0)
+	}
+
+	if start > end {
+		return nil, status.Error(
+			codes.Aborted, fmt.Sprintf("Invalid token"))
 	}
 	snapshots = snapshots[start:end]
 
@@ -798,18 +882,11 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 	return &csi.ListSnapshotsResponse{Entries: entries, NextToken: nextToken}, nil
 }
 
-func (d Driver) NodeExpandVolume(context.Context, *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-	panic("not implemented")
-}
-func (d Driver) ControllerExpandVolume(context.Context, *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
-	panic("not implemented")
-}
-
 // Run the server.
 func (d Driver) Run() error {
 	d.log.Debug("Preparing to start server")
 
-	u, err := url.Parse(d.Endpoint)
+	u, err := url.Parse(d.endpoint)
 	if err != nil {
 		return fmt.Errorf("unable to parse address: %q", err)
 	}
@@ -819,7 +896,7 @@ func (d Driver) Run() error {
 		addr = filepath.FromSlash(u.Path)
 	}
 
-	// CSI plugins talk only over UNIX sockets currently
+	// csi plugins talk only over unix sockets currently
 	if u.Scheme != "unix" {
 		return fmt.Errorf("currently only unix domain sockets are supported, have: %s", u.Scheme)
 	}
@@ -837,13 +914,13 @@ func (d Driver) Run() error {
 		resp, err := handler(ctx, req)
 
 		if err == nil {
-			d.log.WithFields(log.Fields{
+			d.log.WithFields(logrus.Fields{
 				"method": info.FullMethod,
 				"req":    fmt.Sprintf("%+v", req),
 				"resp":   fmt.Sprintf("%+v", resp),
 			}).Debug("method called")
 		} else {
-			d.log.WithFields(log.Fields{
+			d.log.WithFields(logrus.Fields{
 				"method": info.FullMethod,
 				"req":    fmt.Sprintf("%+v", req),
 				"resp":   fmt.Sprintf("%+v", resp),
@@ -858,7 +935,7 @@ func (d Driver) Run() error {
 	csi.RegisterControllerServer(d.srv, d)
 	csi.RegisterNodeServer(d.srv, d)
 
-	d.log.WithFields(log.Fields{
+	d.log.WithFields(logrus.Fields{
 		"address": addr,
 	}).Info("server started")
 	return d.srv.Serve(listener)
@@ -890,15 +967,14 @@ func (d Driver) createNewVolume(req *csi.CreateVolumeRequest) (*csi.CreateVolume
 	for k, v := range req.Parameters {
 		vol.Parameters[k] = v
 	}
-	d.log.WithFields(log.Fields{
+	d.log.WithFields(logrus.Fields{
 		"newVolume": fmt.Sprintf("%+v", vol),
 		"size":      volumeSize,
 	}).Debug("creating new volume")
 
-	// We're cloning from a volume or snapshot.
 	if req.GetVolumeContentSource() != nil {
 		if req.GetVolumeContentSource().GetSnapshot() != nil {
-			snapshotId := req.GetVolumeContentSource().GetSnapshot().GetSnapshotId()
+			snapshotId := req.GetVolumeContentSource().GetSnapshot().GetId()
 			if snapshotId == "" {
 				return &csi.CreateVolumeResponse{}, status.Error(codes.InvalidArgument, fmt.Sprintf("CreateVolume failed for %s: empty snapshotId", req.Name))
 			}
@@ -926,36 +1002,25 @@ func (d Driver) createNewVolume(req *csi.CreateVolumeRequest) (*csi.CreateVolume
 				return &csi.CreateVolumeResponse{}, status.Error(
 					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
 			}
-			// We're cloning from a whole volume.
-		} else if req.GetVolumeContentSource().GetVolume() != nil {
-			sourceVol, err := d.Storage.GetByID(req.GetVolumeContentSource().GetVolume().GetVolumeId())
-			if err != nil {
-				return &csi.CreateVolumeResponse{}, status.Error(
-					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
-			}
-			if sourceVol == nil {
-				return &csi.CreateVolumeResponse{}, status.Error(
-					codes.NotFound, fmt.Sprintf("CreateVolume failed for %s: source volume not found in storage backend", req.Name))
-			}
-			if err := d.Snapshots.VolFromVol(sourceVol, vol); err != nil {
-				return &csi.CreateVolumeResponse{}, status.Error(
-					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
-			}
-		} else {
-			return &csi.CreateVolumeResponse{}, status.Error(
-				codes.InvalidArgument, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
 		}
-		// Regular new volume.
 	} else {
 		if err := d.Storage.Create(vol); err != nil {
 			return &csi.CreateVolumeResponse{}, status.Error(
 				codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
 		}
 	}
+
+	topos, err := d.Storage.AccessibleTopologies(vol)
+	if err != nil {
+		return &csi.CreateVolumeResponse{}, status.Error(
+			codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
+	}
+
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			VolumeId:      volumeID,
-			CapacityBytes: int64(volumeSize.InclusiveBytes()),
+			Id:                 volumeID,
+			CapacityBytes:      int64(volumeSize.InclusiveBytes()),
+			AccessibleTopology: topos,
 		}}, nil
 }
 

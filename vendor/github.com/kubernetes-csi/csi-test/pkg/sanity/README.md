@@ -39,13 +39,13 @@ var _ = Describe("MyCSIDriver", func () {
 	Context("Config A", func () {
 		var config &sanity.Config
 
-		BeforeEach(func() {
-			//... setup driver and config...
-		})
+		BeforeEach() {
+			... setup driver and config...
+		}
 
-		AfterEach(func() {
-			//...tear down driver...
-		})
+		AfterEach() {
+			...tear down driver...
+		}
 
 		Describe("CSI sanity", func() {
 			sanity.GinkgoTest(config)
@@ -53,7 +53,7 @@ var _ = Describe("MyCSIDriver", func () {
 	})
 
 	Context("Config B", func () {
-		// other configs
+		...
 	})
 })
 ```

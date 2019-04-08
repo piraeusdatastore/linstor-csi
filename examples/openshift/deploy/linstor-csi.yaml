@@ -1,43 +1,4 @@
 ---
-apiVersion: apiextensions.k8s.io/v1beta1
-kind: CustomResourceDefinition
-metadata:
-  creationTimestamp: null
-  name: csinodeinfos.csi.storage.k8s.io
-spec:
-  group: csi.storage.k8s.io
-  names:
-    kind: CSINodeInfo
-    plural: csinodeinfos
-  scope: Cluster
-  validation:
-    openAPIV3Schema:
-      properties:
-        csiDrivers:
-          description: List of CSI drivers running on the node and their properties.
-          items:
-            properties:
-              driver:
-                description: The CSI driver that this object refers to.
-                type: string
-              nodeID:
-                description: The node from the driver point of view.
-                type: string
-              topologyKeys:
-                description: List of keys supported by the driver.
-                items:
-                  type: string
-                type: array
-          type: array
-  version: v1alpha1
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
-
----
 kind: StatefulSet
 apiVersion: apps/v1beta1
 metadata:
@@ -56,12 +17,11 @@ spec:
       serviceAccount: linstor-csi-controller-sa
       containers:
         - name: csi-provisioner
-          image: quay.io/k8scsi/csi-provisioner:v1.0.1
+          image: registry.access.redhat.com/openshift3/csi-provisioner:v3.10
           args:
             - "--provisioner=io.drbd.linstor-csi"
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
-            - "--feature-gates=Topology=true"
           env:
             - name: ADDRESS
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
@@ -70,7 +30,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-attacher
-          image: quay.io/k8scsi/csi-attacher:v1.0.1
+          image: registry.access.redhat.com/openshift3/csi-attacher:v3.10
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
@@ -81,31 +41,8 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
-        - name: csi-snapshotter
-          image: quay.io/k8scsi/csi-snapshotter:v1.0.1
-          args:
-            - "--csi-address=$(ADDRESS)"
-          env:
-            - name: ADDRESS
-              value: /var/lib/csi/sockets/pluginproxy/csi.sock
-          imagePullPolicy: Always
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /var/lib/csi/sockets/pluginproxy/
-        - name: csi-cluster-driver-registrar
-          image: quay.io/k8scsi/csi-cluster-driver-registrar:v1.0.1
-          args:
-            - "--v=5"
-            - "--pod-info-mount-version=\"v1\""
-            - "--csi-address=$(ADDRESS)"
-          env:
-            - name: ADDRESS
-              value: /var/lib/csi/sockets/pluginproxy/csi.sock
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: linstor-csi-plugin
-          image: quay.io/linbit/linstor-csi:latest
+          image: quay.io/linbit/linstor-csi:osp3.10
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--node=$(KUBE_NODE_NAME)"
@@ -142,27 +79,26 @@ metadata:
   name: linstor-csi-provisioner-role
 rules:
   - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list"]
-  - apiGroups: [""]
     resources: ["persistentvolumes"]
-    verbs: ["get", "list", "watch", "create", "delete"]
+    verbs: ["create", "delete", "get", "list", "watch", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "get", "list", "watch", "update", "patch"]
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
-    verbs: ["get", "list", "watch", "update"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch", "update", "patch"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list", "watch", "update", "patch"]
   - apiGroups: [""]
-    resources: ["events"]
-    verbs: ["list", "watch", "create", "update", "patch"]
-  - apiGroups: ["snapshot.storage.k8s.io"]
-    resources: ["volumesnapshots"]
-    verbs: ["get", "list"]
-  - apiGroups: ["snapshot.storage.k8s.io"]
-    resources: ["volumesnapshotcontents"]
-    verbs: ["get", "list"]
-
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
 ---
 
 kind: ClusterRoleBinding
@@ -259,32 +195,25 @@ spec:
       serviceAccount: linstor-csi-node-sa
       hostNetwork: true
       containers:
-        - name: csi-node-driver-registrar
-          image: quay.io/k8scsi/csi-node-driver-registrar:v1.0.2
+        - name: csi-driver-registrar
+          image: registry.access.redhat.com/openshift3/csi-driver-registrar:v3.10
+          securityContext:
+            privileged: true
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
-            - "--kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)"
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh", "-c", "rm -rf /registration/io.drbd.linstor-csi /registration/io.drbd.linstor-csi-reg.sock"]
           env:
             - name: ADDRESS
               value: /csi/csi.sock
-            - name: DRIVER_REG_SOCK_PATH
-              value: /var/lib/kubelet/plugins/io.drbd.linstor-csi/csi.sock
             - name: KUBE_NODE_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
           volumeMounts:
             - name: plugin-dir
-              mountPath: /csi/
-            - name: registration-dir
-              mountPath: /registration/
+              mountPath: /csi
         - name: linstor-csi-plugin
-          image: quay.io/linbit/linstor-csi:latest
+          image: quay.io/linbit/linstor-csi:osp3.10
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--node=$(KUBE_NODE_NAME)"
@@ -313,7 +242,14 @@ spec:
               mountPropagation: "Bidirectional"
             - name: device-dir
               mountPath: /dev
+            - name: mountpoint-dir
+              mountPath: /var/lib/origin/openshift.local.volumes/pods/
+              mountPropagation: "Bidirectional"
       volumes:
+        - name: mountpoint-dir
+          hostPath:
+            path: /var/lib/origin/openshift.local.volumes/pods/
+            type: Directory
         - name: registration-dir
           hostPath:
             path: /var/lib/kubelet/plugins_registry/
@@ -348,6 +284,9 @@ rules:
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch", "update", "patch"]
 
 ---
 
