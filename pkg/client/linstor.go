@@ -27,11 +27,11 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	lc "github.com/LINBIT/golinstor"
 	"github.com/LINBIT/linstor-csi/pkg/volume"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	ptypes "github.com/golang/protobuf/ptypes"
+	"github.com/container-storage-interface/spec/lib/go/csi/v0"
 	"github.com/haySwim/data"
 	"github.com/pborman/uuid"
 	logrus "github.com/sirupsen/logrus"
@@ -420,11 +420,13 @@ func (s *Linstor) SnapCreate(snap *volume.SnapInfo) (*volume.SnapInfo, error) {
 
 	// Fill in missing snapshot fields on creation, keep original SourceVolumeId.
 	snap.CsiSnap = &csi.Snapshot{
-		SnapshotId:     linSnap.UUID,
+		Id:             linSnap.UUID,
 		SourceVolumeId: snap.CsiSnap.SourceVolumeId,
 		SizeBytes:      int64(data.NewKibiByte(data.KiB * data.ByteSize(linSnap.SnapshotVlmDfns[0].VlmSize)).InclusiveBytes()),
-		CreationTime:   ptypes.TimestampNow(),
-		ReadyToUse:     true,
+		CreatedAt:      time.Now().UnixNano(),
+		Status: &csi.SnapshotStatus{
+			Type: csi.SnapshotStatus_READY,
+		},
 	}
 
 	s.log.WithFields(logrus.Fields{
@@ -441,7 +443,7 @@ func (s *Linstor) SnapCreate(snap *volume.SnapInfo) (*volume.SnapInfo, error) {
 	if err := r.SetAuxProp(s.annotationsKey, string(serializedVol)); err != nil {
 		// We should at least try to delete the snapshot here, even though it succeeded
 		// without error it's going be unregistered as far as the CO is concerned.
-		if err := r.SnapshotDelete(snap.CsiSnap.SnapshotId); err != nil {
+		if err := r.SnapshotDelete(snap.CsiSnap.Id); err != nil {
 			s.log.WithError(err).Error("failed to clean up snapshot after recording its metadata failed")
 		}
 		return nil, fmt.Errorf("unable to record new snapshot metadata: %v", err)
@@ -462,7 +464,7 @@ func (s *Linstor) SnapDelete(snap *volume.SnapInfo) error {
 		return err
 	}
 
-	if err := r.SnapshotDelete(snap.CsiSnap.SnapshotId); err != nil {
+	if err := r.SnapshotDelete(snap.CsiSnap.Id); err != nil {
 		return fmt.Errorf("failed to remove snaphsot: %v", err)
 	}
 
@@ -479,7 +481,7 @@ func (s *Linstor) SnapDelete(snap *volume.SnapInfo) error {
 		return err
 	}
 	if err := r.SetAuxProp(s.annotationsKey, string(serializedVol)); err != nil {
-		if err := r.SnapshotDelete(snap.CsiSnap.SnapshotId); err != nil {
+		if err := r.SnapshotDelete(snap.CsiSnap.Id); err != nil {
 			s.log.WithError(err).Error("failed to update snapshot list after recording its metadata failed")
 		}
 		return fmt.Errorf("unable to record new snapshot metadata: %v", err)
@@ -500,7 +502,7 @@ func (s *Linstor) VolFromSnap(snap *volume.SnapInfo, vol *volume.Info) error {
 		return err
 	}
 
-	return r.NewResourceFromSnapshot(snap.CsiSnap.SnapshotId)
+	return r.NewResourceFromSnapshot(snap.CsiSnap.Id)
 }
 
 func (s *Linstor) VolFromVol(sourceVol, vol *volume.Info) error {
@@ -619,7 +621,7 @@ func (s *Linstor) GetSnapByID(ID string) (*volume.SnapInfo, error) {
 func (s *Linstor) doGetSnapByID(vols []*volume.Info, ID string) *volume.SnapInfo {
 	for _, vol := range vols {
 		for _, snap := range vol.Snapshots {
-			if snap.CsiSnap.SnapshotId == ID {
+			if snap.CsiSnap.Id == ID {
 				return snap
 			}
 		}

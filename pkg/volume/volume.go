@@ -22,7 +22,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/container-storage-interface/spec/lib/go/csi/v0"
 )
 
 // Info provides the everything need to manipulate volumes.
@@ -46,10 +46,7 @@ type SnapInfo struct {
 // SnapSort sorts a list of snaphosts.
 func SnapSort(snaps []*SnapInfo) {
 	sort.Slice(snaps, func(j, k int) bool {
-		if snaps[j].CsiSnap.CreationTime.Seconds == snaps[k].CsiSnap.CreationTime.Seconds {
-			return snaps[j].CsiSnap.CreationTime.Nanos < snaps[k].CsiSnap.CreationTime.Nanos
-		}
-		return snaps[j].CsiSnap.CreationTime.Seconds < snaps[k].CsiSnap.CreationTime.Seconds
+		return snaps[j].CsiSnap.CreatedAt < snaps[k].CsiSnap.CreatedAt
 	})
 }
 

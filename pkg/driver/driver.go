@@ -34,7 +34,7 @@ import (
 
 	"github.com/LINBIT/linstor-csi/pkg/client"
 	"github.com/LINBIT/linstor-csi/pkg/volume"
-	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/container-storage-interface/spec/lib/go/csi/v0"
 	"github.com/haySwim/data"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -196,7 +196,7 @@ func (d Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCap
 				}}},
 			{Type: &csi.PluginCapability_Service_{
 				Service: &csi.PluginCapability_Service{
-					Type: csi.PluginCapability_Service_VOLUME_ACCESSIBILITY_CONSTRAINTS,
+					Type: csi.PluginCapability_Service_ACCESSIBILITY_CONSTRAINTS,
 				}}},
 		},
 	}, nil
@@ -396,12 +396,6 @@ func (d Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishV
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-// NodeGetVolumeStats is unimplemented, there's no danger of it getting called
-// until we update the node capabilities to say that we can do this.
-func (d Driver) NodeGetVolumeStats(context.Context, *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
-	return &csi.NodeGetVolumeStatsResponse{}, nil
-}
-
 // NodeGetCapabilities allows the CO to check the supported capabilities of
 // node service provided by the Plugin.
 func (d Driver) NodeGetCapabilities(context.Context, *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
@@ -429,6 +423,13 @@ func (d Driver) NodeGetInfo(context.Context, *csi.NodeGetInfoRequest) (*csi.Node
 		MaxVolumesPerNode:  math.MaxInt64,
 		AccessibleTopology: &csi.Topology{},
 	}, nil
+}
+
+func (d Driver) NodeGetId(ctx context.Context, req *csi.NodeGetIdRequest) (*csi.NodeGetIdResponse, error) {
+	return &csi.NodeGetIdResponse{
+		NodeId: d.nodeID,
+	}, nil
+
 }
 
 // CreateVolume will be called by the CO to provision a new volume on
@@ -500,7 +501,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
-				VolumeId:           existingVolume.ID,
+				Id:                 existingVolume.ID,
 				CapacityBytes:      existingVolume.SizeBytes,
 				AccessibleTopology: topos,
 			}}, nil
@@ -683,23 +684,14 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 		"existingVolume": fmt.Sprintf("%+v", existingVolume),
 	}).Info("found existing volume")
 
-	supportedCapabilities := []*csi.VolumeCapability{
-		{AccessType: &csi.VolumeCapability_Mount{
-			Mount: &csi.VolumeCapability_MountVolume{}},
-			AccessMode: &csi.VolumeCapability_AccessMode{
-				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER},
-		},
-	}
-
 	for _, reqCap := range req.VolumeCapabilities {
 		if reqCap.GetAccessMode().GetMode() != csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER {
 			return &csi.ValidateVolumeCapabilitiesResponse{}, nil
 		}
 	}
 	return &csi.ValidateVolumeCapabilitiesResponse{
-		Confirmed: &csi.ValidateVolumeCapabilitiesResponse_Confirmed{
-			VolumeCapabilities: supportedCapabilities,
-		}}, nil
+		Supported: true,
+	}, nil
 }
 
 // ListVolumes SHALL return the information about all the volumes that it
@@ -739,10 +731,6 @@ func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Controll
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
-				}}},
-			{Type: &csi.ControllerServiceCapability_Rpc{
-				Rpc: &csi.ControllerServiceCapability_RPC{
-					Type: csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
 				}}},
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
@@ -872,11 +860,17 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 	if req.GetStartingToken() != "" {
 		i, err := strconv.ParseInt(req.GetStartingToken(), 10, 32)
 		if err != nil {
-			return nil, fmt.Errorf("failed snapshot starting token: %v", err)
+			return nil, status.Error(
+				codes.Aborted, fmt.Sprintf("Invalid token"))
 		}
 		start = int32(i)
 	} else {
 		start = int32(0)
+	}
+
+	if start > end {
+		return nil, status.Error(
+			codes.Aborted, fmt.Sprintf("Invalid token"))
 	}
 	snapshots = snapshots[start:end]
 
@@ -886,13 +880,6 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 		entries = append(entries, &csi.ListSnapshotsResponse_Entry{Snapshot: snap.CsiSnap})
 	}
 	return &csi.ListSnapshotsResponse{Entries: entries, NextToken: nextToken}, nil
-}
-
-func (d Driver) NodeExpandVolume(context.Context, *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-	panic("not implemented")
-}
-func (d Driver) ControllerExpandVolume(context.Context, *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
-	panic("not implemented")
 }
 
 // Run the server.
@@ -985,10 +972,9 @@ func (d Driver) createNewVolume(req *csi.CreateVolumeRequest) (*csi.CreateVolume
 		"size":      volumeSize,
 	}).Debug("creating new volume")
 
-	// We're cloning from a volume or snapshot.
 	if req.GetVolumeContentSource() != nil {
 		if req.GetVolumeContentSource().GetSnapshot() != nil {
-			snapshotId := req.GetVolumeContentSource().GetSnapshot().GetSnapshotId()
+			snapshotId := req.GetVolumeContentSource().GetSnapshot().GetId()
 			if snapshotId == "" {
 				return &csi.CreateVolumeResponse{}, status.Error(codes.InvalidArgument, fmt.Sprintf("CreateVolume failed for %s: empty snapshotId", req.Name))
 			}
@@ -1016,26 +1002,7 @@ func (d Driver) createNewVolume(req *csi.CreateVolumeRequest) (*csi.CreateVolume
 				return &csi.CreateVolumeResponse{}, status.Error(
 					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
 			}
-			// We're cloning from a whole volume.
-		} else if req.GetVolumeContentSource().GetVolume() != nil {
-			sourceVol, err := d.Storage.GetByID(req.GetVolumeContentSource().GetVolume().GetVolumeId())
-			if err != nil {
-				return &csi.CreateVolumeResponse{}, status.Error(
-					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
-			}
-			if sourceVol == nil {
-				return &csi.CreateVolumeResponse{}, status.Error(
-					codes.NotFound, fmt.Sprintf("CreateVolume failed for %s: source volume not found in storage backend", req.Name))
-			}
-			if err := d.Snapshots.VolFromVol(sourceVol, vol); err != nil {
-				return &csi.CreateVolumeResponse{}, status.Error(
-					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
-			}
-		} else {
-			return &csi.CreateVolumeResponse{}, status.Error(
-				codes.InvalidArgument, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
 		}
-		// Regular new volume.
 	} else {
 		if err := d.Storage.Create(vol); err != nil {
 			return &csi.CreateVolumeResponse{}, status.Error(
@@ -1045,14 +1012,13 @@ func (d Driver) createNewVolume(req *csi.CreateVolumeRequest) (*csi.CreateVolume
 
 	topos, err := d.Storage.AccessibleTopologies(vol)
 	if err != nil {
-		return &csi.CreateVolumeResponse{}, status.Errorf(
-			codes.Internal, "CreateVolume failed for %s: unable to determine volume topology: %v",
-			req.Name, err)
+		return &csi.CreateVolumeResponse{}, status.Error(
+			codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
 	}
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			VolumeId:           volumeID,
+			Id:                 volumeID,
 			CapacityBytes:      int64(volumeSize.InclusiveBytes()),
 			AccessibleTopology: topos,
 		}}, nil

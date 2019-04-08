@@ -73,16 +73,9 @@ func TestDriver(t *testing.T) {
 	defer os.RemoveAll(mntStageDir)
 
 	cfg := &sanity.Config{
-		TargetPath:               mntDir + "/csi-target",
-		StagingPath:              mntStageDir + "/csi-staging",
-		Address:                  *endpoint,
-		TestVolumeParametersFile: *paramsFile,
-		CreateTargetDir: func(targetPath string) (string, error) {
-			return targetPath, createTargetDir(targetPath)
-		},
-		CreateStagingDir: func(targetPath string) (string, error) {
-			return targetPath, createTargetDir(targetPath)
-		},
+		StagingPath: mntStageDir,
+		TargetPath:  mntDir,
+		Address:     *endpoint,
 	}
 
 	// Now call the test suite
