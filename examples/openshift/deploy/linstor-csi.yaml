@@ -17,11 +17,11 @@ spec:
       serviceAccount: linstor-csi-controller-sa
       containers:
         - name: csi-provisioner
-          image: registry.access.redhat.com/openshift3/csi-provisioner:v3.10
+          image: quay.io/k8scsi/csi-provisioner:v0.4.0
           args:
             - "--provisioner=io.drbd.linstor-csi"
             - "--csi-address=$(ADDRESS)"
-            - "--v=5"
+            - "--feature-gates=Topology=true"
           env:
             - name: ADDRESS
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
@@ -30,9 +30,8 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-attacher
-          image: registry.access.redhat.com/openshift3/csi-attacher:v3.10
+          image: quay.io/k8scsi/csi-attacher:v0.4.0
           args:
-            - "--v=5"
             - "--csi-address=$(ADDRESS)"
           env:
             - name: ADDRESS
@@ -47,7 +46,6 @@ spec:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--node=$(KUBE_NODE_NAME)"
             - "--controllers=$(LINSTOR_IP)"
-            - "--debug-logging"
           env:
             - name: CSI_ENDPOINT
               value: unix:///var/lib/csi/sockets/pluginproxy/csi.sock
@@ -200,7 +198,6 @@ spec:
           securityContext:
             privileged: true
           args:
-            - "--v=5"
             - "--csi-address=$(ADDRESS)"
           env:
             - name: ADDRESS
@@ -218,7 +215,6 @@ spec:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--node=$(KUBE_NODE_NAME)"
             - "--controllers=$(LINSTOR_IP)"
-            - "--debug-logging"
           env:
             - name: CSI_ENDPOINT
               value: unix:///csi/csi.sock
