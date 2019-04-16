@@ -420,8 +420,11 @@ func (d Driver) NodeGetInfo(context.Context, *csi.NodeGetInfoRequest) (*csi.Node
 		NodeId: d.nodeID,
 		// TODO: I think we're limited by the number of linux block devices, which
 		// is a massive number, but I'm not sure if something up the stack limits us.
-		MaxVolumesPerNode:  math.MaxInt64,
-		AccessibleTopology: &csi.Topology{},
+		MaxVolumesPerNode: math.MaxInt64,
+		AccessibleTopology: &csi.Topology{
+			Segments: map[string]string{
+				client.LinstorNodeTopologyKey: d.nodeID,
+			}},
 	}, nil
 }
 
@@ -959,7 +962,10 @@ func (d Driver) createNewVolume(req *csi.CreateVolumeRequest) (*csi.CreateVolume
 	volumeSize := data.NewKibiByte(data.KiB * data.ByteSize(requiredKiB))
 
 	vol := &volume.Info{
-		Name: req.Name, ID: volumeID, SizeBytes: int64(volumeSize.InclusiveBytes()), CreatedBy: d.name,
+		Name:         req.Name,
+		ID:           volumeID,
+		SizeBytes:    int64(volumeSize.InclusiveBytes()),
+		CreatedBy:    d.name,
 		CreationTime: time.Now(),
 		Parameters:   make(map[string]string),
 		Snapshots:    []*volume.SnapInfo{},
@@ -1004,7 +1010,7 @@ func (d Driver) createNewVolume(req *csi.CreateVolumeRequest) (*csi.CreateVolume
 			}
 		}
 	} else {
-		if err := d.Storage.Create(vol); err != nil {
+		if err := d.Storage.Create(vol, req); err != nil {
 			return &csi.CreateVolumeResponse{}, status.Error(
 				codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
 		}

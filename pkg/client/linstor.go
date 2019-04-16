@@ -52,12 +52,22 @@ const (
 	BlockSizeKey           = "blocksize"
 	ForceKey               = "force"
 	FSKey                  = "filesystem"
-	UseLocalStorageKey     = "podWithLocalVolume"
+	UseLocalStorageKey     = "localStoragePolicy"
 	// These have to be camel case. Maybe move them into resource config for
 	// consistency?
 	MountOptsKey = "mountOpts"
 	FSOptsKey    = "fsOpts"
 )
+
+type localStoragePolicy int
+
+const (
+	localStoragePolicyPreferred localStoragePolicy = iota
+	localStoragePolicyRequired
+	localStoragePolicyIgnore
+)
+
+const LinstorNodeTopologyKey = "linbit.com/hostname"
 
 type Linstor struct {
 	log            *logrus.Entry
@@ -311,7 +321,7 @@ func (s *Linstor) GetByID(ID string) (*volume.Info, error) {
 	return nil, nil
 }
 
-func (s *Linstor) Create(vol *volume.Info) error {
+func (s *Linstor) Create(vol *volume.Info, req *csi.CreateVolumeRequest) error {
 	s.log.WithFields(logrus.Fields{
 		"volume": fmt.Sprintf("%+v", vol),
 	}).Info("creating volume")
@@ -321,7 +331,68 @@ func (s *Linstor) Create(vol *volume.Info) error {
 		return err
 	}
 
-	return r.CreateAndAssign()
+	// If we don't care about local storage or nodes are being manually assigned
+	// skip the topology based assignment logic.
+	lsp, err := parseLocalStoragePolicy(vol.Parameters[UseLocalStorageKey])
+	if err != nil {
+		return fmt.Errorf("unable to create volume: %v", err)
+	}
+	if lsp == localStoragePolicyIgnore || len(r.NodeList) != 0 {
+		return r.CreateAndAssign()
+	}
+
+	topos := req.GetAccessibilityRequirements()
+	if topos == nil {
+		return r.CreateAndAssign()
+	}
+
+	err = r.Create()
+	if err != nil {
+		return err
+	}
+
+	remainingAssignments := r.AutoPlace
+
+	for i, pref := range topos.GetPreferred() {
+		// While there are still preferred nodes and remainingAssignments
+		// attach resources diskfully to those nodes in order of most to least preferred.
+		// If a nodelist is being used, remainingAssignments will be 0 and this will be skipped.
+		if p, ok := pref.GetSegments()[LinstorNodeTopologyKey]; ok && remainingAssignments > 0 {
+			// If attachment fails move onto next most preferred volume.
+			err := r.Attach(p, false)
+			if err != nil {
+				s.log.WithFields(logrus.Fields{
+					"volumeID":                   vol.ID,
+					"topologyPreference":         i,
+					"topologyNode":               p,
+					"totalVolumeCount":           r.AutoPlace,
+					"remainingVolumeAssignments": remainingAssignments,
+					"reason":                     err,
+				}).Info("unable to satisfy topology preference")
+				continue
+			}
+			// If attachment succeeds, decrement the number of remainingAssignments.
+			remainingAssignments--
+			// If we're out of remaining attachments, we're done.
+			if remainingAssignments == 0 {
+				return nil
+			}
+		}
+	}
+
+	// TODO: Check this against actual topologies at the end of create volume intead?
+
+	// We weren't able to assign any volume according to topology preferences
+	// and local storage is required.
+	if r.AutoPlace == remainingAssignments && lsp == localStoragePolicyRequired {
+		// Delete resource definition so it doesn't get flagged as an existing volume.
+		r.Delete()
+		return fmt.Errorf("unable to satisfy volume topology requirements for volume %s", vol.ID)
+	}
+
+	// If r.AutoPlace is higher than the number of assigned nodes r.Assign will
+	// automatically provision the rest.
+	return r.Assign()
 }
 
 func (s *Linstor) Delete(vol *volume.Info) error {
@@ -338,7 +409,11 @@ func (s *Linstor) Delete(vol *volume.Info) error {
 }
 
 func (s *Linstor) AccessibleTopologies(vol *volume.Info) ([]*csi.Topology, error) {
-	if vol.Parameters[UseLocalStorageKey] != "true" {
+	lsp, err := parseLocalStoragePolicy(vol.Parameters[UseLocalStorageKey])
+	if err != nil {
+		return nil, fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
+	}
+	if lsp != localStoragePolicyRequired {
 		return nil, nil
 	}
 
@@ -354,7 +429,7 @@ func (s *Linstor) AccessibleTopologies(vol *volume.Info) ([]*csi.Topology, error
 
 	topos := []*csi.Topology{}
 	for _, n := range nodes {
-		topos = append(topos, &csi.Topology{Segments: map[string]string{"kubernetes.io/hostname": n}})
+		topos = append(topos, &csi.Topology{Segments: map[string]string{LinstorNodeTopologyKey: n}})
 	}
 
 	return topos, nil
@@ -366,16 +441,12 @@ func (s *Linstor) Attach(vol *volume.Info, node string) error {
 		"targetNode": node,
 	}).Info("attaching volume")
 
-	// This is hackish, configure a volume copy that only makes new diskless asignments.
-	cfg, err := s.resDeploymentConfigFromVolumeInfo(vol)
+	r, err := s.resDeploymentFromVolumeInfo(vol)
 	if err != nil {
 		return err
 	}
-	cfg.NodeList = []string{}
-	cfg.AutoPlace = 0
-	cfg.ClientList = []string{node}
 
-	return lc.NewResourceDeployment(*cfg).Assign()
+	return r.Attach(node, true)
 }
 
 // Detach removes a volume from the node.
@@ -809,4 +880,17 @@ func linstorifyResourceName(name string) (string, error) {
 	}
 
 	return "", fmt.Errorf("Could not linstorify name (%s)", name)
+}
+
+func parseLocalStoragePolicy(s string) (localStoragePolicy, error) {
+	switch strings.ToLower(s) {
+	case "required":
+		return localStoragePolicyRequired, nil
+	case "preferred":
+		return localStoragePolicyPreferred, nil
+	case "ignore", "":
+		return localStoragePolicyIgnore, nil
+	default:
+		return localStoragePolicyIgnore, fmt.Errorf("%s is not a valid localStoragePolicy", s)
+	}
 }

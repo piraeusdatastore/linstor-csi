@@ -57,7 +57,7 @@ func (s *MockStorage) GetByID(ID string) (*volume.Info, error) {
 	return nil, nil
 }
 
-func (s *MockStorage) Create(vol *volume.Info) error {
+func (s *MockStorage) Create(vol *volume.Info, req *csi.CreateVolumeRequest) error {
 	s.createdVolumes = append(s.createdVolumes, vol)
 	return nil
 }
