@@ -62,7 +62,7 @@ type Assignment struct {
 // CreateDeleter handles the creation and deletion of volumes.
 type CreateDeleter interface {
 	Querier
-	Create(vol *Info) error
+	Create(vol *Info, req *csi.CreateVolumeRequest) error
 	Delete(vol *Info) error
 
 	// CanonicalizeVolumeName tries to return a relatively similar version
