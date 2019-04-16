@@ -12,12 +12,12 @@ import (
 )
 
 var (
-	controllers     = flag.String("controllers", "", "Run suite against a real LINSTOR cluster with the specificed controller endpoints")
-	node            = flag.String("node", "fake.node", "Node ID to pass to tests, if you're running against a real LINSTOR cluster this needs to match the name of one of the real satellites")
-	paramsFile      = flag.String("parameter-file", "", "File containing paramemers to pass to storage backend during testsing")
-	endpoint        = flag.String("Endpoint", "unix:///tmp/csi.sock", "Unix socket for CSI communication")
-	mountForReal    = flag.Bool("mount-for-real", false, "Actually try to mount volumes, needs to be ran on on a kubelet (indicted by the node flag) with it's /dev dir bind mounted into the container")
-	snapshotForReal = flag.Bool("snapshot-for-real", false, "Actually try to take snapshots, needs to be ran with against a storage pool (passed via paramsFile) that supports snaphosts")
+	lsEndpoint   = flag.String("linstor-endpoint", "", "Run suite against a real LINSTOR cluster with the specificed controller API endpoint")
+	node         = flag.String("node", "fake.node", "Node ID to pass to tests, if you're running against a real LINSTOR cluster this needs to match the name of one of the real satellites")
+	paramsFile   = flag.String("parameter-file", "", "File containing paramemers to pass to storage backend during testsing")
+	csiEndpoint  = flag.String("csi-endpoint", "unix:///tmp/csi.sock", "Unix socket for CSI communication")
+	mountForReal = flag.Bool("mount-for-real", false, "Actually try to mount volumes, needs to be ran on on a kubelet (indicted by the node flag) with it's /dev dir bind mounted into the container")
+	logLevel     = flag.String("log-level", "debug", "how much logging to do")
 )
 
 func TestDriver(t *testing.T) {
@@ -28,8 +28,8 @@ func TestDriver(t *testing.T) {
 	}
 
 	driver, err := NewDriver(
-		Endpoint(*endpoint), NodeID(*node), LogOut(logFile),
-		Debug, Name("linstor.csi.linbit.com-test"),
+		Endpoint(*csiEndpoint), NodeID(*node), LogOut(logFile),
+		LogLevel(*logLevel), Name("linstor.csi.linbit.com-test"),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -37,23 +37,21 @@ func TestDriver(t *testing.T) {
 	driver.version = "linstor-csi-test-version"
 	defer driver.Stop()
 
-	if *controllers != "" {
+	if *lsEndpoint != "" {
 		realStorageBackend, err := client.NewLinstor(
-			client.Debug, client.Controllers(*controllers), client.LogOut(logFile),
+			client.LogOut(logFile), client.LogLevel(*logLevel), client.Endpoint(*lsEndpoint),
 		)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		// Coljures that return functions that set linstor backends on the driver.
+		// Clojures that return functions that set linstor backends on the driver.
 		Storage(realStorageBackend)(driver)
 		Assignments(realStorageBackend)(driver)
+		Snapshots(realStorageBackend)(driver)
 
 		if *mountForReal {
 			Mounter(realStorageBackend)(driver)
-		}
-		if *snapshotForReal {
-			Snapshots(realStorageBackend)(driver)
 		}
 	}
 

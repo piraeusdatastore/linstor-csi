@@ -30,10 +30,10 @@ import (
 
 func main() {
 	var (
-		controllers = flag.String("controllers", "", "Controller endpoints for LINSTOR")
-		endpoint    = flag.String("endpoint", "unix:///var/lib/kubelet/plugins/linstor.csi.linbit.com/csi.sock", "CSI endpoint")
+		lsEndpoint  = flag.String("linstor-endpoint", "http://localhost:3070", "Controller API endpoint for LINSTOR")
+		csiEndpoint = flag.String("csi-endpoint", "unix:///var/lib/kubelet/plugins/linstor.csi.linbit.com/csi.sock", "CSI endpoint")
 		node        = flag.String("node", "", "Node ID to pass to node service")
-		debug       = flag.Bool("debug-logging", false, "Enable debut log output")
+		logLevel    = flag.String("log-level", "info", "Enable debug log output. Choose from: panic, fatal, error, warn, info, debug")
 	)
 	flag.Parse()
 
@@ -47,24 +47,19 @@ func main() {
 
 	linstorClient, err := client.NewLinstor(
 		client.LogOut(logOut), client.LogFmt(logFmt),
-		client.Controllers(*controllers),
+		client.Endpoint(*lsEndpoint), client.LogLevel(*logLevel),
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	drv, err := driver.NewDriver(
-		driver.Endpoint(*endpoint), driver.NodeID(*node), driver.LogOut(logOut),
+		driver.Endpoint(*csiEndpoint), driver.NodeID(*node), driver.LogOut(logOut),
 		driver.Storage(linstorClient), driver.Assignments(linstorClient),
-		driver.Mounter(linstorClient), driver.Snapshots(linstorClient),
+		driver.Mounter(linstorClient), driver.Snapshots(linstorClient), driver.LogLevel(*logLevel),
 	)
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	if *debug {
-		client.Debug(linstorClient)
-		driver.Debug(drv)
 	}
 
 	defer drv.Stop()

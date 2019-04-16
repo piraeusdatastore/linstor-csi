@@ -97,10 +97,8 @@ func NewResourceDeployment(c ResourceDeploymentConfig) ResourceDeployment {
 		r.Name = fmt.Sprintf("auto-%s", uuid.NewV4())
 	}
 
-	if len(r.NodeList) == 0 && r.AutoPlace == 0 {
-		if len(r.NodeList) == 0 && len(r.ClientList) == 0 && r.AutoPlace == 0 {
-			r.AutoPlace = 1
-		}
+	if len(r.NodeList) == 0 && len(r.ClientList) == 0 && r.AutoPlace == 0 {
+		r.AutoPlace = 1
 	}
 	if r.AutoPlace > 0 {
 		r.autoPlaced = true
