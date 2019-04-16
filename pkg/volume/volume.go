@@ -19,6 +19,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 package volume
 
 import (
+	"context"
 	"sort"
 	"time"
 
@@ -59,51 +60,46 @@ type Assignment struct {
 // CreateDeleter handles the creation and deletion of volumes.
 type CreateDeleter interface {
 	Querier
-	Create(vol *Info, req *csi.CreateVolumeRequest) error
-	Delete(vol *Info) error
-
-	// CanonicalizeVolumeName tries to return a relatively similar version
-	// of the suggestedName if the storage backend cannot use the suggestedName
-	// in its original form.
-	CanonicalizeVolumeName(suggestedName string) string
+	Create(ctx context.Context, vol *Info, req *csi.CreateVolumeRequest) error
+	Delete(ctx context.Context, vol *Info) error
 
 	// AccessibleTopologies returns the list of key value pairs volume topologies
 	// for the volume or nil if not applicable.
-	AccessibleTopologies(vol *Info) ([]*csi.Topology, error)
+	AccessibleTopologies(ctx context.Context, vol *Info) ([]*csi.Topology, error)
 }
 
 // SnapshotCreateDeleter handles the creation and deletion of snapshots.
 type SnapshotCreateDeleter interface {
-	SnapCreate(snap *SnapInfo) (*SnapInfo, error)
-	SnapDelete(snap *SnapInfo) error
-	GetSnapByName(name string) (*SnapInfo, error)
-	GetSnapByID(ID string) (*SnapInfo, error)
+	SnapCreate(ctx context.Context, snap *SnapInfo) (*SnapInfo, error)
+	SnapDelete(ctx context.Context, snap *SnapInfo) error
+	GetSnapByName(ctx context.Context, name string) (*SnapInfo, error)
+	GetSnapByID(ctx context.Context, ID string) (*SnapInfo, error)
 	// List Snapshots should return a sorted list of snapshots.
-	ListSnaps() ([]*SnapInfo, error)
+	ListSnaps(ctx context.Context) ([]*SnapInfo, error)
 	// CanonicalizeSnapshotName tries to return a relatively similar version
 	// of the suggestedName if the storage backend cannot use the suggestedName
 	// in its original form.
-	CanonicalizeSnapshotName(suggestedName string) string
+	CanonicalizeSnapshotName(ctx context.Context, suggestedName string) string
 	// VolFromSnap creats a new volume based on the provided snapshot.
-	VolFromSnap(snap *SnapInfo, vol *Info) error
+	VolFromSnap(ctx context.Context, snap *SnapInfo, vol *Info) error
 	// VolFromVol creats a new volume based on the provided volume.
-	VolFromVol(sourceVol, vol *Info) error
+	VolFromVol(ctx context.Context, sourceVol, vol *Info) error
 }
 
 type AttacherDettacher interface {
 	Querier
-	Attach(vol *Info, node string) error
-	Detach(vol *Info, node string) error
-	NodeAvailable(node string) (bool, error)
-	GetAssignmentOnNode(vol *Info, node string) (*Assignment, error)
+	Attach(ctx context.Context, vol *Info, node string) error
+	Detach(ctx context.Context, vol *Info, node string) error
+	NodeAvailable(ctx context.Context, node string) error
+	GetAssignmentOnNode(ctx context.Context, vol *Info, node string) (*Assignment, error)
 }
 
 // Querier retrives various states of volumes.
 type Querier interface {
-	ListAll(parameters map[string]string) ([]*Info, error)
-	GetByName(name string) (*Info, error)
+	ListAll(ctx context.Context, page, perPage int) ([]*Info, error)
+	GetByName(ctx context.Context, name string) (*Info, error)
 	//GetByID should return nil when volume is not found.
-	GetByID(ID string) (*Info, error)
+	GetByID(ctx context.Context, ID string) (*Info, error)
 	// AllocationSizeKiB returns the number of KiB required to provision required bytes.
 	AllocationSizeKiB(requiredBytes, limitBytes int64) (int64, error)
 }

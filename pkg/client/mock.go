@@ -19,6 +19,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 package client
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"github.com/LINBIT/linstor-csi/pkg/volume"
@@ -39,7 +41,7 @@ func (s *MockStorage) AllocationSizeKiB(requiredBytes, limitBytes int64) (int64,
 	return requiredBytes / 1024, nil
 }
 
-func (s *MockStorage) GetByName(name string) (*volume.Info, error) {
+func (s *MockStorage) GetByName(ctx context.Context, name string) (*volume.Info, error) {
 	for _, vol := range s.createdVolumes {
 		if vol.Name == name {
 			return vol, nil
@@ -48,7 +50,7 @@ func (s *MockStorage) GetByName(name string) (*volume.Info, error) {
 	return nil, nil
 }
 
-func (s *MockStorage) GetByID(ID string) (*volume.Info, error) {
+func (s *MockStorage) GetByID(ctx context.Context, ID string) (*volume.Info, error) {
 	for _, vol := range s.createdVolumes {
 		if vol.ID == ID {
 			return vol, nil
@@ -57,12 +59,13 @@ func (s *MockStorage) GetByID(ID string) (*volume.Info, error) {
 	return nil, nil
 }
 
-func (s *MockStorage) Create(vol *volume.Info, req *csi.CreateVolumeRequest) error {
+func (s *MockStorage) Create(ctx context.Context, vol *volume.Info, req *csi.CreateVolumeRequest) error {
+	vol.ID = vol.Name
 	s.createdVolumes = append(s.createdVolumes, vol)
 	return nil
 }
 
-func (s *MockStorage) Delete(vol *volume.Info) error {
+func (s *MockStorage) Delete(ctx context.Context, vol *volume.Info) error {
 	for i, v := range s.createdVolumes {
 		if v != nil && (v.Name == vol.Name) {
 			// csi-test counts numbers of snapshots, so we have to actually delete it.
@@ -74,11 +77,15 @@ func (s *MockStorage) Delete(vol *volume.Info) error {
 	return nil
 }
 
-func (s *MockStorage) AccessibleTopologies(vol *volume.Info) ([]*csi.Topology, error) {
+func (s *MockStorage) AccessibleTopologies(ctx context.Context, vol *volume.Info) ([]*csi.Topology, error) {
 	return nil, nil
 }
 
-func (s *MockStorage) SnapCreate(snap *volume.SnapInfo) (*volume.SnapInfo, error) {
+func (s *MockStorage) CanonicalizeSnapshotName(ctx context.Context, suggestedName string) string {
+	return suggestedName
+}
+
+func (s *MockStorage) SnapCreate(ctx context.Context, snap *volume.SnapInfo) (*volume.SnapInfo, error) {
 	// Fill in missing snapshot fields on creation, keep original SourceVolumeId.
 	snap.CsiSnap = &csi.Snapshot{
 		Id:             uuid.New(),
@@ -89,13 +96,13 @@ func (s *MockStorage) SnapCreate(snap *volume.SnapInfo) (*volume.SnapInfo, error
 		},
 	}
 
-	vol, _ := s.GetByID(snap.CsiSnap.SourceVolumeId)
+	vol, _ := s.GetByID(ctx, snap.CsiSnap.SourceVolumeId)
 	vol.Snapshots = append(vol.Snapshots, snap)
 
 	return snap, nil
 }
 
-func (s *MockStorage) SnapDelete(snap *volume.SnapInfo) error {
+func (s *MockStorage) SnapDelete(ctx context.Context, snap *volume.SnapInfo) error {
 	for _, vol := range s.createdVolumes {
 		for i, ss := range vol.Snapshots {
 			if snap.CsiSnap.Id == ss.CsiSnap.Id {
@@ -110,7 +117,7 @@ func (s *MockStorage) SnapDelete(snap *volume.SnapInfo) error {
 	return nil
 }
 
-func (s *MockStorage) GetSnapByName(name string) (*volume.SnapInfo, error) {
+func (s *MockStorage) GetSnapByName(ctx context.Context, name string) (*volume.SnapInfo, error) {
 	for _, vol := range s.createdVolumes {
 		for _, ss := range vol.Snapshots {
 			if ss.Name == name {
@@ -121,8 +128,8 @@ func (s *MockStorage) GetSnapByName(name string) (*volume.SnapInfo, error) {
 	return nil, nil
 }
 
-func (s *MockStorage) ListSnaps() ([]*volume.SnapInfo, error) {
-	snaps := []*volume.SnapInfo{}
+func (s *MockStorage) ListSnaps(ctx context.Context) ([]*volume.SnapInfo, error) {
+	snaps := make([]*volume.SnapInfo, 0)
 	for _, vol := range s.createdVolumes {
 		for _, ss := range vol.Snapshots {
 			snaps = append(snaps, ss)
@@ -132,7 +139,7 @@ func (s *MockStorage) ListSnaps() ([]*volume.SnapInfo, error) {
 	return snaps, nil
 }
 
-func (s *MockStorage) GetSnapByID(ID string) (*volume.SnapInfo, error) {
+func (s *MockStorage) GetSnapByID(ctx context.Context, ID string) (*volume.SnapInfo, error) {
 	for _, vol := range s.createdVolumes {
 		for _, ss := range vol.Snapshots {
 			if ss.CsiSnap.Id == ID {
@@ -143,30 +150,24 @@ func (s *MockStorage) GetSnapByID(ID string) (*volume.SnapInfo, error) {
 	return nil, nil
 }
 
-func (s *MockStorage) VolFromSnap(snap *volume.SnapInfo, vol *volume.Info) error {
+func (s *MockStorage) VolFromSnap(ctx context.Context, snap *volume.SnapInfo, vol *volume.Info) error {
+	vol.ID = vol.Name
 	s.createdVolumes = append(s.createdVolumes, vol)
 	return nil
 }
 
-func (s *MockStorage) VolFromVol(sourceVol, vol *volume.Info) error {
+func (s *MockStorage) VolFromVol(ctx context.Context, sourceVol, vol *volume.Info) error {
+	vol.ID = vol.Name
 	s.createdVolumes = append(s.createdVolumes, vol)
 	return nil
 }
 
-func (s *MockStorage) CanonicalizeVolumeName(suggestedName string) string {
-	return suggestedName
-}
-
-func (s *MockStorage) CanonicalizeSnapshotName(suggestedName string) string {
-	return suggestedName
-}
-
-func (s *MockStorage) Attach(vol *volume.Info, node string) error {
+func (s *MockStorage) Attach(ctx context.Context, vol *volume.Info, node string) error {
 	s.assignedVolumes = append(s.assignedVolumes, &volume.Assignment{Vol: vol, Node: node, Path: "/dev/null"})
 	return nil
 }
 
-func (s *MockStorage) Detach(vol *volume.Info, node string) error {
+func (s *MockStorage) Detach(ctx context.Context, vol *volume.Info, node string) error {
 	for _, a := range s.assignedVolumes {
 		if a.Vol.Name == vol.Name && a.Node == node {
 			// Close enough for testing...
@@ -176,16 +177,16 @@ func (s *MockStorage) Detach(vol *volume.Info, node string) error {
 	return nil
 }
 
-func (s *MockStorage) NodeAvailable(node string) (bool, error) {
+func (s *MockStorage) NodeAvailable(ctx context.Context, node string) error {
 	// Hard coding magic string to pass csi-test.
 	if node == "some-fake-node-id" {
-		return false, nil
+		return fmt.Errorf("it's obvious that %s is a fake node", node)
 	}
 
-	return true, nil
+	return nil
 }
 
-func (s *MockStorage) GetAssignmentOnNode(vol *volume.Info, node string) (*volume.Assignment, error) {
+func (s *MockStorage) GetAssignmentOnNode(ctx context.Context, vol *volume.Info, node string) (*volume.Assignment, error) {
 	for _, a := range s.assignedVolumes {
 		if a.Vol.ID == vol.ID && a.Node == node {
 			// Close enough for testing...
