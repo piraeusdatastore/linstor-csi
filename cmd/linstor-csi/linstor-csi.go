@@ -31,7 +31,7 @@ import (
 func main() {
 	var (
 		controllers = flag.String("controllers", "", "Controller endpoints for LINSTOR")
-		endpoint    = flag.String("endpoint", "unix:///var/lib/kubelet/plugins/io.drbd.linstor-csi/csi.sock", "CSI endpoint")
+		endpoint    = flag.String("endpoint", "unix:///var/lib/kubelet/plugins/linstor.csi.linbit.com/csi.sock", "CSI endpoint")
 		node        = flag.String("node", "", "Node ID to pass to node service")
 		debug       = flag.Bool("debug-logging", false, "Enable debut log output")
 	)

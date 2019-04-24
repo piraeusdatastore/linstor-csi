@@ -29,7 +29,7 @@ func TestDriver(t *testing.T) {
 
 	driver, err := NewDriver(
 		Endpoint(*endpoint), NodeID(*node), LogOut(logFile),
-		Debug, Name("io.drbd.linstor-csi-test"),
+		Debug, Name("linstor.csi.linbit.com-test"),
 	)
 	if err != nil {
 		t.Fatal(err)

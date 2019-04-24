@@ -65,7 +65,7 @@ func NewDriver(options ...func(*Driver) error) (*Driver, error) {
 	mockStorage := &client.MockStorage{}
 
 	d := &Driver{
-		name:        "io.drbd.linstor-csi",
+		name:        "linstor.csi.linbit.com",
 		version:     Version,
 		nodeID:      "localhost",
 		Storage:     mockStorage,
