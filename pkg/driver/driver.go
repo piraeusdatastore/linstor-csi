@@ -259,6 +259,9 @@ func (d Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeReq
 	if err != nil {
 		return nil, err
 	}
+	if assignedTo == nil {
+		return nil, fmt.Errorf("volume %s is not assigned to node %s", existingVolume.ID, d.nodeID)
+	}
 
 	err = d.Mounter.Mount(existingVolume, assignedTo.Path, req.StagingTargetPath, fsType, mntOpts)
 	if err != nil {
