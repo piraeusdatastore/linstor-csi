@@ -171,8 +171,8 @@ func (s *Linstor) AllocationSizeKiB(requiredBytes, limitBytes int64) (int64, err
 
 	if volumeSize.InclusiveBytes() > limit.InclusiveBytes() && !unlimited {
 		return int64(volumeSize.Value()),
-			fmt.Errorf("got request for %d Bytes of storage (needed to allocate %s), but size is limited to %s",
-				requiredBytes, volumeSize, limit)
+			fmt.Errorf("got request for %d bytes of storage, but needed to allocate %d more bytes than the %d byte limit",
+				requiredBytes, int64(volumeSize.To(data.B)-limit.To(data.B)), int64(limit.To(data.B)))
 	}
 	return int64(volumeSize.Value()), nil
 }
