@@ -58,7 +58,7 @@ spec:
         - name: csi-provisioner
           image: quay.io/k8scsi/csi-provisioner:v1.0.1
           args:
-            - "--provisioner=io.drbd.linstor-csi"
+            - "--provisioner=linstor.csi.linbit.com"
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
             - "--feature-gates=Topology=true"
@@ -268,12 +268,12 @@ spec:
           lifecycle:
             preStop:
               exec:
-                command: ["/bin/sh", "-c", "rm -rf /registration/io.drbd.linstor-csi /registration/io.drbd.linstor-csi-reg.sock"]
+                command: ["/bin/sh", "-c", "rm -rf /registration/linstor.csi.linbit.com /registration/linstor.csi.linbit.com-reg.sock"]
           env:
             - name: ADDRESS
               value: /csi/csi.sock
             - name: DRIVER_REG_SOCK_PATH
-              value: /var/lib/kubelet/plugins/io.drbd.linstor-csi/csi.sock
+              value: /var/lib/kubelet/plugins/linstor.csi.linbit.com/csi.sock
             - name: KUBE_NODE_NAME
               valueFrom:
                 fieldRef:
@@ -320,7 +320,7 @@ spec:
             type: DirectoryOrCreate
         - name: plugin-dir
           hostPath:
-            path: /var/lib/kubelet/plugins/io.drbd.linstor-csi/
+            path: /var/lib/kubelet/plugins/linstor.csi.linbit.com/
             type: DirectoryOrCreate
         - name: pods-mount-dir
           hostPath:
