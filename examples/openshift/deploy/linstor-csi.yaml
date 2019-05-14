@@ -57,6 +57,7 @@ spec:
         - name: csi-provisioner
           image: quay.io/k8scsi/csi-provisioner:v0.4.0
           args:
+            - "--provisioner=linstor.csi.linbit.com"
             - "--csi-address=$(ADDRESS)"
             - "--feature-gates=Topology=true"
           env:
@@ -289,7 +290,7 @@ spec:
             type: DirectoryOrCreate
         - name: plugin-dir
           hostPath:
-            path: /var/lib/kubelet/plugins/io.drbd.linstor-csi/
+            path: /var/lib/kubelet/plugins/linstor.csi.linbit.com/
             type: DirectoryOrCreate
         - name: pods-mount-dir
           hostPath:
