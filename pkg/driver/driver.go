@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math"
 	"net"
 	"net/url"
 	"os"
@@ -350,10 +349,8 @@ func (d Driver) NodeGetCapabilities(context.Context, *csi.NodeGetCapabilitiesReq
 // NodeGetInfo https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#nodegetinfo
 func (d Driver) NodeGetInfo(context.Context, *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	return &csi.NodeGetInfoResponse{
-		NodeId: d.nodeID,
-		// TODO: I think we're limited by the number of linux block devices, which
-		// is a massive number, but I'm not sure if something up the stack limits us.
-		MaxVolumesPerNode: math.MaxInt64,
+		NodeId:            d.nodeID,
+		MaxVolumesPerNode: 1048576, // DRBD volumes per node limit.
 		AccessibleTopology: &csi.Topology{
 			Segments: map[string]string{
 				client.LinstorNodeTopologyKey: d.nodeID,
