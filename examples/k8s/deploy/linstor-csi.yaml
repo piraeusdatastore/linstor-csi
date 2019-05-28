@@ -17,7 +17,7 @@ spec:
       serviceAccount: linstor-csi-controller-sa
       containers:
         - name: csi-provisioner
-          image: quay.io/k8scsi/csi-provisioner:tmp-test-1.14
+          image: quay.io/k8scsi/csi-provisioner:v1.2.0
           args:
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
@@ -30,7 +30,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-attacher
-          image: quay.io/k8scsi/csi-attacher:v1.0.1
+          image: quay.io/k8scsi/csi-attacher:v1.1.1
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
@@ -220,7 +220,7 @@ spec:
       hostNetwork: true
       containers:
         - name: csi-node-driver-registrar
-          image: quay.io/k8scsi/csi-node-driver-registrar:v1.0.2
+          image: quay.io/k8scsi/csi-node-driver-registrar:v1.1.0
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
