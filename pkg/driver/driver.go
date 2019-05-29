@@ -614,8 +614,12 @@ func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*
 }
 
 // GetCapacity https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#getcapacity
-func (d Driver) GetCapacity(context.Context, *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
-	return &csi.GetCapacityResponse{}, nil
+func (d Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
+	bytes, err := d.Storage.CapacityBytes(ctx, req.GetParameters())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "%v", err)
+	}
+	return &csi.GetCapacityResponse{AvailableCapacity: bytes}, nil
 }
 
 // ControllerGetCapabilities https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#controllergetcapabilities
@@ -641,6 +645,10 @@ func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Controll
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
+				}}},
+			{Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: csi.ControllerServiceCapability_RPC_GET_CAPACITY,
 				}}},
 		},
 	}, nil
