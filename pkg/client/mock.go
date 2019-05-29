@@ -33,7 +33,7 @@ type MockStorage struct {
 	assignedVolumes []*volume.Assignment
 }
 
-func (s *MockStorage) ListAll(parameters map[string]string) ([]*volume.Info, error) {
+func (s *MockStorage) ListAll(page, perPage int, resource string) ([]*volume.Info, error) {
 	return s.createdVolumes, nil
 }
 
@@ -193,6 +193,10 @@ func (s *MockStorage) GetAssignmentOnNode(ctx context.Context, vol *volume.Info,
 		}
 	}
 	return nil, nil
+}
+
+func (s *MockStorage) CapacityBytes(ctx context.Context, params map[string]string) (int64, error) {
+	return 50000000, nil
 }
 
 func (s *MockStorage) Mount(vol *volume.Info, source, target, fsType string, options []string) error {

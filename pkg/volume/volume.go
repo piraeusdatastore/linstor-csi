@@ -105,6 +105,8 @@ type Querier interface {
 	GetByID(ctx context.Context, ID string) (*Info, error)
 	// AllocationSizeKiB returns the number of KiB required to provision required bytes.
 	AllocationSizeKiB(requiredBytes, limitBytes int64) (int64, error)
+	// CapacityBytes determines the capacity of the underlying storage in Bytes.
+	CapacityBytes(ctx context.Context, params map[string]string) (int64, error)
 }
 
 type Mounter interface {
