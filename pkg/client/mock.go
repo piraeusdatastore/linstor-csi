@@ -33,7 +33,7 @@ type MockStorage struct {
 	assignedVolumes []*volume.Assignment
 }
 
-func (s *MockStorage) ListAll(page, perPage int, resource string) ([]*volume.Info, error) {
+func (s *MockStorage) ListAll(ctx context.Context, page, perPage int) ([]*volume.Info, error) {
 	return s.createdVolumes, nil
 }
 

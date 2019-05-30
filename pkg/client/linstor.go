@@ -326,8 +326,24 @@ func LogLevel(s string) func(*Linstor) error {
 	}
 }
 
-func (s *Linstor) ListAll(page, perPage int, resource string) ([]*volume.Info, error) {
-	return nil, nil
+func (s *Linstor) ListAll(ctx context.Context, page, perPage int) ([]*volume.Info, error) {
+	var vols = make([]*volume.Info, 0)
+
+	resDefs, err := s.client.ResourceDefinitions.GetAll(ctx, &lapi.ListOpts{Page: page, PerPage: perPage})
+	if err != nil {
+		return vols, nil
+	}
+
+	for _, rd := range resDefs {
+		vol, err := s.resourceDefinitionToVolume(rd)
+		if err != nil {
+			return vols, nil
+		}
+
+		vols = append(vols, vol)
+	}
+
+	return vols, nil
 }
 
 // AllocationSizeKiB returns LINSTOR's smallest possible number of KiB that can
