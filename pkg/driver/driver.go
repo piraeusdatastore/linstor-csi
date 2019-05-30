@@ -847,7 +847,8 @@ func (d Driver) Run() error {
 
 // Stop the server.
 func (d Driver) Stop() error {
-	return fmt.Errorf("Not implemented")
+	d.srv.GracefulStop()
+	return nil
 }
 
 func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
