@@ -760,7 +760,6 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 
 	// Handle pagination.
 	var (
-		start     int32
 		end       int32
 		nextToken string
 	)
@@ -772,21 +771,11 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 		nextToken = strconv.Itoa(int(end))
 	}
 
-	if req.GetStartingToken() != "" {
-		i, err := strconv.ParseInt(req.GetStartingToken(), 10, 32)
-		if err != nil {
-			return nil, status.Error(
-				codes.Aborted, fmt.Sprintf("Invalid token"))
-		}
-		start = int32(i)
-	} else {
-		start = int32(0)
+	start, err := parseStartingToken(req.GetStartingToken())
+	if err != nil {
+		return nil, fmt.Errorf("failed to list snapshots: %v", err)
 	}
 
-	if start > end {
-		return nil, status.Error(
-			codes.Aborted, fmt.Sprintf("Invalid token"))
-	}
 	snapshots = snapshots[start:end]
 
 	entries := make([]*csi.ListSnapshotsResponse_Entry, 0)
@@ -945,4 +934,16 @@ func missingAttr(methodCall, volumeID, attr string) error {
 		volumeID = "an unknown volume"
 	}
 	return status.Error(codes.InvalidArgument, fmt.Sprintf("%s failed for %s: it requires a %s and none was provided", methodCall, volumeID, attr))
+}
+
+func parseStartingToken(s string) (int, error) {
+	if s == "" {
+		return int(0), nil
+	}
+
+	i, err := strconv.ParseInt(s, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse starting token: %v", err)
+	}
+	return int(i), nil
 }
