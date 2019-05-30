@@ -35,7 +35,6 @@ func TestDriver(t *testing.T) {
 		t.Fatal(err)
 	}
 	driver.version = "linstor-csi-test-version"
-	defer driver.Stop()
 
 	if *lsEndpoint != "" {
 		realStorageBackend, err := client.NewLinstor(

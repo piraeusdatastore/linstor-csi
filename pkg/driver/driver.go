@@ -343,7 +343,7 @@ func (d Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishV
 
 // NodeGetVolumeStats https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#nodegetvolumestats
 func (d Driver) NodeGetVolumeStats(context.Context, *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
-	return &csi.NodeGetVolumeStatsResponse{}, nil
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 // NodeGetCapabilities https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#nodegetcapabilities
@@ -806,12 +806,12 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 
 // NodeExpandVolume https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#nodeexpandvolume
 func (d Driver) NodeExpandVolume(context.Context, *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-	panic("not implemented")
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 // ControllerExpandVolume https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#controllerexpandvolume
 func (d Driver) ControllerExpandVolume(context.Context, *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
-	panic("not implemented")
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 // Run the server.
@@ -875,7 +875,8 @@ func (d Driver) Run() error {
 
 // Stop the server.
 func (d Driver) Stop() error {
-	return fmt.Errorf("Not implemented")
+	d.srv.GracefulStop()
+	return nil
 }
 
 func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
