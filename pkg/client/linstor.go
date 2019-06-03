@@ -769,20 +769,21 @@ func (s *Linstor) CapacityBytes(ctx context.Context, params map[string]string) (
 	}
 
 	var total int64
-	var done = make(chan bool, 1)
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for b := range bytes {
 			total += b
 		}
-		done <- true
 	}()
-
-	<-done
 
 	if err := g.Wait(); err != nil {
 		return total, err
 	}
 	close(bytes)
+
+	wg.Wait()
 
 	return int64(data.NewKibiByte(data.KiB * data.ByteSize(total)).To(data.B)), nil
 }
@@ -1178,14 +1179,8 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 		"target": target,
 	}).Info("mounting volume")
 
-	r, err := s.resDeploymentFromVolumeInfo(vol)
-	if err != nil {
-		return err
-	}
-
 	// Merge mount options from Storage Classes and CSI calls.
 	options = append(options, vol.Parameters[MountOptsKey])
-	mntOpts := strings.Join(options, ",")
 
 	// If an FSType is supplided by the parameters, override the one passed
 	// to the Mount Call.
@@ -1194,22 +1189,28 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 		fsType = parameterFsType
 	}
 
-	mounter := lc.FSUtil{
-		ResourceDeployment: r,
-		FSType:             fsType,
-		MountOpts:          mntOpts,
-		FSOpts:             vol.Parameters[FSOptsKey],
-	}
-	s.log.WithFields(logrus.Fields{
-		"mounter": fmt.Sprintf("%+v", mounter),
-	}).Debug("configured mounter")
-
-	err = mounter.SafeFormat(source)
+	inUse, err := s.mounter.DeviceOpened(source)
 	if err != nil {
-		return err
+		return fmt.Errorf("checking for exclusive open failed: %v", err)
+	}
+	if inUse {
+		return fmt.Errorf("unable to get an exclusive open on %s, check device health", source)
 	}
 
-	return mounter.Mount(source, target)
+	if err := s.mounter.MakeDir(target); err != nil {
+		return fmt.Errorf("could not create target directory %s, %v", target, err)
+	}
+
+	needsMount, err := s.mounter.IsNotMountPoint(target)
+	if err != nil {
+		return fmt.Errorf("unable to determine mount status of %s %v", target, err)
+	}
+
+	if !needsMount {
+		return nil
+	}
+
+	return s.mounter.FormatAndMount(source, target, fsType, options)
 }
 
 func (s *Linstor) Unmount(target string) error {
@@ -1217,17 +1218,16 @@ func (s *Linstor) Unmount(target string) error {
 		"target": target,
 	}).Info("unmounting volume")
 
-	r := lc.NewResourceDeployment(lc.ResourceDeploymentConfig{
-		Name:   "CSI Unmount",
-		LogOut: s.logOut})
-	mounter := lc.FSUtil{
-		ResourceDeployment: &r,
+	notMounted, err := s.mounter.IsNotMountPoint(target)
+	if err != nil {
+		return fmt.Errorf("unable to determine mount status of %s %v", target, err)
 	}
-	s.log.WithFields(logrus.Fields{
-		"mounter": fmt.Sprintf("%+v", mounter),
-	}).Debug("configured mounter")
 
-	return mounter.UnMount(target)
+	if notMounted {
+		return nil
+	}
+
+	return s.mounter.Unmount(target)
 }
 
 // validResourceName returns an error if the input string is not a valid LINSTOR name
