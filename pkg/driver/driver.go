@@ -650,6 +650,10 @@ func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Controll
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_GET_CAPACITY,
 				}}},
+			{Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: csi.ControllerServiceCapability_RPC_PUBLISH_READONLY,
+				}}},
 		},
 	}, nil
 }
