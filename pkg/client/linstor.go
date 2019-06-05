@@ -32,8 +32,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	lc "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/LINBIT/linstor-csi/pkg/volume"
@@ -716,51 +714,6 @@ func (s *Linstor) CapacityBytes(ctx context.Context, params map[string]string) (
 		node := n.Name
 		g.Go(func() error {
 			sp, err := s.client.Nodes.GetStoragePool(egctx, node, p.storagePool)
-			if err == nil {
-				bytes <- sp.FreeCapacity
-			}
-			return nil404(err)
-		})
-	}
-
-	var total int64
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for b := range bytes {
-			total += b
-		}
-	}()
-
-	if err := g.Wait(); err != nil {
-		return total, err
-	}
-	close(bytes)
-
-	wg.Wait()
-
-	return int64(data.NewKibiByte(data.KiB * data.ByteSize(total)).To(data.B)), nil
-}
-
-// CapacityBytes returns the amount of free space in the storage pool specified
-// the the params.
-func (s *Linstor) CapacityBytes(ctx context.Context, params map[string]string) (int64, error) {
-	p, err := newParameters(params)
-	if err != nil {
-		return 0, fmt.Errorf("unable to get capacity: %v", err)
-	}
-	nodes, err := s.client.Nodes.GetAll(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("unable to get capacity for storage pool %s: %v", p.storagePool, err)
-	}
-
-	g, ctx := errgroup.WithContext(ctx)
-	bytes := make(chan int64, 1)
-	for _, n := range nodes {
-		node := n.Name
-		g.Go(func() error {
-			sp, err := s.client.Nodes.GetStoragePool(ctx, node, p.storagePool)
 			if err == nil {
 				bytes <- sp.FreeCapacity
 			}
