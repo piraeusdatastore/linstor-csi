@@ -24,9 +24,10 @@ version of Kubernetes is recent enough to enable these gates.
 
 # Usage
 
-This project must be used in conjunction with a working LINSTOR cluster. [LINSTOR's
-documentation](https://docs.linbit.com/docs/users-guide-9.0/#p-linstor) is the
-foremost guide on setting up and administering LINSTOR.
+This project must be used in conjunction with a working LINSTOR cluster, version
+0.9.11 or better.
+[LINSTOR's documentation](https://docs.linbit.com/docs/users-guide-9.0/#p-linstor)
+is the foremost guide on setting up and administering LINSTOR.
 
 ## Kubernetes
 
