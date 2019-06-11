@@ -87,7 +87,6 @@ func newParameters(params map[string]string) (parameters, error) {
 		layerList:           []lapi.LayerType{lapi.DRBD, lapi.STORAGE},
 		placementCount:      1,
 		disklessStoragePool: "DfltDisklessStorPool",
-		storagePool:         "DfltStorPool",
 		encryption:          false,
 		fs:                  "ext4",
 		lsp:                 localStoragePolicyIgnore,
@@ -713,9 +712,13 @@ func (s *Linstor) CapacityBytes(ctx context.Context, params map[string]string) (
 	for _, n := range nodes {
 		node := n.Name
 		g.Go(func() error {
-			sp, err := s.client.Nodes.GetStoragePool(egctx, node, p.storagePool)
+			pools, err := s.client.Nodes.GetStoragePools(egctx, node)
 			if err == nil {
-				bytes <- sp.FreeCapacity
+				for _, sp := range pools {
+					if p.storagePool == sp.StoragePoolName || p.storagePool == "" {
+						bytes <- sp.FreeCapacity
+					}
+				}
 			}
 			return nil404(err)
 		})
