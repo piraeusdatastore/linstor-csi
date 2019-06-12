@@ -768,7 +768,7 @@ func (s *Linstor) SnapCreate(ctx context.Context, snap *volume.SnapInfo) (*volum
 	snap.CsiSnap = &csi.Snapshot{
 		Id:             linSnap.Name,
 		SourceVolumeId: snap.CsiSnap.SourceVolumeId,
-		SizeBytes:      int64(data.NewKibiByte(data.KiB * data.ByteSize(linSnap.SnapshotVlmDfns[0].VlmSize)).InclusiveBytes()),
+		SizeBytes:      int64(data.NewKibiByte(data.KiB * data.ByteSize(linSnap.VolumeDefinitions[0].SizeKib)).InclusiveBytes()),
 		CreatedAt:      time.Now().UnixNano(),
 		Status: &csi.SnapshotStatus{
 			Type: csi.SnapshotStatus_READY,

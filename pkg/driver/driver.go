@@ -365,6 +365,13 @@ func (d Driver) NodeGetInfo(context.Context, *csi.NodeGetInfoRequest) (*csi.Node
 	}, nil
 }
 
+func (d Driver) NodeGetId(ctx context.Context, req *csi.NodeGetIdRequest) (*csi.NodeGetIdResponse, error) {
+	return &csi.NodeGetIdResponse{
+		NodeId: d.nodeID,
+	}, nil
+
+}
+
 // CreateVolume https://github.com/container-storage-interface/spec/blob/v0.3.0/spec.md#createvolume
 func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	if req.Name == "" {
@@ -604,7 +611,7 @@ func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*
 
 		entries = append(entries, &csi.ListVolumesResponse_Entry{
 			Volume: &csi.Volume{
-				VolumeId:           vol.ID,
+				Id:                 vol.ID,
 				CapacityBytes:      vol.SizeBytes,
 				AccessibleTopology: topos,
 			}})
@@ -649,10 +656,6 @@ func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Controll
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_GET_CAPACITY,
-				}}},
-			{Type: &csi.ControllerServiceCapability_Rpc{
-				Rpc: &csi.ControllerServiceCapability_RPC{
-					Type: csi.ControllerServiceCapability_RPC_PUBLISH_READONLY,
 				}}},
 		},
 	}, nil
@@ -928,7 +931,7 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			Id:                 volumeID,
+			Id:                 vol.ID,
 			CapacityBytes:      int64(volumeSize.InclusiveBytes()),
 			AccessibleTopology: topos,
 		}}, nil
