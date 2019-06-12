@@ -248,7 +248,11 @@ spec:
             - name: plugin-dir
               mountPath: /csi
         - name: linstor-csi-plugin
+<<<<<<< HEAD:examples/openshift/deploy/linstor-csi.yaml
           image: quay.io/linbit/linstor-csi:osp3.10
+=======
+          image: quay.io/linbit/linstor-csi:v0.6.1
+>>>>>>> 1042095... fix issue where localstoragepolicy needed to be lowercase to report volume topology:examples/k8s/deploy/linstor-csi-1.14.yaml
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--node=$(KUBE_NODE_NAME)"

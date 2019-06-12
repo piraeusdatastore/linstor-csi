@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2019-06-20
+### Fixed
+- `localStoragePolicy` parameter now case insensitive when reporting volume topology,
+  previously needed to be lowercase
+
 ## [0.6.0] - 2019-06-19
 ### Added
 - log-level argument for csi-plugin. it takes strings of levels: info, debug,
