@@ -622,20 +622,21 @@ func (s *Linstor) Delete(ctx context.Context, vol *volume.Info) error {
 }
 
 func (s *Linstor) AccessibleTopologies(ctx context.Context, vol *volume.Info) ([]*csi.Topology, error) {
-	lsp, err := parseLocalStoragePolicy(vol.Parameters[UseLocalStorageKey])
+	p, err := newParameters(vol.Parameters)
 	if err != nil {
 		return nil, fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
 	}
-	if lsp != localStoragePolicyRequired {
+
+	if p.lsp != localStoragePolicyRequired {
 		return nil, nil
 	}
 
 	r, err := s.client.Resources.GetAll(ctx, vol.ID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
 	}
 
-	topos := make([]*csi.Topology, 0)
+	var topos = make([]*csi.Topology, 0)
 	for _, n := range deployedNodes(r) {
 		topos = append(topos, &csi.Topology{Segments: map[string]string{LinstorNodeTopologyKey: n}})
 	}
