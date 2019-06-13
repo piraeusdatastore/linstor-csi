@@ -82,11 +82,13 @@ type parameters struct {
 	fsOpts              string
 }
 
+const defaultDisklessStoragePoolName = "DfltDisklessStorPool"
+
 func newParameters(params map[string]string) (parameters, error) {
 	var p = parameters{
 		layerList:           []lapi.LayerType{lapi.DRBD, lapi.STORAGE},
 		placementCount:      1,
-		disklessStoragePool: "DfltDisklessStorPool",
+		disklessStoragePool: defaultDisklessStoragePoolName,
 		encryption:          false,
 		fs:                  "ext4",
 		lsp:                 localStoragePolicyIgnore,
@@ -628,7 +630,7 @@ func (s *Linstor) AccessibleTopologies(ctx context.Context, vol *volume.Info) ([
 	}
 
 	if p.lsp != localStoragePolicyRequired {
-		return nil, nil
+		return s.lspIgnoreAccessibleTopologies(ctx, vol)
 	}
 
 	r, err := s.client.Resources.GetAll(ctx, vol.ID)
@@ -641,7 +643,65 @@ func (s *Linstor) AccessibleTopologies(ctx context.Context, vol *volume.Info) ([
 		topos = append(topos, &csi.Topology{Segments: map[string]string{LinstorNodeTopologyKey: n}})
 	}
 
+	s.log.WithFields(logrus.Fields{
+		"volume":     fmt.Sprintf("%+v", vol),
+		"parameters": fmt.Sprintf("%+v", p),
+		"topologies": fmt.Sprintf("%+v", topos),
+	}).Debug("determined volume topologies")
+
 	return topos, nil
+}
+
+func (s *Linstor) lspIgnoreAccessibleTopologies(ctx context.Context, vol *volume.Info) ([]*csi.Topology, error) {
+	p, err := newParameters(vol.Parameters)
+	if err != nil {
+		return nil, fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
+	}
+
+	pools, err := s.getAllStoragePools(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
+	}
+
+	var nodes = make([]string, 0)
+	for _, sp := range pools {
+		// The default diskless storage pool doesn't show up in the list and by
+		// default all network attachable resources can use it.
+		if p.disklessStoragePool == defaultDisklessStoragePoolName ||
+			// Otherwise, the user is using a particular diskless storage pool
+			(sp.StoragePoolName == p.disklessStoragePool && sp.ProviderKind == lapi.DISKLESS) {
+			nodes = append(nodes, sp.NodeName)
+		}
+	}
+
+	var topos = make([]*csi.Topology, 0)
+	for _, n := range uniq(nodes) {
+		topos = append(topos, &csi.Topology{Segments: map[string]string{LinstorNodeTopologyKey: n}})
+	}
+
+	s.log.WithFields(logrus.Fields{
+		"volume":     fmt.Sprintf("%+v", vol),
+		"parameters": fmt.Sprintf("%+v", p),
+		"topologies": fmt.Sprintf("%+v", topos),
+	}).Debug("determined volume topologies")
+
+	return topos, nil
+}
+
+func uniq(strs []string) []string {
+	var seen = make(map[string]bool, len(strs))
+	var j int
+
+	for _, s := range strs {
+		if seen[s] {
+			continue
+		}
+		seen[s] = true
+		strs[j] = s
+		j++
+	}
+
+	return strs[:j]
 }
 
 func (s *Linstor) Attach(ctx context.Context, vol *volume.Info, node string) error {
@@ -743,6 +803,48 @@ func (s *Linstor) CapacityBytes(ctx context.Context, params map[string]string) (
 	wg.Wait()
 
 	return int64(data.NewKibiByte(data.KiB * data.ByteSize(total)).To(data.B)), nil
+}
+
+func (s *Linstor) getAllStoragePools(ctx context.Context) ([]lapi.StoragePool, error) {
+	var allPools = make([]lapi.StoragePool, 0)
+
+	nodes, err := s.client.Nodes.GetAll(ctx)
+	if err != nil {
+		return allPools, fmt.Errorf("unable to get all storage pools: %v", err)
+	}
+
+	poolChan := make(chan lapi.StoragePool, 1)
+
+	g, egctx := errgroup.WithContext(ctx)
+	for _, n := range nodes {
+		node := n.Name
+		g.Go(func() error {
+			pools, err := s.client.Nodes.GetStoragePools(egctx, node)
+			if err == nil {
+				for _, sp := range pools {
+					poolChan <- sp
+				}
+			}
+			return err
+		})
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for sp := range poolChan {
+			allPools = append(allPools, sp)
+		}
+	}()
+
+	if err := g.Wait(); err != nil {
+		return allPools, err
+	}
+	close(poolChan)
+	wg.Wait()
+
+	return allPools, nil
 }
 
 // SnapCreate calls linstor to create a new snapshot on the volume indicated by
