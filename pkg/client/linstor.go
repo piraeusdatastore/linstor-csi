@@ -763,44 +763,17 @@ func (s *Linstor) CapacityBytes(ctx context.Context, params map[string]string) (
 	if err != nil {
 		return 0, fmt.Errorf("unable to get capacity: %v", err)
 	}
-	nodes, err := s.client.Nodes.GetAll(ctx)
+	pools, err := s.getAllStoragePools(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("unable to get capacity for storage pool %s: %v", p.storagePool, err)
 	}
 
-	g, egctx := errgroup.WithContext(ctx)
-	bytes := make(chan int64, 1)
-	for _, n := range nodes {
-		node := n.Name
-		g.Go(func() error {
-			pools, err := s.client.Nodes.GetStoragePools(egctx, node)
-			if err == nil {
-				for _, sp := range pools {
-					if p.storagePool == sp.StoragePoolName || p.storagePool == "" {
-						bytes <- sp.FreeCapacity
-					}
-				}
-			}
-			return nil404(err)
-		})
-	}
-
 	var total int64
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for b := range bytes {
-			total += b
+	for _, sp := range pools {
+		if p.storagePool == sp.StoragePoolName || p.storagePool == "" {
+			total += sp.FreeCapacity
 		}
-	}()
-
-	if err := g.Wait(); err != nil {
-		return total, err
 	}
-	close(bytes)
-
-	wg.Wait()
 
 	return int64(data.NewKibiByte(data.KiB * data.ByteSize(total)).To(data.B)), nil
 }
