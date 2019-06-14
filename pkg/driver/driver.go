@@ -241,15 +241,23 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 	if req.GetVolumeCapability() == nil {
 		return &csi.NodePublishVolumeResponse{}, missingAttr("NodePublishVolume", req.GetVolumeId(), "VolumeCapability slice")
 	}
+	var mntOpts = make([]string, 0)
+	var fsType string
 
-	mnt := req.GetVolumeCapability().GetMount()
-	mntOpts := mnt.MountFlags
-	if req.GetReadonly() {
-		mntOpts = append(mntOpts, "ro")
+	if block := req.GetVolumeCapability().GetBlock(); block != nil {
+		mntOpts = []string{"bind"}
 	}
-	fsType := "ext4"
-	if mnt.FsType != "" {
-		fsType = mnt.FsType
+
+	if mnt := req.GetVolumeCapability().GetMount(); mnt != nil {
+		mntOpts = mnt.MountFlags
+		fsType = "ext4"
+		if mnt.FsType != "" {
+			fsType = mnt.FsType
+		}
+		if req.GetReadonly() {
+			mntOpts = append(mntOpts, "ro")
+		}
+
 	}
 
 	// Retrive device path from storage backend.
