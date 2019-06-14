@@ -33,8 +33,14 @@ type MockStorage struct {
 	assignedVolumes []*volume.Assignment
 }
 
-func (s *MockStorage) ListAll(ctx context.Context, page, perPage int) ([]*volume.Info, error) {
-	return s.createdVolumes, nil
+func (s *MockStorage) ListAll(ctx context.Context) ([]*volume.Info, error) {
+	var vols = make([]*volume.Info, 0)
+	for _, vol := range s.createdVolumes {
+		vols = append(vols, vol)
+	}
+
+	volume.Sort(vols)
+	return vols, nil
 }
 
 func (s *MockStorage) AllocationSizeKiB(requiredBytes, limitBytes int64) (int64, error) {
