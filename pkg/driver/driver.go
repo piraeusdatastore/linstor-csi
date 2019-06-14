@@ -220,89 +220,31 @@ func (d Driver) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeRes
 
 // NodeStageVolume https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#nodestagevolume
 func (d Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	if req.VolumeId == "" {
-		return &csi.NodeStageVolumeResponse{}, missingAttr(
-			"NodeStageVolume", req.VolumeId, "VolumeId")
-	}
-
-	if req.StagingTargetPath == "" {
-		return &csi.NodeStageVolumeResponse{}, missingAttr(
-			"NodeStageVolume", req.VolumeId, "StagingTargetPath")
-	}
-
-	if req.VolumeCapability == nil {
-		return &csi.NodeStageVolumeResponse{}, missingAttr(
-			"NodeStageVolume", req.VolumeId, "VolumeCapability slice")
-	}
-
-	mnt := req.VolumeCapability.GetMount()
-	mntOpts := mnt.MountFlags
-
-	fsType := "ext4"
-	if mnt.FsType != "" {
-		fsType = mnt.FsType
-	}
-
-	existingVolume, err := d.Storage.GetByID(ctx, req.GetVolumeId())
-	if err != nil {
-		return nil, err
-	}
-
-	assignedTo, err := d.Assignments.GetAssignmentOnNode(ctx, existingVolume, d.nodeID)
-	if err != nil {
-		return nil, err
-	}
-	if assignedTo == nil {
-		return nil, fmt.Errorf("volume %s is not assigned to node %s", existingVolume.ID, d.nodeID)
-	}
-
-	err = d.Mounter.Mount(existingVolume, assignedTo.Path, req.StagingTargetPath, fsType, mntOpts)
-	if err != nil {
-		return nil, err
-	}
-
-	return &csi.NodeStageVolumeResponse{}, nil
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 // NodeUnstageVolume https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#nodeunstagevolume
 func (d Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
-	if req.VolumeId == "" {
-		return &csi.NodeUnstageVolumeResponse{}, missingAttr("NodeUnstageVolume", req.VolumeId, "VolumeId")
-	}
-	if req.StagingTargetPath == "" {
-		return &csi.NodeUnstageVolumeResponse{}, missingAttr("NodeUnstageVolume", req.VolumeId, "StagingTargetPath")
-	}
-
-	err := d.Mounter.Unmount(req.StagingTargetPath)
-	if err != nil {
-		return nil, err
-	}
-
-	return &csi.NodeUnstageVolumeResponse{}, nil
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 // NodePublishVolume https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#nodepublishvolume
 func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	if req.VolumeId == "" {
-		return &csi.NodePublishVolumeResponse{}, missingAttr("NodePublishVolume", req.VolumeId, "VolumeId")
+	if req.GetVolumeId() == "" {
+		return &csi.NodePublishVolumeResponse{}, missingAttr("NodePublishVolume", req.GetVolumeId(), "VolumeId")
 	}
 
-	if req.StagingTargetPath == "" {
-		return &csi.NodePublishVolumeResponse{}, missingAttr("NodePublishVolume", req.VolumeId, "StagingTargetPath")
+	if req.GetTargetPath() == "" {
+		return &csi.NodePublishVolumeResponse{}, missingAttr("NodePublishVolume", req.GetVolumeId(), "TargetPath")
 	}
 
-	if req.TargetPath == "" {
-		return &csi.NodePublishVolumeResponse{}, missingAttr("NodePublishVolume", req.VolumeId, "TargetPath")
+	if req.GetVolumeCapability() == nil {
+		return &csi.NodePublishVolumeResponse{}, missingAttr("NodePublishVolume", req.GetVolumeId(), "VolumeCapability slice")
 	}
 
-	if req.VolumeCapability == nil {
-		return &csi.NodePublishVolumeResponse{}, missingAttr("NodePublishVolume", req.VolumeId, "VolumeCapability slice")
-	}
-
-	mnt := req.VolumeCapability.GetMount()
+	mnt := req.GetVolumeCapability().GetMount()
 	mntOpts := mnt.MountFlags
-	mntOpts = append(mntOpts, "bind")
-	if req.Readonly {
+	if req.GetReadonly() {
 		mntOpts = append(mntOpts, "ro")
 	}
 	fsType := "ext4"
@@ -310,14 +252,19 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		fsType = mnt.FsType
 	}
 
+	// Retrive device path from storage backend.
 	existingVolume, err := d.Storage.GetByID(ctx, req.GetVolumeId())
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.Internal, fmt.Sprintf("NodePublishVolume failed for %s: %v", req.GetVolumeId(), err))
+	}
+	assignment, err := d.Assignments.GetAssignmentOnNode(ctx, existingVolume, d.nodeID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, fmt.Sprintf("NodePublishVolume failed for %s: %v", req.GetVolumeId(), err))
 	}
 
-	err = d.Mounter.Mount(existingVolume, req.StagingTargetPath, req.TargetPath, fsType, mntOpts)
+	err = d.Mounter.Mount(existingVolume, assignment.Path, req.GetTargetPath(), fsType, mntOpts)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.Internal, fmt.Sprintf("NodePublishVolume failed for %s: %v", req.GetVolumeId(), err))
 	}
 
 	return &csi.NodePublishVolumeResponse{}, nil
@@ -348,14 +295,7 @@ func (d Driver) NodeGetVolumeStats(context.Context, *csi.NodeGetVolumeStatsReque
 
 // NodeGetCapabilities https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#nodegetcapabilities
 func (d Driver) NodeGetCapabilities(context.Context, *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	return &csi.NodeGetCapabilitiesResponse{
-		Capabilities: []*csi.NodeServiceCapability{
-			{Type: &csi.NodeServiceCapability_Rpc{
-				Rpc: &csi.NodeServiceCapability_RPC{
-					Type: csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
-				}}},
-		},
-	}, nil
+	return &csi.NodeGetCapabilitiesResponse{Capabilities: []*csi.NodeServiceCapability{}}, nil
 }
 
 // NodeGetInfo https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#nodegetinfo
