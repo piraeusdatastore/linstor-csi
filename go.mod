@@ -7,7 +7,7 @@ require (
 	github.com/container-storage-interface/spec v1.1.0
 	github.com/golang/protobuf v1.3.1
 	github.com/haySwim/data v0.2.0
-	github.com/kubernetes-csi/csi-test v1.1.2-0.20190326145326-7e4a8e2872dc
+	github.com/kubernetes-csi/csi-test v2.0.1+incompatible
 	github.com/pborman/uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/smartystreets/goconvey v0.0.0-20190330032615-68dc04aab96a // indirect

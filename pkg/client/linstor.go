@@ -324,10 +324,10 @@ func LogLevel(s string) func(*Linstor) error {
 	}
 }
 
-func (s *Linstor) ListAll(ctx context.Context, page, perPage int) ([]*volume.Info, error) {
+func (s *Linstor) ListAll(ctx context.Context) ([]*volume.Info, error) {
 	var vols = make([]*volume.Info, 0)
 
-	resDefs, err := s.client.ResourceDefinitions.GetAll(ctx, &lapi.ListOpts{Page: page, PerPage: perPage})
+	resDefs, err := s.client.ResourceDefinitions.GetAll(ctx)
 	if err != nil {
 		return vols, nil
 	}
@@ -335,11 +335,13 @@ func (s *Linstor) ListAll(ctx context.Context, page, perPage int) ([]*volume.Inf
 	for _, rd := range resDefs {
 		vol, err := s.resourceDefinitionToVolume(rd)
 		if err != nil {
-			return vols, nil
+			// Not a volume created by us, apparently.
+			continue
 		}
 
 		vols = append(vols, vol)
 	}
+	volume.Sort(vols)
 
 	return vols, nil
 }
