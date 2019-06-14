@@ -538,18 +538,39 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 // ListVolumes https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#getcapacity
 func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
 
+	volumes, err := d.Storage.ListAll(ctx)
+	if err != nil {
+		return &csi.ListVolumesResponse{}, status.Errorf(codes.Aborted, "ListVolumes failed: %v", err)
+	}
+
 	start, err := parseStartingToken(req.GetStartingToken())
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "ListVolumes failed for: %v", err)
+		return nil, status.Errorf(codes.Aborted, "ListVolumes failed for: %v", err)
 	}
 
-	volumes, err := d.Storage.ListAll(ctx, int(req.GetMaxEntries()), start)
-	if err != nil {
-		return &csi.ListVolumesResponse{}, status.Errorf(codes.Internal, "ListVolumes failed: %v", err)
+	if start > len(volumes) {
+		return nil, status.Errorf(codes.Aborted,
+			"ListVolumes failed: requsted more volumes (%d) then the total number of volumes (%d)",
+			start, len(volumes))
 	}
+
+	// Handle pagination.
+	var (
+		end       int32
+		nextToken string
+	)
+	totalVols := int32(len(volumes))
+	if req.GetMaxEntries() == 0 || (totalVols <= req.GetMaxEntries()) {
+		end = totalVols
+	} else {
+		end = req.GetMaxEntries()
+		nextToken = strconv.Itoa(int(end))
+	}
+
+	volumes = volumes[start:end]
 
 	var entries = make([]*csi.ListVolumesResponse_Entry, len(volumes))
-	for _, vol := range volumes {
+	for i, vol := range volumes {
 		topos, err := d.Storage.AccessibleTopologies(ctx, vol)
 		if err != nil {
 			return nil, status.Errorf(
@@ -557,15 +578,15 @@ func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*
 				vol.Name, err)
 		}
 
-		entries = append(entries, &csi.ListVolumesResponse_Entry{
+		entries[i] = &csi.ListVolumesResponse_Entry{
 			Volume: &csi.Volume{
 				Id:                 vol.ID,
 				CapacityBytes:      vol.SizeBytes,
 				AccessibleTopology: topos,
-			}})
+			}}
 	}
 
-	return &csi.ListVolumesResponse{NextToken: strconv.Itoa(int(start + 1)), Entries: entries}, nil
+	return &csi.ListVolumesResponse{NextToken: nextToken, Entries: entries}, nil
 }
 
 // GetCapacity https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#getcapacity

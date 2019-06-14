@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - NodeStageVolume and NodeUnstageVolume, everything can be done via
   NodePublishVolume and NodeUnpublishVolume
+### Fixed
+- ListVolumes now working
+### Changed
+- Updated dependency versions
 
 ## [0.6.1] - 2019-06-20
 ### Fixed

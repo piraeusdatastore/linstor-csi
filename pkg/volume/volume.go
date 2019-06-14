@@ -38,6 +38,13 @@ type Info struct {
 	Snapshots    []*SnapInfo       `json:"snapshots"`
 }
 
+// Sort sorts a list of snaphosts.
+func Sort(vols []*Info) {
+	sort.Slice(vols, func(j, k int) bool {
+		return vols[j].CreationTime.Before(vols[k].CreationTime)
+	})
+}
+
 // SnapInfo provides everything needed to manipulate snapshots.
 type SnapInfo struct {
 	Name    string        `json:"name"`
@@ -96,7 +103,8 @@ type AttacherDettacher interface {
 
 // Querier retrives various states of volumes.
 type Querier interface {
-	ListAll(ctx context.Context, page, perPage int) ([]*Info, error)
+	// ListAll should return a sorted list of pointers to Info.
+	ListAll(ctx context.Context) ([]*Info, error)
 	GetByName(ctx context.Context, name string) (*Info, error)
 	//GetByID should return nil when volume is not found.
 	GetByID(ctx context.Context, ID string) (*Info, error)
