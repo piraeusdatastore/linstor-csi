@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - disklessly attached volumes report volume topology bassed off of
   `disklessStoragePool` parameter. By default, they are available on all linstor
   nodes.
+### Removed
+- NodeStageVolume and NodeUnstageVolume, everything can be done via
+  NodePublishVolume and NodeUnpublishVolume
 
 ## [0.6.1] - 2019-06-20
 ### Fixed
