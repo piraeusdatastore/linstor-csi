@@ -90,7 +90,6 @@ func newParameters(params map[string]string) (parameters, error) {
 		placementCount:      1,
 		disklessStoragePool: defaultDisklessStoragePoolName,
 		encryption:          false,
-		fs:                  "ext4",
 		lsp:                 localStoragePolicyIgnore,
 	}
 	for k, v := range params {
@@ -1209,16 +1208,6 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 		"target": target,
 	}).Info("mounting volume")
 
-	// Merge mount options from Storage Classes and CSI calls.
-	options = append(options, vol.Parameters[MountOptsKey])
-
-	// If an FSType is supplided by the parameters, override the one passed
-	// to the Mount Call.
-	parameterFsType, ok := vol.Parameters[FSKey]
-	if ok {
-		fsType = parameterFsType
-	}
-
 	inUse, err := s.mounter.DeviceOpened(source)
 	if err != nil {
 		return fmt.Errorf("checking for exclusive open failed: %v", err)
@@ -1227,8 +1216,32 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 		return fmt.Errorf("unable to get an exclusive open on %s, check device health", source)
 	}
 
-	if err := s.mounter.MakeDir(target); err != nil {
-		return fmt.Errorf("could not create target directory %s, %v", target, err)
+	var block bool
+	if fsType == "" {
+		block = true
+	}
+
+	if !block {
+		// Merge mount options from Storage Classes and CSI calls.
+		options = append(options, vol.Parameters[MountOptsKey])
+		// and if an fsType is supplied by the parameters, override the one passed
+		// to the Mount Call.
+		p, err := newParameters(vol.Parameters)
+		if err != nil {
+			return fmt.Errorf("mounting volume failed: %v", err)
+		}
+		if p.fs != "" {
+			fsType = p.fs
+		}
+
+		if err := s.mounter.MakeDir(target); err != nil {
+			return fmt.Errorf("could not create target directory %s, %v", target, err)
+		}
+
+	} else {
+		if err := s.mounter.MakeFile(target); err != nil {
+			return fmt.Errorf("could not create bind target for block volume %s, %v", target, err)
+		}
 	}
 
 	needsMount, err := s.mounter.IsNotMountPoint(target)
@@ -1240,6 +1253,9 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 		return nil
 	}
 
+	if block {
+		return s.mounter.Mount(source, target, fsType, options)
+	}
 	return s.mounter.FormatAndMount(source, target, fsType, options)
 }
 

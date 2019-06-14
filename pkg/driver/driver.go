@@ -241,15 +241,23 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 	if req.GetVolumeCapability() == nil {
 		return &csi.NodePublishVolumeResponse{}, missingAttr("NodePublishVolume", req.GetVolumeId(), "VolumeCapability slice")
 	}
+	var mntOpts = make([]string, 0)
+	var fsType string
 
-	mnt := req.GetVolumeCapability().GetMount()
-	mntOpts := mnt.MountFlags
-	if req.GetReadonly() {
-		mntOpts = append(mntOpts, "ro")
+	if block := req.GetVolumeCapability().GetBlock(); block != nil {
+		mntOpts = []string{"bind"}
 	}
-	fsType := "ext4"
-	if mnt.FsType != "" {
-		fsType = mnt.FsType
+
+	if mnt := req.GetVolumeCapability().GetMount(); mnt != nil {
+		mntOpts = mnt.MountFlags
+		fsType = "ext4"
+		if mnt.FsType != "" {
+			fsType = mnt.FsType
+		}
+		if req.GetReadonly() {
+			mntOpts = append(mntOpts, "ro")
+		}
+
 	}
 
 	// Retrive device path from storage backend.
@@ -519,8 +527,11 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 		{AccessType: &csi.VolumeCapability_Mount{
 			Mount: &csi.VolumeCapability_MountVolume{}},
 			AccessMode: &csi.VolumeCapability_AccessMode{
-				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER},
-		},
+				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER}},
+		{AccessType: &csi.VolumeCapability_Block{
+			Block: &csi.VolumeCapability_BlockVolume{}},
+			AccessMode: &csi.VolumeCapability_AccessMode{
+				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER}},
 	}
 
 	for _, reqCap := range req.VolumeCapabilities {
