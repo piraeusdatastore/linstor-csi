@@ -20,10 +20,12 @@ package main
 
 import (
 	"flag"
+	"net/url"
 	"os"
 
 	log "github.com/sirupsen/logrus"
 
+	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/LINBIT/linstor-csi/pkg/client"
 	"github.com/LINBIT/linstor-csi/pkg/driver"
 )
@@ -45,18 +47,38 @@ func main() {
 	log.SetFormatter(logFmt)
 	log.SetOutput(logOut)
 
+	// Setup API Client and High-Level Client.
+	u, err := url.Parse(*lsEndpoint)
+	if err != nil {
+		log.Fatal(err)
+	}
+	c, err := lapi.NewClient(
+		lapi.BaseURL(u),
+		lapi.Log(&lapi.LogCfg{Level: *logLevel, Out: logOut, Formatter: logFmt}),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	linstorClient, err := client.NewLinstor(
-		client.LogOut(logOut), client.LogFmt(logFmt),
-		client.Endpoint(*lsEndpoint), client.LogLevel(*logLevel),
+		client.APIClient(c),
+		client.LogFmt(logFmt),
+		client.LogLevel(*logLevel),
+		client.LogOut(logOut),
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	drv, err := driver.NewDriver(
-		driver.Endpoint(*csiEndpoint), driver.NodeID(*node), driver.LogOut(logOut),
-		driver.Storage(linstorClient), driver.Assignments(linstorClient),
-		driver.Mounter(linstorClient), driver.Snapshots(linstorClient), driver.LogLevel(*logLevel),
+		driver.Assignments(linstorClient),
+		driver.Endpoint(*csiEndpoint),
+		driver.LogLevel(*logLevel),
+		driver.LogOut(logOut),
+		driver.Mounter(linstorClient),
+		driver.NodeID(*node),
+		driver.Snapshots(linstorClient),
+		driver.Storage(linstorClient),
 	)
 	if err != nil {
 		log.Fatal(err)
