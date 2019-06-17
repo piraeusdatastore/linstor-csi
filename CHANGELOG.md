@@ -5,10 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.6.2] - 2019-06-17
 ### Added
-- disklessly attached volumes report volume topology bassed off of
-  `disklessStoragePool` parameter. By default, they are available on all linstor
-  nodes.
+- disklessly attached volumes report volume topology based off of
+  `disklessStoragePool` parameter. By default, they are available on all LINSTOR
+  nodes. Creating new diskless storage pools on a subset of nodes can be used to
+  control from where diskless volumes can be accessed. <!-- Needs Docs -->
 - support for raw block volumes <!-- Needs Docs -->
 - `linstor-api-requests-per-second` plugin argument <!-- Needs Docs -->
 - `linstor-api-burst` plugin argument <!-- Needs Docs -->
@@ -16,17 +19,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - NodeStageVolume and NodeUnstageVolume, everything can be done via
   NodePublishVolume and NodeUnpublishVolume
+
 ### Fixed
 - ListVolumes now working
+
 ### Changed
 - Updated dependency versions
 
-## [0.6.1] - 2019-06-20
+## [0.6.1] - 2019-06-12
 ### Fixed
 - `localStoragePolicy` parameter now case insensitive when reporting volume topology,
   previously needed to be lowercase
 
-## [0.6.0] - 2019-06-19
+## [0.6.0] - 2019-06-11
 ### Added
 - log-level argument for csi-plugin. it takes strings of levels: info, debug,
   error, etc. The help text lists all of them, but those are the only three you
