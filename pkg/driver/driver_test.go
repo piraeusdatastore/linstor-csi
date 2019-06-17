@@ -4,11 +4,14 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"testing"
 
+	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/LINBIT/linstor-csi/pkg/client"
 	"github.com/kubernetes-csi/csi-test/pkg/sanity"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -28,8 +31,11 @@ func TestDriver(t *testing.T) {
 	}
 
 	driver, err := NewDriver(
-		Endpoint(*csiEndpoint), NodeID(*node), LogOut(logFile),
-		LogLevel(*logLevel), Name("linstor.csi.linbit.com-test"),
+		Endpoint(*csiEndpoint),
+		LogLevel(*logLevel),
+		LogOut(logFile),
+		Name("linstor.csi.linbit.com-test"),
+		NodeID(*node),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -37,8 +43,21 @@ func TestDriver(t *testing.T) {
 	driver.version = "linstor-csi-test-version"
 
 	if *lsEndpoint != "" {
+		u, err := url.Parse(*lsEndpoint)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c, err := lapi.NewClient(
+			lapi.BaseURL(u),
+			lapi.Log(&lapi.LogCfg{Level: *logLevel, Out: logFile, Formatter: &logrus.TextFormatter{}}),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
 		realStorageBackend, err := client.NewLinstor(
-			client.LogOut(logFile), client.LogLevel(*logLevel), client.Endpoint(*lsEndpoint),
+			client.APIClient(c),
+			client.LogLevel(*logLevel),
+			client.LogOut(logFile),
 		)
 		if err != nil {
 			t.Fatal(err)

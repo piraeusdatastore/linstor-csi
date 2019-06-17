@@ -24,8 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -203,35 +201,24 @@ type Linstor struct {
 	log            *logrus.Entry
 	annotationsKey string
 	fallbackPrefix string
-	endpoint       *url.URL
 	client         *lapi.Client
-	logCfg         *lapi.LogCfg
 	mounter        *mount.SafeFormatAndMount
 }
 
 // NewLinstor returns a high-level linstor client for CSI applications to interact with
 // By default, it will try to connect with localhost:3370.
 func NewLinstor(options ...func(*Linstor) error) (*Linstor, error) {
-	l := &Linstor{
-		annotationsKey: "Aux/csi-volume-annotations",
-		fallbackPrefix: "csi-",
-		log:            logrus.NewEntry(logrus.New()),
-		client:         &lapi.Client{},
-		logCfg: &lapi.LogCfg{
-			Out:       ioutil.Discard,
-			Formatter: &logrus.TextFormatter{},
-			Level:     "info",
-		}}
-
-	var err error
-
-	l.endpoint, err = url.Parse("http://localhost:3370")
+	c, err := lapi.NewClient()
 	if err != nil {
 		return nil, err
 	}
 
-	l.log.Logger.SetFormatter(l.logCfg.Formatter)
-	l.log.Logger.SetOutput(l.logCfg.Out)
+	l := &Linstor{
+		annotationsKey: "Aux/csi-volume-annotations",
+		fallbackPrefix: "csi-",
+		log:            logrus.NewEntry(logrus.New()),
+		client:         c,
+	}
 
 	// run all option functions.
 	for _, opt := range options {
@@ -240,15 +227,6 @@ func NewLinstor(options ...func(*Linstor) error) (*Linstor, error) {
 			return nil, err
 		}
 	}
-
-	c, err := lapi.NewClient(lapi.Log(l.logCfg), lapi.BaseURL(l.endpoint))
-	if err != nil {
-		return nil, err
-	}
-
-	cp := l.client
-
-	*cp = *c
 
 	// Add in fields that may have been configured above.
 	l.log = l.log.WithFields(logrus.Fields{
@@ -262,19 +240,18 @@ func NewLinstor(options ...func(*Linstor) error) (*Linstor, error) {
 	}
 
 	l.log.WithFields(logrus.Fields{
-		"client": fmt.Sprintf("%+v", l.client),
+		"APIClient":       fmt.Sprintf("%+v", l.client),
+		"highLevelClient": fmt.Sprintf("%+v", l),
 	}).Debug("generated new linstor client")
 	return l, nil
 }
 
-// Endpoint is the url where the LINSTOR controller api can be accessed.
-func Endpoint(s string) func(*Linstor) error {
+// APIClient the configured LINSTOR API client that will be used to communicate
+// with the LINSTOR cluster.
+func APIClient(c *lapi.Client) func(*Linstor) error {
 	return func(l *Linstor) error {
-		u, err := url.Parse(s)
-		if err != nil {
-			return fmt.Errorf("unable to use %s as LINSTOR API endpoint: %v", s, err)
-		}
-		l.endpoint = u
+		cp := l.client
+		*cp = *c
 		return nil
 	}
 }
@@ -284,9 +261,6 @@ func Endpoint(s string) func(*Linstor) error {
 func LogOut(out io.Writer) func(*Linstor) error {
 	return func(l *Linstor) error {
 		l.log.Logger.SetOutput(out)
-
-		// For the client's logs.
-		l.logCfg.Out = out
 		return nil
 	}
 }
@@ -295,9 +269,6 @@ func LogOut(out io.Writer) func(*Linstor) error {
 func LogFmt(fmt logrus.Formatter) func(*Linstor) error {
 	return func(l *Linstor) error {
 		l.log.Logger.SetFormatter(fmt)
-
-		// For the client's logs.
-		l.logCfg.Formatter = fmt
 		return nil
 	}
 }
@@ -312,9 +283,6 @@ func LogLevel(s string) func(*Linstor) error {
 		}
 
 		l.log.Logger.SetLevel(level)
-
-		// For the client's logs.
-		l.logCfg.Level = s
 
 		// Report function names on debug
 		if level == logrus.DebugLevel {
