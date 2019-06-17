@@ -24,6 +24,7 @@ import (
 	"os"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/time/rate"
 
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/LINBIT/linstor-csi/pkg/client"
@@ -36,6 +37,8 @@ func main() {
 		csiEndpoint = flag.String("csi-endpoint", "unix:///var/lib/kubelet/plugins/linstor.csi.linbit.com/csi.sock", "CSI endpoint")
 		node        = flag.String("node", "", "Node ID to pass to node service")
 		logLevel    = flag.String("log-level", "info", "Enable debug log output. Choose from: panic, fatal, error, warn, info, debug")
+		rps         = flag.Float64("linstor-api-requests-per-second", 0, "Maximum allowed number of LINSTOR API requests per second. Default: Unlimited")
+		burst       = flag.Int("linstor-api-burst", 1, "Maximum number of API requests allowed before being limited by requests-per-second. Default: 1 (no bursting)")
 	)
 	flag.Parse()
 
@@ -52,8 +55,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	r := rate.Limit(*rps)
+	if r <= 0 {
+		r = rate.Inf
+	}
 	c, err := lapi.NewClient(
 		lapi.BaseURL(u),
+		lapi.Limit(r, *burst),
 		lapi.Log(&lapi.LogCfg{Level: *logLevel, Out: logOut, Formatter: logFmt}),
 	)
 	if err != nil {

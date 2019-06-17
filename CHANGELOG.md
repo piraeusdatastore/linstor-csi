@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `disklessStoragePool` parameter. By default, they are available on all linstor
   nodes.
 - support for raw block volumes <!-- Needs Docs -->
+- `linstor-api-requests-per-second` plugin argument <!-- Needs Docs -->
+- `linstor-api-burst` plugin argument <!-- Needs Docs -->
+
 ### Removed
 - NodeStageVolume and NodeUnstageVolume, everything can be done via
   NodePublishVolume and NodeUnpublishVolume
