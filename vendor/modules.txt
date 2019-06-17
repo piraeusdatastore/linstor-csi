@@ -1,6 +1,6 @@
 # github.com/LINBIT/golinstor v0.15.0
-github.com/LINBIT/golinstor
 github.com/LINBIT/golinstor/client
+github.com/LINBIT/golinstor
 # github.com/container-storage-interface/spec v1.1.0
 github.com/container-storage-interface/spec/lib/go/csi
 # github.com/golang/protobuf v1.3.1
