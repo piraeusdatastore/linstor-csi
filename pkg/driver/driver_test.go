@@ -12,6 +12,7 @@ import (
 	"github.com/LINBIT/linstor-csi/pkg/client"
 	"github.com/kubernetes-csi/csi-test/pkg/sanity"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/time/rate"
 )
 
 var (
@@ -21,6 +22,8 @@ var (
 	csiEndpoint  = flag.String("csi-endpoint", "unix:///tmp/csi.sock", "Unix socket for CSI communication")
 	mountForReal = flag.Bool("mount-for-real", false, "Actually try to mount volumes, needs to be ran on on a kubelet (indicted by the node flag) with it's /dev dir bind mounted into the container")
 	logLevel     = flag.String("log-level", "debug", "how much logging to do")
+	rps          = flag.Float64("linstor-api-requests-per-second", 0, "Maximum allowed number of LINSTOR API requests per second. Default: Unlimited")
+	burst        = flag.Int("linstor-api-burst", 1, "Maximum number of API requests allowed before being limited by requests-per-second. Default: 1 (no bursting)")
 )
 
 func TestDriver(t *testing.T) {
@@ -47,8 +50,13 @@ func TestDriver(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		r := rate.Limit(*rps)
+		if r <= 0 {
+			r = rate.Inf
+		}
 		c, err := lapi.NewClient(
 			lapi.BaseURL(u),
+			lapi.Limit(r, *burst),
 			lapi.Log(&lapi.LogCfg{Level: *logLevel, Out: logFile, Formatter: &logrus.TextFormatter{}}),
 		)
 		if err != nil {
