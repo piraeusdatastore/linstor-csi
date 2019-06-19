@@ -62,22 +62,22 @@ const (
 )
 
 type parameters struct {
-	nodeList            []string
-	layerList           []lapi.LayerType
 	clientList          []string
-	replicasOnSame      []string
+	nodeList            []string
 	replicasOnDifferent []string
-	placementCount      int32
-	doNotPlaceWithRegex string
-	sizeKiB             uint64
-	storagePool         string
+	replicasOnSame      []string
 	disklessStoragePool string
-	encryption          bool
-	disklessonremaining bool
+	doNotPlaceWithRegex string
 	fs                  string
-	lsp                 localStoragePolicy
-	mountOpts           string
 	fsOpts              string
+	mountOpts           string
+	storagePool         string
+	sizeKiB             uint64
+	placementCount      int32
+	disklessonremaining bool
+	encryption          bool
+	layerList           []lapi.LayerType
+	lsp                 localStoragePolicy
 }
 
 const defaultDisklessStoragePoolName = "DfltDisklessStorPool"
@@ -141,7 +141,7 @@ func newParameters(params map[string]string) (parameters, error) {
 			if err != nil {
 				return p, fmt.Errorf("unable to parse %q as an unsigned 64 bit integer", v)
 			}
-			p.sizeKiB = uint64(size)
+			p.sizeKiB = size
 		case FSKey:
 			p.fs = v
 		case UseLocalStorageKey:
@@ -475,12 +475,12 @@ func (s *Linstor) GetByName(ctx context.Context, name string) (*volume.Info, err
 	return nil, nil
 }
 
-func (s *Linstor) GetByID(ctx context.Context, ID string) (*volume.Info, error) {
+func (s *Linstor) GetByID(ctx context.Context, id string) (*volume.Info, error) {
 	s.log.WithFields(logrus.Fields{
-		"csiVolumeID": ID,
-	}).Debug("looking up resource by CSI volume ID")
+		"csiVolumeID": id,
+	}).Debug("looking up resource by CSI volume id")
 
-	res, err := s.client.ResourceDefinitions.Get(ctx, ID)
+	res, err := s.client.ResourceDefinitions.Get(ctx, id)
 	if err != nil {
 		return nil, nil404(err)
 	}
@@ -800,7 +800,7 @@ func (s *Linstor) getAllStoragePools(ctx context.Context) ([]lapi.StoragePool, e
 func (s *Linstor) SnapCreate(ctx context.Context, snap *volume.SnapInfo) (*volume.SnapInfo, error) {
 	vol, err := s.GetByID(ctx, snap.CsiSnap.SourceVolumeId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrive volume info from id %s", snap.CsiSnap.SourceVolumeId)
+		return nil, fmt.Errorf("failed to retrieve volume info from id %s", snap.CsiSnap.SourceVolumeId)
 	}
 
 	if err := s.client.Resources.CreateSnapshot(ctx, lapi.Snapshot{
@@ -849,7 +849,7 @@ func (s *Linstor) SnapCreate(ctx context.Context, snap *volume.SnapInfo) (*volum
 func (s *Linstor) SnapDelete(ctx context.Context, snap *volume.SnapInfo) error {
 	vol, err := s.GetByID(ctx, snap.CsiSnap.SourceVolumeId)
 	if err != nil {
-		return fmt.Errorf("failed to retrive volume info from id %s", snap.CsiSnap.SourceVolumeId)
+		return fmt.Errorf("failed to retrieve volume info from id %s", snap.CsiSnap.SourceVolumeId)
 	}
 
 	s.log.WithFields(logrus.Fields{
@@ -999,13 +999,12 @@ func (s *Linstor) CanonicalizeSnapshotName(ctx context.Context, suggestedName st
 	name, err := linstorifyResourceName(suggestedName)
 	if err != nil {
 		return s.fallbackPrefix + uuid.New()
-	} else {
-		// We already handled the idempotency/existing case
-		// This is to make sure that nobody else created a snapshot with that name (e.g., another user/plugin)
-		existingSnap, err := s.GetSnapByName(ctx, name)
-		if existingSnap != nil || err != nil {
-			return s.fallbackPrefix + uuid.New()
-		}
+	}
+	// We already handled the idempotency/existing case
+	// This is to make sure that nobody else created a snapshot with that name (e.g., another user/plugin)
+	existingSnap, err := s.GetSnapByName(ctx, name)
+	if existingSnap != nil || err != nil {
+		return s.fallbackPrefix + uuid.New()
 	}
 
 	return name
@@ -1016,7 +1015,7 @@ func (s *Linstor) CanonicalizeSnapshotName(ctx context.Context, suggestedName st
 func (s *Linstor) ListVolumes(ctx context.Context) ([]*volume.Info, error) {
 	allResDefs, err := s.client.ResourceDefinitions.GetAll(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrive resource definitions: %v", err)
+		return nil, fmt.Errorf("failed to retrieve resource definitions: %v", err)
 	}
 
 	var vols = make([]*volume.Info, 0)
@@ -1062,19 +1061,19 @@ func (s *Linstor) doGetSnapByName(vols []*volume.Info, name string) *volume.Snap
 	return nil
 }
 
-func (s *Linstor) GetSnapByID(ctx context.Context, ID string) (*volume.SnapInfo, error) {
+func (s *Linstor) GetSnapByID(ctx context.Context, id string) (*volume.SnapInfo, error) {
 	vols, err := s.ListVolumes(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.doGetSnapByID(vols, ID), nil
+	return s.doGetSnapByID(vols, id), nil
 }
 
-func (s *Linstor) doGetSnapByID(vols []*volume.Info, ID string) *volume.SnapInfo {
+func (s *Linstor) doGetSnapByID(vols []*volume.Info, id string) *volume.SnapInfo {
 	for _, vol := range vols {
 		for _, snap := range vol.Snapshots {
-			if snap.CsiSnap.Id == ID {
+			if snap.CsiSnap.Id == id {
 				return snap
 			}
 		}
@@ -1217,7 +1216,8 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 		}
 
 	} else {
-		if err := s.mounter.MakeFile(target); err != nil {
+		err := s.mounter.MakeFile(target)
+		if err != nil {
 			return fmt.Errorf("could not create bind target for block volume %s, %v", target, err)
 		}
 	}
@@ -1257,14 +1257,14 @@ func (s *Linstor) Unmount(target string) error {
 // validResourceName returns an error if the input string is not a valid LINSTOR name
 func validResourceName(resName string) error {
 	if resName == "all" {
-		return errors.New("Not allowed to use 'all' as resource name")
+		return errors.New("not allowed to use 'all' as resource name")
 	}
 
 	b, err := regexp.MatchString("[[:alpha:]]", resName)
 	if err != nil {
 		return err
 	} else if !b {
-		return errors.New("Resource name did not contain at least one alphabetic (A-Za-z) character")
+		return errors.New("resource name did not contain at least one alphabetic (A-Za-z) character")
 	}
 
 	re := "^[A-Za-z_][A-Za-z0-9\\-_]{1,47}$"
@@ -1273,7 +1273,7 @@ func validResourceName(resName string) error {
 		return err
 	} else if !b {
 		// without open coding it (ugh!) as good as it gets
-		return fmt.Errorf("Resource name did not match: '%s'", re)
+		return fmt.Errorf("resource name did not match: '%s'", re)
 	}
 
 	return nil
@@ -1289,7 +1289,7 @@ func linstorifyResourceName(name string) (string, error) {
 		return name, nil
 	}
 
-	re := regexp.MustCompile("[^A-Za-z0-9\\-_]")
+	re := regexp.MustCompile(`[^A-Za-z0-9\-_]`)
 	newName := re.ReplaceAllLiteralString(name, "_")
 	if err := validResourceName(newName); err == nil {
 		return newName, err
@@ -1301,7 +1301,7 @@ func linstorifyResourceName(name string) (string, error) {
 		return newName, nil
 	}
 
-	return "", fmt.Errorf("Could not linstorify name (%s)", name)
+	return "", fmt.Errorf("could not linstorify name (%s)", name)
 }
 
 func parseLocalStoragePolicy(s string) (localStoragePolicy, error) {

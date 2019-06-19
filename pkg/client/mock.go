@@ -35,11 +35,9 @@ type MockStorage struct {
 
 func (s *MockStorage) ListAll(ctx context.Context) ([]*volume.Info, error) {
 	var vols = make([]*volume.Info, 0)
-	for _, vol := range s.createdVolumes {
-		vols = append(vols, vol)
-	}
-
+	vols = append(vols, s.createdVolumes...)
 	volume.Sort(vols)
+
 	return vols, nil
 }
 
@@ -56,9 +54,9 @@ func (s *MockStorage) GetByName(ctx context.Context, name string) (*volume.Info,
 	return nil, nil
 }
 
-func (s *MockStorage) GetByID(ctx context.Context, ID string) (*volume.Info, error) {
+func (s *MockStorage) GetByID(ctx context.Context, id string) (*volume.Info, error) {
 	for _, vol := range s.createdVolumes {
-		if vol.ID == ID {
+		if vol.ID == id {
 			return vol, nil
 		}
 	}
@@ -135,20 +133,19 @@ func (s *MockStorage) GetSnapByName(ctx context.Context, name string) (*volume.S
 }
 
 func (s *MockStorage) ListSnaps(ctx context.Context) ([]*volume.SnapInfo, error) {
-	snaps := make([]*volume.SnapInfo, 0)
+	var snaps = make([]*volume.SnapInfo, 0)
 	for _, vol := range s.createdVolumes {
-		for _, ss := range vol.Snapshots {
-			snaps = append(snaps, ss)
-		}
+		snaps = append(snaps, vol.Snapshots...)
 	}
 	volume.SnapSort(snaps)
+
 	return snaps, nil
 }
 
-func (s *MockStorage) GetSnapByID(ctx context.Context, ID string) (*volume.SnapInfo, error) {
+func (s *MockStorage) GetSnapByID(ctx context.Context, id string) (*volume.SnapInfo, error) {
 	for _, vol := range s.createdVolumes {
 		for _, ss := range vol.Snapshots {
-			if ss.CsiSnap.Id == ID {
+			if ss.CsiSnap.Id == id {
 				return ss, nil
 			}
 		}
