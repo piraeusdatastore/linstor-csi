@@ -220,13 +220,26 @@ type localStoragePolicy int
 const (
 	// Try to use local volumes, but don't fail if you can't. Needs disklessly
 	// attachable resources.
-	localStoragePolicyPreferred localStoragePolicy = iota
+	localStoragePolicyPrefer localStoragePolicy = iota
 	// Volumes must be accessed locally.
-	localStoragePolicyRequired
+	localStoragePolicyRequire
 	// Don't consider volume location for accessiblity. Needs disklessly
 	// attachable resources.
 	localStoragePolicyIgnore
 )
+
+func parseLocalStoragePolicy(s string) (localStoragePolicy, error) {
+	switch strings.ToLower(s) {
+	case "require", "required":
+		return localStoragePolicyRequire, nil
+	case "prefer", "preferred":
+		return localStoragePolicyPrefer, nil
+	case "ignore", "":
+		return localStoragePolicyIgnore, nil
+	default:
+		return localStoragePolicyIgnore, fmt.Errorf("%s is not a valid localStoragePolicy", s)
+	}
+}
 
 // LinstorNodeTopologyKey refers to a node running the LINSTOR csi node service
 // and the linstor Satellite and is therefore capabile of hosting LINSTOR volumes.
@@ -600,7 +613,7 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, req *csi.CreateV
 
 	// We weren't able to assign any volume according to topology preferences
 	// and local storage is required.
-	if params.placementCount == remainingAssignments && params.lsp == localStoragePolicyRequired {
+	if params.placementCount == remainingAssignments && params.lsp == localStoragePolicyRequire {
 		return fmt.Errorf("unable to satisfy volume topology requirements for volume %s", vol.ID)
 	}
 
@@ -664,7 +677,7 @@ func (s *Linstor) AccessibleTopologies(ctx context.Context, vol *volume.Info) ([
 		return nil, fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
 	}
 
-	if p.lsp != localStoragePolicyRequired {
+	if p.lsp != localStoragePolicyRequire {
 		return s.lspIgnoreAccessibleTopologies(ctx, vol)
 	}
 
@@ -1369,19 +1382,6 @@ func linstorifyResourceName(name string) (string, error) {
 	}
 
 	return "", fmt.Errorf("could not linstorify name (%s)", name)
-}
-
-func parseLocalStoragePolicy(s string) (localStoragePolicy, error) {
-	switch strings.ToLower(s) {
-	case "required":
-		return localStoragePolicyRequired, nil
-	case "preferred":
-		return localStoragePolicyPreferred, nil
-	case "ignore", "":
-		return localStoragePolicyIgnore, nil
-	default:
-		return localStoragePolicyIgnore, fmt.Errorf("%s is not a valid localStoragePolicy", s)
-	}
 }
 
 func nil404(e error) error {
