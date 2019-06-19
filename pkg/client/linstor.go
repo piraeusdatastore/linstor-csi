@@ -1146,27 +1146,15 @@ func (s *Linstor) GetAssignmentOnNode(ctx context.Context, vol *volume.Info, nod
 		"targetNode": node,
 	}).Debug("getting assignment info")
 
-	vols, err := s.client.Resources.GetVolumes(ctx, vol.ID, node)
+	linVol, err := s.client.Resources.GetVolume(ctx, vol.ID, node, 0)
 	if err != nil {
 		return nil, err
-	}
-
-	var devPath string
-
-	// We only work with volume 0.
-	for _, v := range vols {
-		if v.VolumeNumber == 0 {
-			devPath = v.DevicePath
-			break
-		}
-
-		return nil, fmt.Errorf("resource %s has no volume 0 on node %s", vol.ID, node)
 	}
 
 	va := &volume.Assignment{
 		Vol:  vol,
 		Node: node,
-		Path: devPath,
+		Path: linVol.DevicePath,
 	}
 
 	s.log.WithFields(logrus.Fields{
