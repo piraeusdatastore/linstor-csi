@@ -634,7 +634,7 @@ func (s *Linstor) deploy(ctx context.Context, vol *volume.Info, params parameter
 			}
 		}
 
-		//TODO return nil here!!
+		return nil
 	}
 
 	// We're autoplacing resources, this should be the usual case.
