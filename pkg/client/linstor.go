@@ -460,13 +460,15 @@ func (s *Linstor) volToResourceDefinition(vol *volume.Info, params parameters) (
 func (s *Linstor) volToResourceCreateList(vol *volume.Info, params parameters) []lapi.ResourceCreate {
 	var resCreates = make([]lapi.ResourceCreate, len(params.nodeList)+len(params.clientList))
 
-	// TODO: don't append here, put them at indexes
+	var i int
 	for _, node := range params.nodeList {
-		resCreates = append(resCreates, volToDiskfullResourceCreate(vol, params, node))
+		resCreates[i] = volToDiskfullResourceCreate(vol, params, node)
+		i++
 	}
 
 	for _, node := range params.clientList {
-		resCreates = append(resCreates, volToDisklessResourceCreate(vol, params, node))
+		resCreates[i] = volToDisklessResourceCreate(vol, params, node)
+		i++
 	}
 
 	return resCreates
