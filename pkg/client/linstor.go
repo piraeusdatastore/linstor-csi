@@ -402,18 +402,31 @@ func (s *Linstor) volToResourceCreateList(vol *volume.Info, params parameters) [
 	var resCreates = make([]lapi.ResourceCreate, len(params.nodeList)+len(params.clientList))
 
 	for _, node := range params.nodeList {
-		resCreates = append(resCreates, s.volToResourceCreate(vol, params, node, false))
+		resCreates = append(resCreates, volToDiskfullResourceCreate(vol, params, node))
 	}
 
 	for _, node := range params.clientList {
-		resCreates = append(resCreates, s.volToResourceCreate(vol, params, node, true))
+		resCreates = append(resCreates, volToDisklessResourceCreate(vol, params, node))
 	}
 
 	return resCreates
 }
 
-func (s *Linstor) volToResourceCreate(vol *volume.Info, params parameters, node string, diskless bool) lapi.ResourceCreate {
-	res := lapi.ResourceCreate{
+func volToDiskfullResourceCreate(vol *volume.Info, params parameters, node string) lapi.ResourceCreate {
+	res := volToGenericResourceCreate(vol, params, node)
+	res.Resource.Props[lc.KeyStorPoolName] = params.storagePool
+	return res
+}
+
+func volToDisklessResourceCreate(vol *volume.Info, params parameters, node string) lapi.ResourceCreate {
+	res := volToGenericResourceCreate(vol, params, node)
+	res.Resource.Props[lc.KeyStorPoolName] = params.disklessStoragePool
+	res.Resource.Flags = append(res.Resource.Flags, lc.FlagDiskless)
+	return res
+}
+
+func volToGenericResourceCreate(vol *volume.Info, params parameters, node string) lapi.ResourceCreate {
+	return lapi.ResourceCreate{
 		LayerList: params.layerList,
 		Resource: lapi.Resource{
 			Name:     vol.ID,
@@ -421,13 +434,6 @@ func (s *Linstor) volToResourceCreate(vol *volume.Info, params parameters, node 
 			Props:    make(map[string]string, 1),
 			Flags:    make([]string, 0),
 		}}
-	if diskless {
-		res.Resource.Props[lc.KeyStorPoolName] = params.disklessStoragePool
-		res.Resource.Flags = append(res.Resource.Flags, lc.FlagDiskless)
-	} else {
-		res.Resource.Props[lc.KeyStorPoolName] = params.storagePool
-	}
-	return res
 }
 
 func (s *Linstor) paramsToAutoPlace(params parameters) lapi.AutoPlaceRequest {
@@ -519,7 +525,7 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, req *csi.CreateV
 		// attach resources diskfully to those nodes in order of most to least preferred.
 		if p, ok := pref.GetSegments()[LinstorNodeTopologyKey]; ok && remainingAssignments > 0 {
 			// If attachment fails move onto next most preferred volume.
-			if err := s.client.Resources.Create(ctx, s.volToResourceCreate(vol, params, p, false)); err != nil {
+			if err := s.client.Resources.Create(ctx, volToDiskfullResourceCreate(vol, params, p)); err != nil {
 				s.log.WithFields(logrus.Fields{
 					"volumeID":                   vol.ID,
 					"topologyPreference":         i,
@@ -699,7 +705,7 @@ func (s *Linstor) Attach(ctx context.Context, vol *volume.Info, node string) err
 		return fmt.Errorf("unable to attach volume due to bad parameters %+v: %v", vol.Parameters, err)
 	}
 
-	return s.client.Resources.Create(ctx, s.volToResourceCreate(vol, params, node, true))
+	return s.client.Resources.Create(ctx, volToDiskfullResourceCreate(vol, params, node))
 }
 
 // Detach removes a volume from the node.
