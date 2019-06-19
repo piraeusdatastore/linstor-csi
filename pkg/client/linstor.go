@@ -960,8 +960,34 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.SnapInfo, vol *v
 		"snapshot": fmt.Sprintf("%+v", snap),
 	}).Info("creating volume from snapshot")
 
-	// TODO: inline this.
-	return s.createResourceFromSnaphot(ctx, vol, snap)
+	params, err := newParameters(vol.Parameters)
+	if err != nil {
+		return fmt.Errorf("unable to create volume due to bad parameters %+v: %v", vol.Parameters, err)
+	}
+
+	if err := s.createResourceDefinition(ctx, vol, params); err != nil {
+		return err
+	}
+
+	r, err := s.client.Resources.GetAll(ctx, vol.ID)
+	if err != nil {
+		return err
+	}
+
+	snapRestore := lapi.SnapshotRestore{
+		ToResource: vol.ID,
+		Nodes:      deployedNodes(r),
+	}
+
+	if err := s.client.Resources.RestoreVolumeDefinitionSnapshot(ctx, snap.CsiSnap.SourceVolumeId, snap.Name, snapRestore); err != nil {
+		return err
+	}
+
+	if err := s.client.Resources.RestoreSnapshot(ctx, snap.CsiSnap.SourceVolumeId, snap.Name, snapRestore); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // VolFromVol creates the volume using the data contained within the source volume.
@@ -971,8 +997,20 @@ func (s *Linstor) VolFromVol(ctx context.Context, sourceVol, vol *volume.Info) e
 		"sourceVolume": fmt.Sprintf("%+v", sourceVol),
 	}).Info("creating volume from snapshot")
 
-	// TODO: inline this.
-	return s.createResourceFromResource(ctx, sourceVol, vol)
+	tmpName := s.fallbackPrefix + uuid.New()
+	if err := s.client.Resources.CreateSnapshot(ctx,
+		lapi.Snapshot{
+			Name:         tmpName,
+			ResourceName: sourceVol.ID,
+		}); err != nil {
+		return fmt.Errorf("failed to create snapshot: %v", err)
+	}
+
+	return s.VolFromSnap(
+		ctx,
+		&volume.SnapInfo{Name: tmpName, CsiSnap: &csi.Snapshot{SourceVolumeId: sourceVol.ID}},
+		vol,
+	)
 }
 
 // Creates a resourceDefinition, updating the vol.ID if successful.
@@ -1004,56 +1042,6 @@ func (s *Linstor) createResourceDefinition(ctx context.Context, vol *volume.Info
 	}
 
 	return nil
-}
-
-func (s *Linstor) createResourceFromSnaphot(ctx context.Context, vol *volume.Info, snap *volume.SnapInfo) error {
-	params, err := newParameters(vol.Parameters)
-	if err != nil {
-		return fmt.Errorf("unable to create volume due to bad parameters %+v: %v", vol.Parameters, err)
-	}
-
-	if err := s.createResourceDefinition(ctx, vol, params); err != nil {
-		return err
-	}
-
-	r, err := s.client.Resources.GetAll(ctx, vol.ID)
-	if err != nil {
-		return err
-	}
-
-	snapRestore := lapi.SnapshotRestore{
-		ToResource: vol.ID,
-		Nodes:      deployedNodes(r),
-	}
-
-	if err := s.client.Resources.RestoreVolumeDefinitionSnapshot(ctx, snap.CsiSnap.SourceVolumeId, snap.Name, snapRestore); err != nil {
-		return err
-	}
-
-	if err := s.client.Resources.RestoreSnapshot(ctx, snap.CsiSnap.SourceVolumeId, snap.Name, snapRestore); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *Linstor) createResourceFromResource(ctx context.Context, from, to *volume.Info) error {
-
-	tmpName := s.fallbackPrefix + uuid.New()
-	if err := s.client.Resources.CreateSnapshot(ctx,
-		lapi.Snapshot{
-			Name:         tmpName,
-			ResourceName: from.ID,
-		}); err != nil {
-		return fmt.Errorf("failed to create snapshot: %v", err)
-	}
-
-	return s.createResourceFromSnaphot(ctx, to,
-		&volume.SnapInfo{
-			Name: tmpName,
-			CsiSnap: &csi.Snapshot{
-				SourceVolumeId: from.ID,
-			}})
 }
 
 // store a representation of a volume into the aux props of a resource definition.
