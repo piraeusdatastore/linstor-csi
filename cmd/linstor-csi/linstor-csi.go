@@ -92,6 +92,7 @@ func main() {
 		log.Fatal(err)
 	}
 
+	//nolint:errcheck
 	defer drv.Stop()
 
 	if err := drv.Run(); err != nil {
