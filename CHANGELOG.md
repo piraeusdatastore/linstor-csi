@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `localStoragePolicy` now accepts `prefer` and `require` These are now the
   preferred (but not required) way to specify these options.
+### Fixed
+- multivolume resources were potentially broken, but this plugin only makes
+  single volume resources, so this was a corner case.
 
 ## [0.6.2] - 2019-06-17
 ### Added
