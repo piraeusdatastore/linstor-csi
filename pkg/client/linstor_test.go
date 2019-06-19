@@ -109,11 +109,12 @@ func TestLinstorifyResourceName(t *testing.T) {
 
 	for _, test := range unitTests {
 		resName, err := linstorifyResourceName(test.in)
-		if test.errExp && err == nil {
+		switch {
+		case test.errExp && err == nil:
 			t.Fatalf("Expected that rest '%s' returns an error\n", test.in)
-		} else if !test.errExp && err != nil {
+		case !test.errExp && err != nil:
 			t.Fatalf("Expected that rest '%s' does not return an error\n", test.in)
-		} else if test.errExp && err != nil {
+		case test.errExp && err != nil:
 			continue
 		}
 

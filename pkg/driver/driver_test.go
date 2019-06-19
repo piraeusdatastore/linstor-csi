@@ -72,16 +72,17 @@ func TestDriver(t *testing.T) {
 		}
 
 		// Clojures that return functions that set linstor backends on the driver.
-		Storage(realStorageBackend)(driver)
-		Assignments(realStorageBackend)(driver)
-		Snapshots(realStorageBackend)(driver)
+		_ = Storage(realStorageBackend)(driver)
+		_ = Assignments(realStorageBackend)(driver)
+		_ = Snapshots(realStorageBackend)(driver)
 
 		if *mountForReal {
-			Mounter(realStorageBackend)(driver)
+			_ = Mounter(realStorageBackend)(driver)
 		}
 	}
 
 	// run your driver
+	//nolint:errcheck
 	go driver.Run()
 
 	mntDir, err := ioutil.TempDir("", "mnt")

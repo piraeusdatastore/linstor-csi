@@ -260,7 +260,7 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 
 	}
 
-	// Retrive device path from storage backend.
+	// Retrieve device path from storage backend.
 	existingVolume, err := d.Storage.GetByID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, fmt.Sprintf("NodePublishVolume failed for %s: %v", req.GetVolumeId(), err))
@@ -714,10 +714,11 @@ func (d Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotReque
 
 // ListSnapshots https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#listsnapshots
 func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
-	snapshots := make([]*volume.SnapInfo, 0)
+	var snapshots = make([]*volume.SnapInfo, 0)
 
 	// Handle case where a single snapshot is requsted.
-	if req.GetSnapshotId() != "" {
+	switch {
+	case req.GetSnapshotId() != "":
 		snap, err := d.Snapshots.GetSnapByID(ctx, req.GetSnapshotId())
 		if err != nil {
 			return nil, fmt.Errorf("failed to list snapshots: %v", err)
@@ -732,7 +733,7 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 		snapshots = []*volume.SnapInfo{snap}
 
 		// Handle case where a single volumes snapshots are requested.
-	} else if req.GetSourceVolumeId() != "" {
+	case req.GetSourceVolumeId() != "":
 		vol, err := d.Storage.GetByID(ctx, req.GetSourceVolumeId())
 		if err != nil {
 			return nil, fmt.Errorf("failed to list snapshots: %v", err)
@@ -744,7 +745,7 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 		snapshots = vol.Snapshots
 
 		// Regular list of all snapshots.
-	} else {
+	default:
 		snaps, err := d.Snapshots.ListSnaps(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list snapshots: %v", err)
@@ -882,13 +883,14 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 
 	// We're cloning from a volume or snapshot.
 	if req.GetVolumeContentSource() != nil {
-		if req.GetVolumeContentSource().GetSnapshot() != nil {
-			snapshotId := req.GetVolumeContentSource().GetSnapshot().GetSnapshotId()
-			if snapshotId == "" {
+		switch {
+		case req.GetVolumeContentSource().GetSnapshot() != nil:
+			snapshotID := req.GetVolumeContentSource().GetSnapshot().GetSnapshotId()
+			if snapshotID == "" {
 				return &csi.CreateVolumeResponse{}, status.Error(codes.InvalidArgument, fmt.Sprintf("CreateVolume failed for %s: empty snapshotId", req.Name))
 			}
 
-			snap, err := d.Snapshots.GetSnapByID(ctx, snapshotId)
+			snap, err := d.Snapshots.GetSnapByID(ctx, snapshotID)
 			if err != nil {
 				return &csi.CreateVolumeResponse{}, status.Error(
 					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
@@ -908,12 +910,12 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 			}
 
 			if err := d.Snapshots.VolFromSnap(ctx, snap, vol); err != nil {
-				d.Storage.Delete(ctx, vol)
+				d.failpathDelete(ctx, vol)
 				return &csi.CreateVolumeResponse{}, status.Error(
 					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
 			}
 			// We're cloning from a whole volume.
-		} else if req.GetVolumeContentSource().GetVolume() != nil {
+		case req.GetVolumeContentSource().GetVolume() != nil:
 			sourceVol, err := d.Storage.GetByID(ctx, req.GetVolumeContentSource().GetVolume().GetVolumeId())
 			if err != nil {
 				return &csi.CreateVolumeResponse{}, status.Error(
@@ -924,18 +926,19 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 					codes.NotFound, fmt.Sprintf("CreateVolume failed for %s: source volume not found in storage backend", req.Name))
 			}
 			if err := d.Snapshots.VolFromVol(ctx, sourceVol, vol); err != nil {
-				d.Storage.Delete(ctx, vol)
+				d.failpathDelete(ctx, vol)
 				return &csi.CreateVolumeResponse{}, status.Error(
 					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
 			}
-		} else {
+		default:
 			return &csi.CreateVolumeResponse{}, status.Error(
 				codes.InvalidArgument, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
 		}
 		// Regular new volume.
 	} else {
-		if err := d.Storage.Create(ctx, vol, req); err != nil {
-			d.Storage.Delete(ctx, vol)
+		err := d.Storage.Create(ctx, vol, req)
+		if err != nil {
+			d.failpathDelete(ctx, vol)
 			return &csi.CreateVolumeResponse{}, status.Error(
 				codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
 		}
@@ -973,4 +976,15 @@ func parseStartingToken(s string) (int, error) {
 		return 0, fmt.Errorf("failed to parse starting token: %v", err)
 	}
 	return int(i), nil
+}
+
+// failpathDelete deletes volumes and logs if that fails. Mostly useful
+// in error paths where we need to report the original error and not the
+// possible error from trying to clean up from that original error.
+func (d Driver) failpathDelete(ctx context.Context, vol *volume.Info) {
+	if err := d.Storage.Delete(ctx, vol); err != nil {
+		d.log.WithFields(logrus.Fields{
+			"volume": fmt.Sprintf("%+v", vol),
+		}).WithError(err).Error("failed to clean up volume")
+	}
 }
