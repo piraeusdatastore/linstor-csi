@@ -53,12 +53,16 @@ type Driver struct {
 	srv         *grpc.Server
 	log         *logrus.Entry
 	version     string
-	name        string
-	endpoint    string
-	nodeID      string
+	// name distingushes the driver from other drivers and is used to mark
+	// volumes so that volumes provisioned by another driver are not interfered with.
+	name string
+	// endpoint is the socket over which all CSI calls are requested and responded to.
+	endpoint string
+	// nodeID is the hostname of the node where this plugin is running locally.
+	nodeID string
 }
 
-// NewDriver build up a driver.
+// NewDriver builds up a driver.
 func NewDriver(options ...func(*Driver) error) (*Driver, error) {
 	// Set up default noop-ish storage backend.
 	mockStorage := &client.MockStorage{}
@@ -79,6 +83,7 @@ func NewDriver(options ...func(*Driver) error) (*Driver, error) {
 
 	d.endpoint = fmt.Sprintf("unix:///var/lib/kubelet/plugins/%s/csi.sock", d.name)
 
+	// Run options functions.
 	for _, opt := range options {
 		err := opt(d)
 		if err != nil {
@@ -280,15 +285,15 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 
 // NodeUnpublishVolume https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#nodeunpublishvolume
 func (d Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
-	if req.VolumeId == "" {
-		return nil, missingAttr("NodeUnpublishVolume", req.VolumeId, "VolumeId")
+	if req.GetVolumeId() == "" {
+		return nil, missingAttr("NodeUnpublishVolume", req.GetVolumeId(), "VolumeId")
 	}
 
-	if req.TargetPath == "" {
-		return nil, missingAttr("NodeUnpublishVolume", req.VolumeId, "TargetPath")
+	if req.GetTargetPath() == "" {
+		return nil, missingAttr("NodeUnpublishVolume", req.GetVolumeId(), "TargetPath")
 	}
 
-	err := d.Mounter.Unmount(req.TargetPath)
+	err := d.Mounter.Unmount(req.GetTargetPath())
 	if err != nil {
 		return nil, err
 	}
@@ -322,19 +327,20 @@ func (d Driver) NodeGetId(ctx context.Context, req *csi.NodeGetIdRequest) (*csi.
 
 // CreateVolume https://github.com/container-storage-interface/spec/blob/v0.3.0/spec.md#createvolume
 func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
-	if req.Name == "" {
-		return &csi.CreateVolumeResponse{}, missingAttr("CreateVolume", req.Name, "Name")
+	if req.GetName() == "" {
+		return &csi.CreateVolumeResponse{}, missingAttr("CreateVolume", req.GetName(), "Name")
 	}
-	if req.VolumeCapabilities == nil || len(req.VolumeCapabilities) == 0 {
-		return &csi.CreateVolumeResponse{}, missingAttr("ValidateVolumeCapabilities", req.Name, "VolumeCapabilities")
+	if req.GetVolumeCapabilities() == nil || len(req.GetVolumeCapabilities()) == 0 {
+		return &csi.CreateVolumeResponse{}, missingAttr("ValidateVolumeCapabilities", req.GetName(), "VolumeCapabilities")
 	}
 
-	requiredKiB, err := d.Storage.AllocationSizeKiB(req.CapacityRange.GetRequiredBytes(), req.CapacityRange.GetLimitBytes())
+	// Determine how much storage we need to actually allocate for a given number
+	// of bytes.
+	requiredKiB, err := d.Storage.AllocationSizeKiB(req.GetCapacityRange().GetRequiredBytes(), req.GetCapacityRange().GetLimitBytes())
 	if err != nil {
 		return &csi.CreateVolumeResponse{}, status.Error(
 			codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
 	}
-
 	volumeSize := data.NewKibiByte(data.KiB * data.ByteSize(requiredKiB))
 
 	// Handle case were a volume of the same name is already present.
@@ -347,7 +353,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 	if existingVolume != nil {
 
 		d.log.WithFields(logrus.Fields{
-			"requestedVolumeName": req.Name,
+			"requestedVolumeName": req.GetName(),
 			"existingVolume":      fmt.Sprintf("%+v", existingVolume),
 		}).Info("volume already present")
 
@@ -355,18 +361,18 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 			return &csi.CreateVolumeResponse{}, status.Error(
 				codes.AlreadyExists, fmt.Sprintf(
 					"CreateVolume failed for %s: volume already present and wasn't created by %s",
-					req.Name, d.name))
+					req.GetName(), d.name))
 		}
 
 		if existingVolume.SizeBytes != int64(volumeSize.InclusiveBytes()) {
 			return &csi.CreateVolumeResponse{}, status.Error(
 				codes.AlreadyExists, fmt.Sprintf(
 					"CreateVolume failed for %s: volume already present, created by %s, but size differs (existing: %d, wanted: %d",
-					req.Name, d.name, existingVolume.SizeBytes, int64(volumeSize.InclusiveBytes())))
+					req.GetName(), d.name, existingVolume.SizeBytes, int64(volumeSize.InclusiveBytes())))
 		}
 
 		d.log.WithFields(logrus.Fields{
-			"requestedVolumeName": req.Name,
+			"requestedVolumeName": req.GetName(),
 			"volumeSize":          volumeSize,
 			"expectedCreatedBy":   d.name,
 			"existingVolume":      fmt.Sprintf("%+v", existingVolume),
@@ -376,7 +382,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 		if err != nil {
 			return &csi.CreateVolumeResponse{}, status.Errorf(
 				codes.Internal, "CreateVolume failed for %s: unable to determine volume topology: %v",
-				req.Name, err)
+				req.GetName(), err)
 		}
 
 		return &csi.CreateVolumeResponse{
@@ -393,7 +399,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 // DeleteVolume https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#deletevolume
 func (d Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
 	if req.GetVolumeId() == "" {
-		return nil, missingAttr("DeleteVolume", req.VolumeId, "VolumeId")
+		return nil, missingAttr("DeleteVolume", req.GetVolumeId(), "VolumeId")
 	}
 
 	existingVolume, err := d.Storage.GetByID(ctx, req.GetVolumeId())
@@ -416,51 +422,50 @@ func (d Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) 
 
 // ControllerPublishVolume https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#controllerpublishvolume
 func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
-	if req.VolumeId == "" {
-		return nil, missingAttr("ControllerPublishVolume", req.VolumeId, "VolumeId")
+	if req.GetVolumeId() == "" {
+		return nil, missingAttr("ControllerPublishVolume", req.GetVolumeId(), "VolumeId")
 	}
-	if req.NodeId == "" {
-		return nil, missingAttr("ControllerPublishVolume", req.VolumeId, "NodeId")
+	if req.GetNodeId() == "" {
+		return nil, missingAttr("ControllerPublishVolume", req.GetVolumeId(), "NodeId")
 	}
-	if req.VolumeCapability == nil {
-		return nil, missingAttr("ControllerPublishVolume", req.VolumeId, "VolumeCapability")
+	if req.GetVolumeCapability() == nil {
+		return nil, missingAttr("ControllerPublishVolume", req.GetVolumeId(), "VolumeCapability")
 	}
 
 	// Don't try to assign volumes that don't exist.
-	existingVolume, err := d.Storage.GetByID(ctx, req.VolumeId)
+	existingVolume, err := d.Storage.GetByID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, status.Error(
-			codes.Internal, fmt.Sprintf(
-				"ControllerPublishVolume failed for %s: %v", req.VolumeId, err))
+			codes.Internal, fmt.Sprintf("ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err))
 	}
 	if existingVolume == nil {
 		return nil, status.Error(
 			codes.NotFound, fmt.Sprintf(
 				"ControllerPublishVolume failed for %s: volume not present in storage backend",
-				req.VolumeId))
+				req.GetVolumeId()))
 	}
 	d.log.WithFields(logrus.Fields{
 		"existingVolume": fmt.Sprintf("%+v", existingVolume),
 	}).Debug("found existing volume")
 
 	// Or have had their attributes changed.
-	if existingVolume.Readonly != req.Readonly {
+	if existingVolume.Readonly != req.GetReadonly() {
 		return nil, status.Error(
 			codes.AlreadyExists, fmt.Sprintf(
 				"ControllerPublishVolume failed for %s: volume attributes changes for already existing volume",
-				req.VolumeId))
+				req.GetVolumeId()))
 	}
 
 	// Don't even attempt to put it on nodes that aren't avaible.
-	if err := d.Assignments.NodeAvailable(ctx, req.NodeId); err != nil {
+	if err := d.Assignments.NodeAvailable(ctx, req.GetNodeId()); err != nil {
 		return nil, status.Error(codes.NotFound, fmt.Sprintf(
-			"ControllerPublishVolume failed for %s on node %s: %v", req.VolumeId, req.GetNodeId(), err))
+			"ControllerPublishVolume failed for %s on node %s: %v", req.GetVolumeId(), req.GetNodeId(), err))
 	}
 
-	err = d.Assignments.Attach(ctx, existingVolume, req.NodeId)
+	err = d.Assignments.Attach(ctx, existingVolume, req.GetNodeId())
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf(
-			"ControllerPublishVolume failed for %s: %v", req.VolumeId, err))
+			"ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err))
 	}
 
 	return &csi.ControllerPublishVolumeResponse{}, nil
@@ -504,22 +509,22 @@ func (d Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Controll
 
 // ValidateVolumeCapabilities https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#validatevolumecapabilities
 func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
-	if req.VolumeId == "" {
-		return nil, missingAttr("ValidateVolumeCapabilities", req.VolumeId, "volumeId")
+	if req.GetVolumeId() == "" {
+		return nil, missingAttr("ValidateVolumeCapabilities", req.GetVolumeId(), "volumeId")
 	}
 
-	if req.VolumeCapabilities == nil {
-		return nil, missingAttr("ValidateVolumeCapabilities", req.VolumeId, "VolumeCapabilities")
+	if req.GetVolumeCapabilities() == nil {
+		return nil, missingAttr("ValidateVolumeCapabilities", req.GetVolumeId(), "VolumeCapabilities")
 	}
 
-	existingVolume, err := d.Storage.GetByID(ctx, req.VolumeId)
+	existingVolume, err := d.Storage.GetByID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, status.Error(
-			codes.Internal, fmt.Sprintf("ValidateVolumeCapabilities failed for %s: %v", req.VolumeId, err))
+			codes.Internal, fmt.Sprintf("ValidateVolumeCapabilities failed for %s: %v", req.GetVolumeId(), err))
 	}
 	if existingVolume == nil {
 		return nil, status.Error(
-			codes.NotFound, fmt.Sprintf("ValidateVolumeCapabilities failed for %s: volume not present in storage backend", req.VolumeId))
+			codes.NotFound, fmt.Sprintf("ValidateVolumeCapabilities failed for %s: volume not present in storage backend", req.GetVolumeId()))
 	}
 	d.log.WithFields(logrus.Fields{
 		"existingVolume": fmt.Sprintf("%+v", existingVolume),
@@ -535,7 +540,7 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 	}, nil
 }
 
-// ListVolumes https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#getcapacity
+// ListVolumes https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#listvolumes
 func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
 
 	volumes, err := d.Storage.ListAll(ctx)
@@ -569,6 +574,7 @@ func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*
 
 	volumes = volumes[start:end]
 
+	// Build up entries list from paginated volume slice.
 	var entries = make([]*csi.ListVolumesResponse_Entry, len(volumes))
 	for i, vol := range volumes {
 		topos, err := d.Storage.AccessibleTopologies(ctx, vol)
@@ -602,26 +608,32 @@ func (d Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*
 func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
 	return &csi.ControllerGetCapabilitiesResponse{
 		Capabilities: []*csi.ControllerServiceCapability{
+			// Tell the CO we can create and delete volumes.
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 				}}},
+			// Tell the CO we can make volumes available on remote nodes.
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
 				}}},
+			// Tell the CO we can list volumes.
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
 				}}},
+			// Tell the CO we can create and delete snapshots.
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
 				}}},
+			// Tell the CO we can create clones of volumes.
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
 				}}},
+			// Tell the CO we can query our storage space.
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_GET_CAPACITY,
@@ -633,10 +645,10 @@ func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Controll
 // CreateSnapshot https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#createsnapshot
 func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
 	if req.GetSourceVolumeId() == "" {
-		return nil, missingAttr("CreateSnapshot", req.SourceVolumeId, "SourceVolumeId")
+		return nil, missingAttr("CreateSnapshot", req.GetSourceVolumeId(), "SourceVolumeId")
 	}
 	if req.GetName() == "" {
-		return nil, missingAttr("CreateSnapshot", req.Name, "Name")
+		return nil, missingAttr("CreateSnapshot", req.GetName(), "Name")
 	}
 
 	existingSnap, err := d.Snapshots.GetSnapByName(ctx, req.GetName())
@@ -672,7 +684,7 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 // DeleteSnapshot https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#deletesnapshot
 func (d Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
 	if req.GetSnapshotId() == "" {
-		return nil, missingAttr("DeleteSnapshot", req.SnapshotId, "SnapshotId")
+		return nil, missingAttr("DeleteSnapshot", req.GetSnapshotId(), "SnapshotId")
 	}
 
 	snap, err := d.Snapshots.GetSnapByID(ctx, req.GetSnapshotId())
@@ -755,11 +767,12 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 
 	snapshots = snapshots[start:end]
 
+	// Build up entires list from paginated snapshots.
 	entries := make([]*csi.ListSnapshotsResponse_Entry, 0)
-
 	for _, snap := range snapshots {
 		entries = append(entries, &csi.ListSnapshotsResponse_Entry{Snapshot: snap.CsiSnap})
 	}
+
 	return &csi.ListSnapshotsResponse{Entries: entries, NextToken: nextToken}, nil
 }
 
@@ -837,8 +850,9 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 
 	volumeSize := data.NewKibiByte(data.KiB * data.ByteSize(requiredKiB))
 
+	// Volume id is currently filled in when the volume is created.
 	vol := &volume.Info{
-		Name:         req.Name,
+		Name:         req.GetName(),
 		SizeBytes:    int64(volumeSize.InclusiveBytes()),
 		CreatedBy:    d.name,
 		CreationTime: time.Now(),
@@ -858,50 +872,51 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 		case req.GetVolumeContentSource().GetSnapshot() != nil:
 			snapshotID := req.GetVolumeContentSource().GetSnapshot().GetId()
 			if snapshotID == "" {
-				return &csi.CreateVolumeResponse{}, status.Error(codes.InvalidArgument, fmt.Sprintf("CreateVolume failed for %s: empty snapshotId", req.Name))
+				return &csi.CreateVolumeResponse{}, status.Error(codes.InvalidArgument, fmt.Sprintf("CreateVolume failed for %s: empty snapshotId", req.GetName()))
 			}
 
 			snap, err := d.Snapshots.GetSnapByID(ctx, snapshotID)
 			if err != nil {
 				return &csi.CreateVolumeResponse{}, status.Error(
-					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
+					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.GetName(), err))
 			}
 			if snap == nil {
 				return &csi.CreateVolumeResponse{}, status.Error(
-					codes.NotFound, fmt.Sprintf("CreateVolume failed for %s: snapshot not found in storage backend", req.Name))
+					codes.NotFound, fmt.Sprintf("CreateVolume failed for %s: snapshot not found in storage backend", req.GetName()))
 			}
 			sourceVol, err := d.Storage.GetByID(ctx, snap.CsiSnap.SourceVolumeId)
 			if err != nil {
 				return &csi.CreateVolumeResponse{}, status.Error(
-					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
+					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.GetName(), err))
 			}
 			if sourceVol == nil {
 				return &csi.CreateVolumeResponse{}, status.Error(
-					codes.NotFound, fmt.Sprintf("CreateVolume failed for %s: source volume not found in storage backend", req.Name))
+					codes.NotFound, fmt.Sprintf("CreateVolume failed for %s: source volume not found in storage backend", req.GetName()))
 			}
 
 			if err := d.Snapshots.VolFromSnap(ctx, snap, vol); err != nil {
 				d.failpathDelete(ctx, vol)
 				return &csi.CreateVolumeResponse{}, status.Error(
-					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
+					codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.GetName(), err))
 			}
 		default:
 			return &csi.CreateVolumeResponse{}, status.Error(
-				codes.InvalidArgument, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
+				codes.InvalidArgument, fmt.Sprintf("CreateVolume failed for %s: %v", req.GetName(), err))
 		}
 	} else {
 		err := d.Storage.Create(ctx, vol, req)
 		if err != nil {
 			d.failpathDelete(ctx, vol)
 			return &csi.CreateVolumeResponse{}, status.Error(
-				codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
+				codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.GetName(), err))
 		}
 	}
 
 	topos, err := d.Storage.AccessibleTopologies(ctx, vol)
 	if err != nil {
-		return &csi.CreateVolumeResponse{}, status.Error(
-			codes.Internal, fmt.Sprintf("CreateVolume failed for %s: %v", req.Name, err))
+		return &csi.CreateVolumeResponse{}, status.Errorf(
+			codes.Internal, "CreateVolume failed for %s: unable to determine volume topology: %v",
+			req.GetName(), err)
 	}
 
 	return &csi.CreateVolumeResponse{
