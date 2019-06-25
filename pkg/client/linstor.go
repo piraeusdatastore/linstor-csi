@@ -525,13 +525,11 @@ func (s *Linstor) GetByName(ctx context.Context, name string) (*volume.Info, err
 
 	for _, rd := range list {
 		vol, err := s.resourceDefinitionToVolume(rd)
-		if err != nil {
-			return nil, err
-		}
 		// Probably found a resource we didn't create.
-		if vol == nil {
+		if err != nil || vol == nil {
 			continue
 		}
+
 		if vol.Name == name {
 			return vol, nil
 		}
