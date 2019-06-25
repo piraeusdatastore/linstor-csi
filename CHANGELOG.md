@@ -5,9 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.6.3] - 2019-06-24
 ### Added
 - `localStoragePolicy` now accepts `prefer` and `require` These are now the
-  preferred (but not required) way to specify these options.
+  preferred (but not required) way to specify these options. <!-- Needs Docs -->
 ### Fixed
 - multivolume resources were potentially broken, but this plugin only makes
   single volume resources, so this was a corner case.
