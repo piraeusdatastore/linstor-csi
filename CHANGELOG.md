@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - multivolume resources were potentially broken, but this plugin only makes
   single volume resources, so this was a corner case.
+- getting volume names was broken if there were non-csi-annotated resource
+  definitions
 
 ## [0.6.2] - 2019-06-17
 ### Added
