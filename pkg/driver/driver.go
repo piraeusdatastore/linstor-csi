@@ -622,11 +622,6 @@ func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Controll
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
 				}}},
-			// Tell the CO we can create clones of volumes.
-			{Type: &csi.ControllerServiceCapability_Rpc{
-				Rpc: &csi.ControllerServiceCapability_RPC{
-					Type: csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
-				}}},
 			// Tell the CO we can query our storage space.
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{

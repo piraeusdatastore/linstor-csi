@@ -100,7 +100,7 @@ func TestDriver(t *testing.T) {
 	cfg := &sanity.Config{
 		StagingPath: mntStageDir,
 		TargetPath:  mntDir,
-		Address:     *endpoint,
+		Address:     *csiEndpoint,
 	}
 
 	// Now call the test suite
