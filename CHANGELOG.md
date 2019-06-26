@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.4] - 2019-06-25
+### Fixed
+- attach diskless resources, rather than diskful. introduced in 0.6.3
+
 ## [0.6.3] - 2019-06-24
 ### Added
 - `localStoragePolicy` now accepts `prefer` and `require` These are now the
