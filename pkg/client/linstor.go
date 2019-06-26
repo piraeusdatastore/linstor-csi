@@ -753,7 +753,7 @@ func uniq(strs []string) []string {
 	return strs[:j]
 }
 
-// Attach idempotently creates a resource on the given node diskfully.
+// Attach idempotently creates a resource on the given node disklessly.
 func (s *Linstor) Attach(ctx context.Context, vol *volume.Info, node string) error {
 	s.log.WithFields(logrus.Fields{
 		"volume":     fmt.Sprintf("%+v", vol),
@@ -780,7 +780,7 @@ func (s *Linstor) Attach(ctx context.Context, vol *volume.Info, node string) err
 		return fmt.Errorf("unable to attach volume due to bad parameters %+v: %v", vol.Parameters, err)
 	}
 
-	return s.client.Resources.Create(ctx, volToDiskfullResourceCreate(vol, params, node))
+	return s.client.Resources.Create(ctx, volToDisklessResourceCreate(vol, params, node))
 }
 
 // Detach removes a volume from the node.
