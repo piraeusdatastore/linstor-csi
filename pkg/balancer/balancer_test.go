@@ -44,13 +44,13 @@ func createNode(clientSet kubernetes.Interface, labels map[string]string, nodeNa
 	)
 }
 
-func TestRetrieveRackId(t *testing.T) {
+func TestretrieveRackId(t *testing.T) {
 	clientSet := fake.NewSimpleClientset()
 	nodeName := "storage1"
 	rackName := "Rack7"
 	labels := map[string]string{RackLabel: rackName}
 	createNode(clientSet, labels, nodeName)
-	rack, err := RetrieveRackId(clientSet, nodeName)
+	rack, err := retrieveRackId(clientSet, nodeName)
 	if err != nil {
 		t.Errorf("Something went wrong: %v\n", err)
 	} else if rack != rackName {
@@ -58,23 +58,23 @@ func TestRetrieveRackId(t *testing.T) {
 	}
 }
 
-func TestRetrieveRackIdNoLabel(t *testing.T) {
+func TestretrieveRackIdNoLabel(t *testing.T) {
 	clientSet := fake.NewSimpleClientset()
 	nodeName := "storage1"
 	labels := map[string]string{}
 	createNode(clientSet, labels, nodeName)
-	_, err := RetrieveRackId(clientSet, nodeName)
+	_, err := retrieveRackId(clientSet, nodeName)
 	if err == nil {
-		t.Error("RetrieveRackId should fail")
+		t.Error("retrieveRackId should fail")
 	}
 }
 
-func TestRetrieveRackIdNoNode(t *testing.T) {
+func TestretrieveRackIdNoNode(t *testing.T) {
 	clientSet := fake.NewSimpleClientset()
 	nodeName := "storage1"
-	_, err := RetrieveRackId(clientSet, nodeName)
+	_, err := retrieveRackId(clientSet, nodeName)
 	if err == nil {
-		t.Error("RetrieveRackId should fail")
+		t.Error("retrieveRackId should fail")
 	}
 }
 
@@ -421,11 +421,8 @@ func TestGetStoragePool(t *testing.T) {
 	createNode(clientSet, storLabels, "storage1")
 	createNode(clientSet, storLabels, "storage2")
 	createNode(clientSet, storLabels, "storage3")
-	k8sClient = func() (kubernetes.Interface, error) {
-		return clientSet, nil
-	}
 	tCtx := context.Background()
-	sp, err := PickStoragePool(tCtx, "compute1", &NodesService{})
+	sp, err := pickStoragePoolTopo(tCtx, "compute1", &NodesService{}, clientSet)
 	assert.Nil(t, err)
 	assert.Equal(t, &BalanceDecision{
 		StoragePoolName: "sp2",
