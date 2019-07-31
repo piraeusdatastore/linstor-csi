@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/LINBIT/linstor-csi/pkg/client"
+	"github.com/LINBIT/linstor-csi/pkg/topology"
 	"github.com/LINBIT/linstor-csi/pkg/volume"
 	"github.com/container-storage-interface/spec/lib/go/csi/v0"
 	"github.com/haySwim/data"
@@ -312,7 +313,7 @@ func (d Driver) NodeGetInfo(context.Context, *csi.NodeGetInfoRequest) (*csi.Node
 		MaxVolumesPerNode: 1048576, // DRBD volumes per node limit.
 		AccessibleTopology: &csi.Topology{
 			Segments: map[string]string{
-				client.LinstorNodeTopologyKey: d.nodeID,
+				topology.LinstorNodeKey: d.nodeID,
 			}},
 	}, nil
 }

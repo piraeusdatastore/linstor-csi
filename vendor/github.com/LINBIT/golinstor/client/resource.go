@@ -42,6 +42,18 @@ type Resource struct {
 	Flags       []string          `json:"flags,omitempty"`
 	LayerObject ResourceLayer     `json:"layer_object,omitempty"`
 	State       ResourceState     `json:"state,omitempty"`
+	Volumes     []Volume          `json:"volumes,omitempty"`
+	// unique object id
+	Uuid string `json:"uuid,omitempty"`
+}
+
+type ResourceDefinitionModify struct {
+	// drbd port for resources
+	DrbdPort int32 `json:"drbd_port,omitempty"`
+	// drbd peer slot number
+	DrbdPeerSlots int32       `json:"drbd_peer_slots,omitempty"`
+	LayerStack    []LayerType `json:"layer_stack,omitempty"`
+	GenericPropsModify
 }
 
 // ResourceCreate is a struct where the properties of a resource are stored to create it
@@ -81,8 +93,8 @@ type DrbdVolume struct {
 	// block device used by drbd
 	BackingDevice    string `json:"backing_device,omitempty"`
 	MetaDisk         string `json:"meta_disk,omitempty"`
-	AllocatedSizeKib uint64 `json:"allocated_size_kib,omitempty"`
-	UsableSizeKib    uint64 `json:"usable_size_kib,omitempty"`
+	AllocatedSizeKib int64  `json:"allocated_size_kib,omitempty"`
+	UsableSizeKib    int64  `json:"usable_size_kib,omitempty"`
 	// String describing current volume state
 	DiskState string `json:"disk_state,omitempty"`
 }
@@ -99,8 +111,8 @@ type LuksVolume struct {
 	DevicePath string `json:"device_path,omitempty"`
 	// block device used by luks
 	BackingDevice    string `json:"backing_device,omitempty"`
-	AllocatedSizeKib uint64 `json:"allocated_size_kib,omitempty"`
-	UsableSizeKib    uint64 `json:"usable_size_kib,omitempty"`
+	AllocatedSizeKib int64  `json:"allocated_size_kib,omitempty"`
+	UsableSizeKib    int64  `json:"usable_size_kib,omitempty"`
 	// String describing current volume state
 	DiskState string `json:"disk_state,omitempty"`
 	Opened    bool   `json:"opened,omitempty"`
@@ -116,8 +128,8 @@ type StorageVolume struct {
 	VolumeNumber int32 `json:"volume_number,omitempty"`
 	// block device path
 	DevicePath       string `json:"device_path,omitempty"`
-	AllocatedSizeKib uint64 `json:"allocated_size_kib,omitempty"`
-	UsableSizeKib    uint64 `json:"usable_size_kib,omitempty"`
+	AllocatedSizeKib int64  `json:"allocated_size_kib,omitempty"`
+	UsableSizeKib    int64  `json:"usable_size_kib,omitempty"`
 	// String describing current volume state
 	DiskState string `json:"disk_state,omitempty"`
 }
@@ -132,8 +144,8 @@ type NvmeVolume struct {
 	DevicePath string `json:"device_path,omitempty"`
 	// block device used by nvme
 	BackingDevice    string `json:"backing_device,omitempty"`
-	AllocatedSizeKib uint64 `json:"allocated_size_kib,omitempty"`
-	UsableSizeKib    uint64 `json:"usable_size_kib,omitempty"`
+	AllocatedSizeKib int64  `json:"allocated_size_kib,omitempty"`
+	UsableSizeKib    int64  `json:"usable_size_kib,omitempty"`
 	// String describing current volume state
 	DiskState string `json:"disk_state,omitempty"`
 }
@@ -149,13 +161,15 @@ type Volume struct {
 	StoragePool      string       `json:"storage_pool,omitempty"`
 	ProviderKind     ProviderKind `json:"provider_kind,omitempty"`
 	DevicePath       string       `json:"device_path,omitempty"`
-	AllocatedSizeKib uint64       `json:"allocated_size_kib,omitempty"`
-	UsableSizeKib    uint64       `json:"usable_size_kib,omitempty"`
+	AllocatedSizeKib int64        `json:"allocated_size_kib,omitempty"`
+	UsableSizeKib    int64        `json:"usable_size_kib,omitempty"`
 	// A string to string property map.
 	Props         map[string]string `json:"props,omitempty"`
 	Flags         []string          `json:"flags,omitempty"`
 	State         VolumeState       `json:"state,omitempty"`
 	LayerDataList []VolumeLayer     `json:"layer_data_list,omitempty"`
+	// unique object id
+	Uuid string `json:"uuid,omitempty"`
 }
 
 // VolumeLayer is a struct for storing the layer-properties of a linstor-volume
@@ -207,6 +221,8 @@ type Snapshot struct {
 	Props             map[string]string          `json:"props,omitempty"`
 	Flags             []string                   `json:"flags,omitempty"`
 	VolumeDefinitions []SnapshotVolumeDefinition `json:"volume_definitions,omitempty"`
+	// unique object id
+	Uuid string `json:"uuid,omitempty"`
 }
 
 // SnapshotVolumeDefinition is a struct to store the properties of a volume from a snapshot
@@ -222,6 +238,14 @@ type SnapshotRestore struct {
 	ToResource string `json:"to_resource"`
 	// List of nodes where to place the restored snapshot
 	Nodes []string `json:"nodes,omitempty"`
+}
+
+type DrbdProxyModify struct {
+	// Compression type used by the proxy.
+	CompressionType string `json:"compression_type,omitempty"`
+	// A string to string property map.
+	CompressionProps map[string]string `json:"compression_props,omitempty"`
+	GenericPropsModify
 }
 
 // custom code
@@ -283,8 +307,8 @@ func (d *LuksVolume) isOneOfDrbdVolumeLuksVolumeStorageVolumeNvmeVolume()    {}
 func (d *StorageVolume) isOneOfDrbdVolumeLuksVolumeStorageVolumeNvmeVolume() {}
 func (d *NvmeVolume) isOneOfDrbdVolumeLuksVolumeStorageVolumeNvmeVolume()    {}
 
-// GetOverall returns all resources in the cluster. Filters can be set via ListOpts.
-func (n *ResourceService) GetOverall(ctx context.Context, opts ...*ListOpts) ([]Resource, error) {
+// GetResourceView returns all resources in the cluster. Filters can be set via ListOpts.
+func (n *ResourceService) GetResourceView(ctx context.Context, opts ...*ListOpts) ([]Resource, error) {
 	var reses []Resource
 	_, err := n.client.doGET(ctx, "/v1/view/resources", &reses, opts...)
 	return reses, err
@@ -311,7 +335,7 @@ func (n *ResourceService) Create(ctx context.Context, res ResourceCreate) error 
 }
 
 // Modify gives the ability to modify a resource on a node
-func (n *ResourceService) Modify(ctx context.Context, resName, nodeName string, props PropsModify) error {
+func (n *ResourceService) Modify(ctx context.Context, resName, nodeName string, props ResourceDefinitionModify) error {
 	_, err := n.client.doPUT(ctx, "/v1/resource-definitions/"+resName+"/resources/"+nodeName, props)
 	return err
 }
@@ -336,6 +360,13 @@ func (n *ResourceService) GetVolume(ctx context.Context, resName, nodeName strin
 
 	_, err := n.client.doGET(ctx, "/v1/resource-definitions/"+resName+"/resources/"+nodeName+"/volumes/"+strconv.Itoa(volNr), &vol, opts...)
 	return vol, err
+}
+
+// ModifyVolume modifies an existing volume with the given props
+func (n *ResourceService) ModifyVolume(ctx context.Context, resName, nodeName string, volNr int, props GenericPropsModify) error {
+	u := fmt.Sprintf("/v1/resource-definitions/%s/resources/%s/volumes/%d", resName, nodeName, volNr)
+	_, err := n.client.doPUT(ctx, u, props)
+	return err
 }
 
 // Diskless toggles a resource on a node to diskless - the parameter disklesspool can be set if its needed
@@ -388,7 +419,7 @@ func (n *ResourceService) GetConnections(ctx context.Context, resName, nodeAName
 }
 
 // ModifyConnection allows to modify the connection between two nodes
-func (n *ResourceService) ModifyConnection(ctx context.Context, resName, nodeAName, nodeBName string, props PropsModify) error {
+func (n *ResourceService) ModifyConnection(ctx context.Context, resName, nodeAName, nodeBName string, props GenericPropsModify) error {
 	u := fmt.Sprintf("/v1/resource-definitions/%s/resource-connections/%s/%s", resName, nodeAName, nodeBName)
 	_, err := n.client.doPUT(ctx, u, props)
 	return err
@@ -441,7 +472,7 @@ func (n *ResourceService) RollbackSnapshot(ctx context.Context, resName, snapNam
 }
 
 // ModifyDRBDProxy is used to modify drbd-proxy properties
-func (n *ResourceService) ModifyDRBDProxy(ctx context.Context, resName string, props PropsModify) error {
+func (n *ResourceService) ModifyDRBDProxy(ctx context.Context, resName string, props DrbdProxyModify) error {
 	_, err := n.client.doPUT(ctx, "/v1/resource-definitions/"+resName+"/drbd-proxy", props)
 	return err
 }

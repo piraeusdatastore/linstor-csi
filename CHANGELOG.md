@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2019-08-19
+### Added
+- `placementPolicy` parameter to control where volumes are physically placed
+  on storage with the following (case sensitive!) options:<!-- Needs Docs -->
+  - `AutoPlace` uses LINSTOR autoplace<!-- Needs Docs -->
+  - `Manual` uses `clientList` and `nodeList`<!-- Needs Docs -->
+  - `FollowTopology` attempts to provision volumes according to volume
+  topology preferences `placementCount` number of times.<!-- Needs Docs -->
+- `allowRemoteVolumeAccess` parameter which allow volumes to be remotely attached
+  to nodes (diskless). Defaults to `"true"`<!-- Needs Docs -->
+- `placementCount` parameter to determine how many replicas to create. Alias to
+  the `autoPlace` parameter<!-- Needs Docs -->
+### Removed
+- localStoragePolicy parameter<!-- Needs Docs -->
+### Changed
+- Upgrade to golinstor v0.16.1 from v0.15.0
+
 ## [0.6.4] - 2019-06-25
 ### Fixed
 - attach diskless resources, rather than diskful. introduced in 0.6.3

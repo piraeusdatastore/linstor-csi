@@ -33,6 +33,14 @@ type Node struct {
 	NetInterfaces []NetInterface    `json:"net_interfaces,omitempty"`
 	// Enum describing the current connection status.
 	ConnectionStatus string `json:"connection_status,omitempty"`
+	// unique object id
+	Uuid string `json:"uuid,omitempty"`
+}
+
+type NodeModify struct {
+	NodeType string `json:"node_type,omitempty"`
+	// A string to string property map.
+	GenericPropsModify
 }
 
 // NetInterface represents a node's network interface.
@@ -41,6 +49,8 @@ type NetInterface struct {
 	Address                 string `json:"address"`
 	SatellitePort           int32  `json:"satellite_port,omitempty"`
 	SatelliteEncryptionType string `json:"satellite_encryption_type,omitempty"`
+	// unique object id
+	Uuid string `json:"uuid,omitempty"`
 }
 
 // StoragePool represents a nodes storage pool as defined in LINSTOR.
@@ -58,6 +68,10 @@ type StoragePool struct {
 	TotalCapacity int64 `json:"total_capacity,omitempty"`
 	// read only
 	FreeSpaceMgrName string `json:"free_space_mgr_name,omitempty"`
+	// unique object id
+	Uuid string `json:"uuid,omitempty"`
+	// Currently known report messages for this storage pool
+	Reports []ApiCallRc `json:"reports,omitempty"`
 }
 
 // ProviderKind is a type that represents various types of storage.
@@ -102,7 +116,7 @@ func (n *NodeService) Create(ctx context.Context, node Node) error {
 }
 
 // Modify modifies the given node and sets/deletes the given properties.
-func (n *NodeService) Modify(ctx context.Context, nodeName string, props PropsModify) error {
+func (n *NodeService) Modify(ctx context.Context, nodeName string, props NodeModify) error {
 	_, err := n.client.doPUT(ctx, "/v1/nodes/"+nodeName, props)
 	return err
 }
@@ -155,6 +169,13 @@ func (n *NodeService) ModifyNetInterface(ctx context.Context, nodeName, nifName 
 func (n *NodeService) DeleteNetinterface(ctx context.Context, nodeName, nifName string) error {
 	_, err := n.client.doDELETE(ctx, "/v1/nodes/"+nodeName+"/net-interfaces/"+nifName, nil)
 	return err
+}
+
+// GetStoragePoolView gets information about all storage pools in the cluster.
+func (n *NodeService) GetStoragePoolView(ctx context.Context, opts ...*ListOpts) ([]StoragePool, error) {
+	var sps []StoragePool
+	_, err := n.client.doGET(ctx, "/v1/view/storage-pools", &sps, opts...)
+	return sps, err
 }
 
 // GetStoragePools gets information about all storage pools on a given node.

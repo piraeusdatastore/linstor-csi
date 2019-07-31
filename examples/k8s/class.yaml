@@ -4,5 +4,5 @@ metadata:
   name: linstor-basic-storage
 provisioner: linstor.csi.linbit.com
 parameters:
-  autoPlace: "2"
+  placementCount: "2"
   storagePool: "my-storage-pool"

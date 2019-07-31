@@ -25,13 +25,17 @@ import (
 	"fmt"
 	"io"
 	"regexp"
-	"strconv"
-	"strings"
-	"sync"
 	"time"
 
-	lc "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
+	"github.com/LINBIT/linstor-csi/pkg/linstor"
+	lc "github.com/LINBIT/linstor-csi/pkg/linstor/highlevelclient"
+	"github.com/LINBIT/linstor-csi/pkg/linstor/util"
+	"github.com/LINBIT/linstor-csi/pkg/topology"
+	"github.com/LINBIT/linstor-csi/pkg/topology/scheduler"
+	"github.com/LINBIT/linstor-csi/pkg/topology/scheduler/autoplace"
+	"github.com/LINBIT/linstor-csi/pkg/topology/scheduler/followtopology"
+	"github.com/LINBIT/linstor-csi/pkg/topology/scheduler/manual"
 	"github.com/LINBIT/linstor-csi/pkg/volume"
 	"github.com/container-storage-interface/spec/lib/go/csi/v0"
 	"github.com/haySwim/data"
@@ -41,216 +45,11 @@ import (
 	"k8s.io/kubernetes/pkg/util/mount"
 )
 
-// Parameter key names.
-const (
-	nodeListKey            = "nodelist"
-	layerListKey           = "layerlist"
-	clientListKey          = "clientlist"
-	replicasOnSameKey      = "replicasonsame"
-	replicasOnDifferentKey = "replicasondifferent"
-	autoPlaceKey           = "autoplace"
-	doNotPlaceWithRegexKey = "donotplacewithregex"
-	sizeKiBKey             = "sizekib"
-	storagePoolKey         = "storagepool"
-	disklessStoragePoolKey = "disklessstoragepool"
-	disklessOnRemainingKey = "disklessonremaining"
-	encryptionKey          = "encryption"
-	fsKey                  = "filesystem"
-	useLocalStorageKey     = "localstoragepolicy"
-	mountOptsKey           = "mountopts"
-	fSOptsKey              = "fsopts"
-)
-
-type parameters struct {
-	// clientList is a list of nodes where the volume should be assigned to disklessly
-	// at the time that the volume is first created.
-	clientList []string
-	// nodeList is a list of nodes where the volume should be assigned to diskfully
-	// at the time that the volume is first created. Specifying this overrides any
-	// other automatic placement rules.
-	nodeList []string
-	// replicasOnDifferent is a list that corresonds to the `linstor resource create`
-	// option of the same name.
-	replicasOnDifferent []string
-	// replicasOnSame is a list that corresonds to the `linstor resource create`
-	// option of the same name.
-	replicasOnSame []string
-	// disklessStoragePool is the diskless storage pool to use for diskless assignments.
-	disklessStoragePool string
-	// doNotPlaceWithRegex corresonds to the `linstor resource create`
-	// option of the same name.
-	doNotPlaceWithRegex string
-	// fs is the filesystem type: ext4, xfs, and so on.
-	fs string
-	// fsOpts is a string of filesystem options passed at mount time.
-	fsOpts string
-	// mountOpts is a string of mount options passed at mount time. Comma
-	// separated like in /etc/fstab.
-	mountOpts string
-	// storagePool is the storage pool to use for diskful assignments.
-	storagePool string
-	sizeKiB     uint64
-	// placementCount is the number of replicas of the volume in total.
-	placementCount int32
-	// disklessonremaining corresonds to the `linstor resource create`
-	// option of the same name.
-	disklessonremaining bool
-	// encrypt volumes if true.
-	encryption bool
-	// layerList is a list that corresonds to the `linstor resource create`
-	// option of the same name.
-	layerList []lapi.LayerType
-	// lsp determines where volumes are created and from where they are reachable.
-	lsp localStoragePolicy
-}
-
-const defaultDisklessStoragePoolName = "DfltDisklessStorPool"
-
-// newParameters parses out the raw parameters we get and sets appropreate
-// zero values
-func newParameters(params map[string]string) (parameters, error) {
-	// set zero values
-	var p = parameters{
-		layerList:           []lapi.LayerType{lapi.DRBD, lapi.STORAGE},
-		placementCount:      1,
-		disklessStoragePool: defaultDisklessStoragePoolName,
-		encryption:          false,
-		lsp:                 localStoragePolicyIgnore,
-	}
-
-	for k, v := range params {
-		switch strings.ToLower(k) {
-		case nodeListKey:
-			p.nodeList = strings.Split(v, " ")
-		case layerListKey:
-			l, err := parseLayerList(v)
-			if err != nil {
-				return p, err
-			}
-			p.layerList = l
-		case replicasOnSameKey:
-			p.replicasOnSame = strings.Split(v, " ")
-		case replicasOnDifferentKey:
-			p.replicasOnDifferent = strings.Split(v, " ")
-		case storagePoolKey:
-			p.storagePool = v
-		case disklessStoragePoolKey:
-			p.disklessStoragePool = v
-		case autoPlaceKey:
-			if v == "" {
-				v = "1"
-			}
-			autoplace, err := strconv.ParseInt(v, 10, 32)
-			if err != nil {
-				return p, fmt.Errorf("unable to parse %q as a 32 bit integer", v)
-			}
-			p.placementCount = int32(autoplace)
-		case doNotPlaceWithRegexKey:
-			p.doNotPlaceWithRegex = v
-		case encryptionKey:
-			e, err := strconv.ParseBool(v)
-			if err != nil {
-				return p, err
-			}
-			p.encryption = e
-		case disklessOnRemainingKey:
-			d, err := strconv.ParseBool(v)
-			if err != nil {
-				return p, err
-			}
-			p.disklessonremaining = d
-		case clientListKey:
-			p.clientList = strings.Split(v, " ")
-		case sizeKiBKey:
-			if v == "" {
-				v = "4"
-			}
-			size, err := strconv.ParseUint(v, 10, 64)
-			if err != nil {
-				return p, fmt.Errorf("unable to parse %q as an unsigned 64 bit integer", v)
-			}
-			p.sizeKiB = size
-		case fsKey:
-			p.fs = v
-		case useLocalStorageKey:
-			lsp, err := parseLocalStoragePolicy(v)
-			if err != nil {
-				return p, err
-			}
-			p.lsp = lsp
-		case mountOptsKey:
-			p.mountOpts = v
-		case fSOptsKey:
-			p.fsOpts = v
-		}
-	}
-
-	// User has manually configured deployments, ignore autoplacing options.
-	if len(p.nodeList)+len(p.clientList) != 0 {
-		p.placementCount = 0
-		p.replicasOnSame = make([]string, 0)
-		p.replicasOnDifferent = make([]string, 0)
-		p.doNotPlaceWithRegex = ""
-	}
-
-	return p, nil
-}
-
-func parseLayerList(s string) ([]lapi.LayerType, error) {
-	list := strings.Split(s, " ")
-	var layers = make([]lapi.LayerType, 0)
-	knownLayers := []lapi.LayerType{lapi.DRBD, lapi.STORAGE, lapi.LUKS, lapi.NVME}
-
-userLayers:
-	for _, l := range list {
-		for _, k := range knownLayers {
-			if strings.EqualFold(l, string(k)) {
-				layers = append(layers, k)
-				continue userLayers
-			}
-		}
-		// Reached the bottom without finding a match.
-		return layers, fmt.Errorf("unknown layer type %s, known layer types %v", l, knownLayers)
-	}
-	return layers, nil
-}
-
-type localStoragePolicy int
-
-const (
-	// Try to use local volumes, but don't fail if you can't. Needs disklessly
-	// attachable resources.
-	localStoragePolicyPrefer localStoragePolicy = iota
-	// Volumes must be accessed locally.
-	localStoragePolicyRequire
-	// Don't consider volume location for accessiblity. Needs disklessly
-	// attachable resources.
-	localStoragePolicyIgnore
-)
-
-func parseLocalStoragePolicy(s string) (localStoragePolicy, error) {
-	switch strings.ToLower(s) {
-	case "require", "required":
-		return localStoragePolicyRequire, nil
-	case "prefer", "preferred":
-		return localStoragePolicyPrefer, nil
-	case "ignore", "":
-		return localStoragePolicyIgnore, nil
-	default:
-		return localStoragePolicyIgnore, fmt.Errorf("%s is not a valid localStoragePolicy", s)
-	}
-}
-
-// LinstorNodeTopologyKey refers to a node running the LINSTOR csi node service
-// and the linstor Satellite and is therefore capabile of hosting LINSTOR volumes.
-const LinstorNodeTopologyKey = "linbit.com/hostname"
-
 // Linstor is a high-level client for use with CSI.
 type Linstor struct {
 	log            *logrus.Entry
-	annotationsKey string
 	fallbackPrefix string
-	client         *lapi.Client
+	client         *lc.HighLevelClient
 	mounter        *mount.SafeFormatAndMount
 }
 
@@ -258,12 +57,11 @@ type Linstor struct {
 // By default, it will try to connect with localhost:3370.
 func NewLinstor(options ...func(*Linstor) error) (*Linstor, error) {
 	// Set up zero values.
-	c, err := lapi.NewClient()
+	c, err := lc.NewHighLevelClient()
 	if err != nil {
 		return nil, err
 	}
 	l := &Linstor{
-		annotationsKey: "Aux/csi-volume-annotations",
 		fallbackPrefix: "csi-",
 		log:            logrus.NewEntry(logrus.New()),
 		client:         c,
@@ -279,7 +77,6 @@ func NewLinstor(options ...func(*Linstor) error) (*Linstor, error) {
 
 	// Add in fields that may have been configured above.
 	l.log = l.log.WithFields(logrus.Fields{
-		"annotationsKey":      l.annotationsKey,
 		"linstorCSIComponent": "client",
 	})
 
@@ -298,7 +95,7 @@ func NewLinstor(options ...func(*Linstor) error) (*Linstor, error) {
 
 // APIClient the configured LINSTOR API client that will be used to communicate
 // with the LINSTOR cluster.
-func APIClient(c *lapi.Client) func(*Linstor) error {
+func APIClient(c *lc.HighLevelClient) func(*Linstor) error {
 	return func(l *Linstor) error {
 		cp := l.client
 		*cp = *c
@@ -398,7 +195,7 @@ func (s *Linstor) AllocationSizeKiB(requiredBytes, limitBytes int64) (int64, err
 // resourceDefinitionToVolume reads the serialized volume info on the lapi.ResourceDefinition
 // and contructs a pointer to a volume.Info from it.
 func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinition) (*volume.Info, error) {
-	csiVolumeAnnotation, ok := resDef.Props[s.annotationsKey]
+	csiVolumeAnnotation, ok := resDef.Props[linstor.AnnotationsKey]
 	if !ok {
 		return nil, fmt.Errorf("unable to find CSI volume annotation on resource %+v", resDef)
 	}
@@ -420,95 +217,6 @@ func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinition) (*v
 	}).Debug("converted resource definition to volume")
 
 	return vol, nil
-}
-
-// volToResourceDefinitionCreate prepares a lapi.ResourceDefinitionCreate from
-// a volume.Info.
-func (s *Linstor) volToResourceDefinitionCreate(vol *volume.Info, params parameters) (lapi.ResourceDefinitionCreate, error) {
-	resDef, err := s.volToResourceDefinition(vol, params)
-	if err != nil {
-		return lapi.ResourceDefinitionCreate{}, err
-	}
-	return lapi.ResourceDefinitionCreate{ResourceDefinition: resDef}, nil
-}
-
-// volToResourceDefinition prepares a lapi.ResourceDefinition from a volume.Info.
-func (s *Linstor) volToResourceDefinition(vol *volume.Info, params parameters) (lapi.ResourceDefinition, error) {
-	resDef := lapi.ResourceDefinition{
-		ExternalName: vol.Name,
-		Props:        make(map[string]string),
-		LayerData:    make([]lapi.ResourceDefinitionLayer, len(params.layerList)),
-	}
-
-	for i := range resDef.LayerData {
-		resDef.LayerData[i].Type = params.layerList[i]
-	}
-
-	serializedVol, err := json.Marshal(vol)
-	if err != nil {
-		return resDef, err
-	}
-
-	// TODO: Support for other annotations.
-	resDef.Props[s.annotationsKey] = string(serializedVol)
-
-	return resDef, nil
-}
-
-// volToResourceCreateList prepares a list of lapi.ResourceCreate to be used to
-// manually assign resources based on the node and client lists of the volume.
-func (s *Linstor) volToResourceCreateList(vol *volume.Info, params parameters) []lapi.ResourceCreate {
-	var resCreates = make([]lapi.ResourceCreate, len(params.nodeList)+len(params.clientList))
-
-	var i int
-	for _, node := range params.nodeList {
-		resCreates[i] = volToDiskfullResourceCreate(vol, params, node)
-		i++
-	}
-
-	for _, node := range params.clientList {
-		resCreates[i] = volToDisklessResourceCreate(vol, params, node)
-		i++
-	}
-
-	return resCreates
-}
-
-func volToDiskfullResourceCreate(vol *volume.Info, params parameters, node string) lapi.ResourceCreate {
-	res := volToGenericResourceCreate(vol, params, node)
-	res.Resource.Props[lc.KeyStorPoolName] = params.storagePool
-	return res
-}
-
-func volToDisklessResourceCreate(vol *volume.Info, params parameters, node string) lapi.ResourceCreate {
-	res := volToGenericResourceCreate(vol, params, node)
-	res.Resource.Props[lc.KeyStorPoolName] = params.disklessStoragePool
-	res.Resource.Flags = append(res.Resource.Flags, lc.FlagDiskless)
-	return res
-}
-
-func volToGenericResourceCreate(vol *volume.Info, params parameters, node string) lapi.ResourceCreate {
-	return lapi.ResourceCreate{
-		LayerList: params.layerList,
-		Resource: lapi.Resource{
-			Name:     vol.ID,
-			NodeName: node,
-			Props:    make(map[string]string, 1),
-			Flags:    make([]string, 0),
-		}}
-}
-
-func (s *Linstor) paramsToAutoPlace(params parameters) lapi.AutoPlaceRequest {
-	return lapi.AutoPlaceRequest{
-		DisklessOnRemaining: params.disklessonremaining,
-		LayerList:           params.layerList,
-		SelectFilter: lapi.AutoSelectFilter{
-			PlaceCount:           params.placementCount,
-			StoragePool:          params.storagePool,
-			NotPlaceWithRscRegex: params.doNotPlaceWithRegex,
-			ReplicasOnSame:       params.replicasOnSame,
-			ReplicasOnDifferent:  params.replicasOnDifferent,
-		}}
 }
 
 // GetByName retrives a volume.Info that has a name that matches the CSI volume
@@ -559,12 +267,7 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, req *csi.CreateV
 		"volume": fmt.Sprintf("%+v", vol),
 	}).Info("creating volume")
 
-	params, err := newParameters(vol.Parameters)
-	if err != nil {
-		return fmt.Errorf("unable to create volume due to bad parameters %+v: %v", vol.Parameters, err)
-	}
-
-	if err := s.createResourceDefinition(ctx, vol, params); err != nil {
+	if err := s.createResourceDefinition(ctx, vol); err != nil {
 		return err
 	}
 
@@ -575,68 +278,11 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, req *csi.CreateV
 		return err
 	}
 
-	// If we don't care about local storage or nodes are being manually assigned
-	// or there are no topology preferences skip the topology based assignment logic.
-	topos := req.GetAccessibilityRequirements()
-	if params.lsp == localStoragePolicyIgnore ||
-		params.placementCount == 0 ||
-		topos == nil {
-		return s.deploy(ctx, vol, params)
+	volumeScheduler, err := s.schedulerByPlacementPolicy(vol)
+	if err != nil {
+		return err
 	}
-
-	remainingAssignments := params.placementCount
-
-	for i, pref := range topos.GetPreferred() {
-		// While there are still preferred nodes and remainingAssignments
-		// attach resources diskfully to those nodes in order of most to least preferred.
-		if p, ok := pref.GetSegments()[LinstorNodeTopologyKey]; ok && remainingAssignments > 0 {
-			// If attachment fails move onto next most preferred volume.
-			if err := s.client.Resources.Create(ctx, volToDiskfullResourceCreate(vol, params, p)); err != nil {
-				s.log.WithFields(logrus.Fields{
-					"volumeID":                   vol.ID,
-					"topologyPreference":         i,
-					"topologyNode":               p,
-					"totalVolumeCount":           params.placementCount,
-					"remainingVolumeAssignments": remainingAssignments,
-					"reason":                     err,
-				}).Info("unable to satisfy topology preference")
-				continue
-			}
-			// If attachment succeeds, decrement the number of remainingAssignments.
-			remainingAssignments--
-			// If we're out of remaining attachments, we're done.
-			if remainingAssignments == 0 {
-				return nil
-			}
-		}
-	}
-
-	// We weren't able to assign any volume according to topology preferences
-	// and local storage is required.
-	if params.placementCount == remainingAssignments && params.lsp == localStoragePolicyRequire {
-		return fmt.Errorf("unable to satisfy volume topology requirements for volume %s", vol.ID)
-	}
-
-	// If params.placementCount is higher than the number of assigned nodes s.deploy should
-	// automatically provision the rest.
-	return s.deploy(ctx, vol, params)
-}
-
-func (s *Linstor) deploy(ctx context.Context, vol *volume.Info, params parameters) error {
-	if params.placementCount == 0 {
-		manualPlacements := s.volToResourceCreateList(vol, params)
-		for _, placement := range manualPlacements {
-			err := s.client.Resources.Create(ctx, placement)
-			if err != nil {
-				return err
-			}
-		}
-
-		return nil
-	}
-
-	// We're autoplacing resources, this should be the usual case.
-	return s.client.Resources.Autoplace(ctx, vol.ID, s.paramsToAutoPlace(params))
+	return volumeScheduler.Create(ctx, vol, req)
 }
 
 // Delete removes a resource, all of its volumes, and snapshots from LINSTOR.
@@ -672,85 +318,29 @@ func (s *Linstor) Delete(ctx context.Context, vol *volume.Info) error {
 // AccessibleTopologies returns a list of pointers to csi.Topology from where the
 // volume is reachable, based on the localStoragePolicy reported by the volume.
 func (s *Linstor) AccessibleTopologies(ctx context.Context, vol *volume.Info) ([]*csi.Topology, error) {
-	p, err := newParameters(vol.Parameters)
+	volumeScheduler, err := s.schedulerByPlacementPolicy(vol)
 	if err != nil {
-		return nil, fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
+		return nil, err
 	}
-
-	if p.lsp != localStoragePolicyRequire {
-		return s.lspIgnoreAccessibleTopologies(ctx, vol)
-	}
-
-	r, err := s.client.Resources.GetAll(ctx, vol.ID)
-	if err != nil {
-		return nil, fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
-	}
-
-	var topos = make([]*csi.Topology, 0)
-	for _, n := range deployedNodes(r) {
-		topos = append(topos, &csi.Topology{Segments: map[string]string{LinstorNodeTopologyKey: n}})
-	}
-
-	s.log.WithFields(logrus.Fields{
-		"volume":     fmt.Sprintf("%+v", vol),
-		"parameters": fmt.Sprintf("%+v", p),
-		"topologies": fmt.Sprintf("%+v", topos),
-	}).Debug("determined volume topologies")
-
-	return topos, nil
+	return volumeScheduler.AccessibleTopologies(ctx, vol)
 }
 
-func (s *Linstor) lspIgnoreAccessibleTopologies(ctx context.Context, vol *volume.Info) ([]*csi.Topology, error) {
-	p, err := newParameters(vol.Parameters)
+func (s *Linstor) schedulerByPlacementPolicy(vol *volume.Info) (scheduler.Interface, error) {
+	params, err := volume.NewParameters(vol.Parameters)
 	if err != nil {
-		return nil, fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
+		return nil, err
 	}
 
-	pools, err := s.getAllStoragePools(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
+	switch params.PlacementPolicy {
+	case topology.AutoPlace:
+		return autoplace.NewScheduler(s.client), nil
+	case topology.Manual:
+		return manual.NewScheduler(s.client), nil
+	case topology.FollowTopology:
+		return followtopology.NewScheduler(s.client, s.log), nil
+	default:
+		return nil, fmt.Errorf("unsupported volume scheduler: %s", params.PlacementPolicy)
 	}
-
-	var nodes = make([]string, 0)
-	for _, sp := range pools {
-		// The default diskless storage pool doesn't show up in the list and by
-		// default all network attachable resources can use it.
-		if p.disklessStoragePool == defaultDisklessStoragePoolName ||
-			// Otherwise, the user is using a particular diskless storage pool
-			(sp.StoragePoolName == p.disklessStoragePool && sp.ProviderKind == lapi.DISKLESS) {
-			nodes = append(nodes, sp.NodeName)
-		}
-	}
-
-	var topos = make([]*csi.Topology, 0)
-	for _, n := range uniq(nodes) {
-		topos = append(topos, &csi.Topology{Segments: map[string]string{LinstorNodeTopologyKey: n}})
-	}
-
-	s.log.WithFields(logrus.Fields{
-		"volume":     fmt.Sprintf("%+v", vol),
-		"parameters": fmt.Sprintf("%+v", p),
-		"topologies": fmt.Sprintf("%+v", topos),
-	}).Debug("determined volume topologies")
-
-	return topos, nil
-}
-
-// remove duplicates from a slice.
-func uniq(strs []string) []string {
-	var seen = make(map[string]bool, len(strs))
-	var j int
-
-	for _, s := range strs {
-		if seen[s] {
-			continue
-		}
-		seen[s] = true
-		strs[j] = s
-		j++
-	}
-
-	return strs[:j]
 }
 
 // Attach idempotently creates a resource on the given node disklessly.
@@ -775,29 +365,27 @@ func (s *Linstor) Attach(ctx context.Context, vol *volume.Info, node string) err
 		return nil
 	}
 
-	params, err := newParameters(vol.Parameters)
+	rc, err := vol.ToDisklessResourceCreate(node)
 	if err != nil {
-		return fmt.Errorf("unable to attach volume due to bad parameters %+v: %v", vol.Parameters, err)
+		return err
 	}
-
-	return s.client.Resources.Create(ctx, volToDisklessResourceCreate(vol, params, node))
+	return s.client.Resources.Create(ctx, rc)
 }
 
 // Detach removes a volume from the node.
 func (s *Linstor) Detach(ctx context.Context, vol *volume.Info, node string) error {
-	s.log.WithFields(logrus.Fields{
-		"volume":     fmt.Sprintf("%+v", vol),
-		"targetNode": node,
-	}).Info("detaching volume")
-
 	res, err := s.client.Resources.Get(ctx, vol.ID, node)
 	if err != nil {
 		return err
 	}
+	s.log.WithFields(logrus.Fields{
+		"resource":   fmt.Sprintf("%+v", res),
+		"targetNode": node,
+	}).Info("detaching volume")
 
-	if deployed(res) {
+	if util.DeployedDiskfully(res) {
 		s.log.WithFields(logrus.Fields{
-			"volume":     fmt.Sprintf("%+v", vol),
+			"resource":   fmt.Sprintf("%+v", res),
 			"targetNode": node,
 		}).Info("volume is diskfull on node, refusing to detach")
 		return nil
@@ -808,66 +396,25 @@ func (s *Linstor) Detach(ctx context.Context, vol *volume.Info, node string) err
 
 // CapacityBytes returns the amount of free space in the storage pool specified
 // the the params.
-func (s *Linstor) CapacityBytes(ctx context.Context, params map[string]string) (int64, error) {
-	p, err := newParameters(params)
+func (s *Linstor) CapacityBytes(ctx context.Context, parameters map[string]string) (int64, error) {
+	params, err := volume.NewParameters(parameters)
 	if err != nil {
 		return 0, fmt.Errorf("unable to get capacity: %v", err)
 	}
-	pools, err := s.getAllStoragePools(ctx)
+
+	pools, err := s.client.Nodes.GetStoragePoolView(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("unable to get capacity for storage pool %s: %v", p.storagePool, err)
+		return 0, fmt.Errorf("unable to get capacity for storage pool %s: %v", params.StoragePool, err)
 	}
 
 	var total int64
 	for _, sp := range pools {
-		if p.storagePool == sp.StoragePoolName || p.storagePool == "" {
+		if params.StoragePool == sp.StoragePoolName || params.StoragePool == "" {
 			total += sp.FreeCapacity
 		}
 	}
 
 	return int64(data.NewKibiByte(data.KiB * data.ByteSize(total)).To(data.B)), nil
-}
-
-func (s *Linstor) getAllStoragePools(ctx context.Context) ([]lapi.StoragePool, error) {
-	var allPools = make([]lapi.StoragePool, 0)
-
-	nodes, err := s.client.Nodes.GetAll(ctx)
-	if err != nil {
-		return allPools, fmt.Errorf("unable to get all storage pools: %v", err)
-	}
-
-	poolChan := make(chan lapi.StoragePool, 1)
-
-	g, egctx := errgroup.WithContext(ctx)
-	for _, n := range nodes {
-		node := n.Name
-		g.Go(func() error {
-			pools, err := s.client.Nodes.GetStoragePools(egctx, node)
-			if err == nil {
-				for _, sp := range pools {
-					poolChan <- sp
-				}
-			}
-			return err
-		})
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for sp := range poolChan {
-			allPools = append(allPools, sp)
-		}
-	}()
-
-	if err := g.Wait(); err != nil {
-		return allPools, err
-	}
-	close(poolChan)
-	wg.Wait()
-
-	return allPools, nil
 }
 
 // SnapCreate calls linstor to create a new snapshot on the volume indicated by
@@ -960,12 +507,7 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.SnapInfo, vol *v
 		"snapshot": fmt.Sprintf("%+v", snap),
 	}).Info("creating volume from snapshot")
 
-	params, err := newParameters(vol.Parameters)
-	if err != nil {
-		return fmt.Errorf("unable to create volume due to bad parameters %+v: %v", vol.Parameters, err)
-	}
-
-	if err := s.createResourceDefinition(ctx, vol, params); err != nil {
+	if err := s.createResourceDefinition(ctx, vol); err != nil {
 		return err
 	}
 
@@ -976,7 +518,7 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.SnapInfo, vol *v
 
 	snapRestore := lapi.SnapshotRestore{
 		ToResource: vol.ID,
-		Nodes:      deployedNodes(r),
+		Nodes:      util.DeployedDiskfullyNodes(r),
 	}
 
 	if err := s.client.Resources.RestoreVolumeDefinitionSnapshot(ctx, snap.CsiSnap.SourceVolumeId, snap.Name, snapRestore); err != nil {
@@ -1014,8 +556,8 @@ func (s *Linstor) VolFromVol(ctx context.Context, sourceVol, vol *volume.Info) e
 }
 
 // Creates a resourceDefinition, updating the vol.ID if successful.
-func (s *Linstor) createResourceDefinition(ctx context.Context, vol *volume.Info, params parameters) error {
-	resDefCreate, err := s.volToResourceDefinitionCreate(vol, params)
+func (s *Linstor) createResourceDefinition(ctx context.Context, vol *volume.Info) error {
+	resDefCreate, err := vol.ToResourceDefinitionCreate()
 	if err != nil {
 		return err
 	}
@@ -1050,12 +592,12 @@ func (s *Linstor) saveVolume(ctx context.Context, vol *volume.Info) error {
 	if err != nil {
 		return err
 	}
-	return s.setProps(ctx, vol, map[string]string{s.annotationsKey: string(serializedVol)})
+	return s.setProps(ctx, vol, map[string]string{linstor.AnnotationsKey: string(serializedVol)})
 }
 
 func (s *Linstor) setProps(ctx context.Context, vol *volume.Info, props map[string]string) error {
 	return s.client.ResourceDefinitions.Modify(ctx, vol.ID,
-		lapi.PropsModify{
+		lapi.GenericPropsModify{
 			OverrideProps: props,
 		})
 }
@@ -1266,16 +808,16 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 	}
 
 	if !block {
-		p, err := newParameters(vol.Parameters)
+		params, err := volume.NewParameters(vol.Parameters)
 		if err != nil {
 			return fmt.Errorf("mounting volume failed: %v", err)
 		}
 		// Merge mount options from Storage Classes and CSI calls.
-		options = append(options, p.mountOpts)
+		options = append(options, params.MountOpts)
 		// and if an fsType is supplied by the parameters, override the one passed
 		// to the Mount Call.
-		if p.fs != "" {
-			fsType = p.fs
+		if params.FS != "" {
+			fsType = params.FS
 		}
 
 		if err := s.mounter.MakeDir(target); err != nil {
@@ -1377,40 +919,4 @@ func nil404(e error) error {
 		return nil
 	}
 	return e
-}
-
-func deployedNodes(res []lapi.Resource) []string {
-	var nodes = make([]string, 0)
-	for _, r := range res {
-		if deployed(r) {
-			nodes = append(nodes, r.NodeName)
-		}
-	}
-	return nodes
-}
-
-func deployed(res lapi.Resource) bool {
-	return doesNotcontainAll(res.Flags, lc.FlagDiskless)
-}
-
-func containsAll(list []string, candidates ...string) bool {
-	if len(candidates) == 0 {
-		return false
-	}
-
-nextCandidate:
-	for _, c := range candidates {
-		for _, e := range list {
-			if e == c {
-				continue nextCandidate
-			}
-		}
-		// Made it through all data with no match.
-		return false
-	}
-	return true
-}
-
-func doesNotcontainAll(list []string, candidates ...string) bool {
-	return !containsAll(list, candidates...)
 }
