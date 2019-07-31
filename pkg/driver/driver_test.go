@@ -10,6 +10,7 @@ import (
 
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/LINBIT/linstor-csi/pkg/client"
+	lc "github.com/LINBIT/linstor-csi/pkg/linstor/highlevelclient"
 	"github.com/kubernetes-csi/csi-test/pkg/sanity"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
@@ -54,7 +55,7 @@ func TestDriver(t *testing.T) {
 		if r <= 0 {
 			r = rate.Inf
 		}
-		c, err := lapi.NewClient(
+		c, err := lc.NewHighLevelClient(
 			lapi.BaseURL(u),
 			lapi.Limit(r, *burst),
 			lapi.Log(&lapi.LogCfg{Level: *logLevel, Out: logFile, Formatter: &logrus.TextFormatter{}}),

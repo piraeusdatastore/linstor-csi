@@ -3,6 +3,8 @@ github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/LINBIT/golinstor v0.15.0 h1:MeWNakRvoUhXmGJ8z+r7fSc0ZLtVkk8LUqNDGEBH/0g=
 github.com/LINBIT/golinstor v0.15.0/go.mod h1:p2V1Y5ppce3isjO7IBiZGOwY8R8oIm+nYZqOa77bpXM=
+github.com/LINBIT/golinstor v0.16.1 h1:xx0uH6GwyGPdVA3ufO6j/NywferhCDUW9nOCdD17/cg=
+github.com/LINBIT/golinstor v0.16.1/go.mod h1:p2V1Y5ppce3isjO7IBiZGOwY8R8oIm+nYZqOa77bpXM=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/container-storage-interface/spec v1.1.0 h1:qPsTqtR1VUPvMPeK0UnCZMtXaKGyyLPG8gj/wG6VqMs=
 github.com/container-storage-interface/spec v1.1.0/go.mod h1:6URME8mwIBbpVyZV93Ce5St17xBiQJQY67NDsuohiy4=
