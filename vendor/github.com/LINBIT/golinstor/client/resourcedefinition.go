@@ -40,6 +40,8 @@ type ResourceDefinition struct {
 	Props     map[string]string         `json:"props,omitempty"`
 	Flags     []string                  `json:"flags,omitempty"`
 	LayerData []ResourceDefinitionLayer `json:"layer_data,omitempty"`
+	// unique object id
+	Uuid string `json:"uuid,omitempty"`
 }
 
 // ResourceDefinitionCreate is a struct for holding the data needed to create a resource-defintion
@@ -97,6 +99,13 @@ type VolumeDefinition struct {
 	Props     map[string]string       `json:"props,omitempty"`
 	Flags     []string                `json:"flags,omitempty"`
 	LayerData []VolumeDefinitionLayer `json:"layer_data,omitempty"`
+	// unique object id
+	Uuid string `json:"uuid,omitempty"`
+}
+
+type VolumeDefinitionModify struct {
+	SizeKib uint64 `json:"size_kib,omitempty"`
+	GenericPropsModify
 }
 
 // VolumeDefinitionLayer is a struct for the layer-type of a volume-definition
@@ -209,7 +218,7 @@ func (n *ResourceDefinitionService) Create(ctx context.Context, resDef ResourceD
 }
 
 // Modify allows to modify a resource-definition
-func (n *ResourceDefinitionService) Modify(ctx context.Context, resDefName string, props PropsModify) error {
+func (n *ResourceDefinitionService) Modify(ctx context.Context, resDefName string, props GenericPropsModify) error {
 	_, err := n.client.doPUT(ctx, "/v1/resource-definitions/"+resDefName, props)
 	return err
 }
@@ -241,7 +250,7 @@ func (n *ResourceDefinitionService) CreateVolumeDefinition(ctx context.Context, 
 }
 
 // ModifyVolumeDefinition give the abilty to modify a specific volume-definition
-func (n *ResourceDefinitionService) ModifyVolumeDefinition(ctx context.Context, resDefName string, volNr int, props PropsModify) error {
+func (n *ResourceDefinitionService) ModifyVolumeDefinition(ctx context.Context, resDefName string, volNr int, props VolumeDefinitionModify) error {
 	_, err := n.client.doPUT(ctx, "/v1/resource-definitions/"+resDefName+"/volume-definitions/"+strconv.Itoa(volNr), props)
 	return err
 }

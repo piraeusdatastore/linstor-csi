@@ -29,6 +29,7 @@ import (
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/LINBIT/linstor-csi/pkg/client"
 	"github.com/LINBIT/linstor-csi/pkg/driver"
+	lc "github.com/LINBIT/linstor-csi/pkg/linstor/highlevelclient"
 )
 
 func main() {
@@ -59,7 +60,7 @@ func main() {
 	if r <= 0 {
 		r = rate.Inf
 	}
-	c, err := lapi.NewClient(
+	c, err := lc.NewHighLevelClient(
 		lapi.BaseURL(u),
 		lapi.Limit(r, *burst),
 		lapi.Log(&lapi.LogCfg{Level: *logLevel, Out: logOut, Formatter: logFmt}),
