@@ -6,7 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.7.0] - 2019-08-19
+## [0.7.1] - 2019-08-08
+### Changed
+- better logging for Mount calls.
+- csi-plugin base imagine is now debian:buster was alpine
+
+### Fixed
+- filesystem options no longer ignored. Introduced in v0.6.0
+
+## [0.7.0] - 2019-08-07
 ### Added
 - `placementPolicy` parameter to control where volumes are physically placed
   on storage with the following (case sensitive!) options:<!-- Needs Docs -->
