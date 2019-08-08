@@ -1,4 +1,4 @@
-FROM ubuntu
+FROM debian:buster
 RUN apt-get update -y && apt-get dist-upgrade -y && apt-get install curl gcc xfsprogs git -y
 RUN curl -O https://storage.googleapis.com/golang/go1.12.5.linux-amd64.tar.gz
 RUN tar -C /usr/local/ -xvf go1.12.5.linux-amd64.tar.gz

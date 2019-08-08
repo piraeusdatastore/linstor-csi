@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strings"
 
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/LINBIT/linstor-csi/pkg/linstor"
@@ -786,12 +787,35 @@ func (s *Linstor) GetAssignmentOnNode(ctx context.Context, vol *volume.Info, nod
 // Filesystems are formatted and block devics are bind mounted.
 // Operates locally on the machines where it is called.
 func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options []string) error {
+	params, err := volume.NewParameters(vol.Parameters)
+	if err != nil {
+		return fmt.Errorf("mounting volume failed: %v", err)
+	}
+
+	// Override default CSI fsType with the one passed in the StorageClass
+	if params.FS != "" {
+		fsType = params.FS
+	}
+	// If there is no fsType, then this is a block mode volume.
+	var block bool
+	if fsType == "" {
+		block = true
+	}
+
+	// Merge mount options from Storage Classes and CSI calls.
+	options = append(options, params.MountOpts)
+
 	s.log.WithFields(logrus.Fields{
-		"volume": fmt.Sprintf("%+v", vol),
-		"source": source,
-		"target": target,
+		"volume":          fmt.Sprintf("%+v", vol),
+		"source":          source,
+		"target":          target,
+		"options":         options,
+		"filesystem":      fsType,
+		"blockAccessMode": block,
 	}).Info("mounting volume")
 
+	// Determine if we have exclusive access to the device. This is mostly
+	// a way to determine if a disklessly attached device's connection is down.
 	inUse, err := s.mounter.DeviceOpened(source)
 	if err != nil {
 		return fmt.Errorf("checking for exclusive open failed: %v", err)
@@ -800,28 +824,15 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 		return fmt.Errorf("unable to get an exclusive open on %s, check device health", source)
 	}
 
-	var block bool
-	if fsType == "" {
-		block = true
-	}
-
+	// This is a regular filesystem so format the device and create the mountpoint.
 	if !block {
-		params, err := volume.NewParameters(vol.Parameters)
-		if err != nil {
+		if err := s.formatDevice(vol, source, fsType); err != nil {
 			return fmt.Errorf("mounting volume failed: %v", err)
 		}
-		// Merge mount options from Storage Classes and CSI calls.
-		options = append(options, params.MountOpts)
-		// and if an fsType is supplied by the parameters, override the one passed
-		// to the Mount Call.
-		if params.FS != "" {
-			fsType = params.FS
-		}
-
 		if err := s.mounter.MakeDir(target); err != nil {
 			return fmt.Errorf("could not create target directory %s, %v", target, err)
 		}
-
+		// This is a block volume so create a file to bindmount to.
 	} else {
 		err := s.mounter.MakeFile(target)
 		if err != nil {
@@ -841,7 +852,59 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 	if block {
 		return s.mounter.Mount(source, target, fsType, options)
 	}
+
 	return s.mounter.FormatAndMount(source, target, fsType, options)
+}
+
+func (s *Linstor) formatDevice(vol *volume.Info, source, fsType string) error {
+	// Format device with Storage Class's filesystem options.
+	deviceFS, err := s.mounter.GetDiskFormat(source)
+	if err != nil {
+		return fmt.Errorf("unable to determine filesystem type of %s: %v", source, err)
+	}
+
+	// Device is formatted correctly already.
+	if deviceFS == fsType {
+		s.log.WithFields(logrus.Fields{
+			"deviceFS":    deviceFS,
+			"requestedFS": fsType,
+			"device":      source,
+		}).Debug("device already formatted with requested filesystem")
+		return nil
+	}
+
+	if deviceFS != "" && deviceFS != fsType {
+		return fmt.Errorf("device %q already formatted with %q filesystem, refusing to overwrite with %q filesystem", source, deviceFS, fsType)
+	}
+
+	params, err := volume.NewParameters(vol.Parameters)
+	if err != nil {
+		return fmt.Errorf("formatting device failed: %v", err)
+	}
+
+	args := mkfsArgs(params.FSOpts, source)
+	cmd := "mkfs." + fsType
+
+	s.log.WithFields(logrus.Fields{
+		"command": cmd,
+		"args":    args,
+	}).Debug("creating filesystem")
+
+	out, err := s.mounter.Exec.Run(cmd, args...)
+	if err != nil {
+		return fmt.Errorf("couldn't create %s filesystem on %s: %v: %q", fsType, source, err, out)
+	}
+
+	return nil
+}
+
+// Build mkfs args in the form [opt1, opt2, opt3..., source].
+func mkfsArgs(opts, source string) []string {
+	if opts == "" {
+		return []string{source}
+	}
+
+	return append(strings.Split(opts, " "), source)
 }
 
 //Unmount unmounts the target. Operates locally on the machines where it is called.
