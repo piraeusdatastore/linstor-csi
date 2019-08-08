@@ -18,7 +18,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 package client
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestAllocationSizeKiB(t *testing.T) {
 
@@ -123,4 +126,22 @@ func TestLinstorifyResourceName(t *testing.T) {
 		}
 	}
 
+}
+
+func TestMkfsArgs(t *testing.T) {
+	var tableTests = []struct {
+		opts, source string
+		expected     []string
+	}{
+		{"-K", "/dev/path", []string{"-K", "/dev/path"}},
+		{"", "/dev/path", []string{"/dev/path"}},
+	}
+
+	for _, tt := range tableTests {
+		actual := mkfsArgs(tt.opts, tt.source)
+		if !reflect.DeepEqual(tt.expected, actual) {
+			t.Errorf("Expected that mkfsArgs(%q, %q) results in\n\t%v\nbut got\n\t%v\n",
+				tt.opts, tt.source, tt.expected, actual)
+		}
+	}
 }
