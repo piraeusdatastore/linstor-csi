@@ -1,7 +1,14 @@
 FROM debian:buster
-RUN apt-get update -y && apt-get dist-upgrade -y && apt-get install curl gcc xfsprogs git -y
-RUN curl -O https://storage.googleapis.com/golang/go1.12.5.linux-amd64.tar.gz
-RUN tar -C /usr/local/ -xvf go1.12.5.linux-amd64.tar.gz
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates=20190110 \
+      curl=7.64.0-4 \
+      gcc=4:8.3.0-1 \
+      git=1:2.20.1-2 \
+      libc6-dev=2.28-10 \
+      xfsprogs=4.20.0-1 \
+      && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN curl -O https://storage.googleapis.com/golang/go1.12.7.linux-amd64.tar.gz
+RUN tar -C /usr/local/ -xvf go1.12.7.linux-amd64.tar.gz
 RUN mkdir -p /LINBIT/linstor-csi/
 ADD . /LINBIT/linstor-csi/
 ADD ./vendor/github.com/LINBIT/golinstor /LINBIT/golinstor/
