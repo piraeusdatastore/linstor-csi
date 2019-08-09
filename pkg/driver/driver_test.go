@@ -1,9 +1,11 @@
 package driver
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
 	"testing"
@@ -17,14 +19,15 @@ import (
 )
 
 var (
-	lsEndpoint   = flag.String("linstor-endpoint", "", "Run suite against a real LINSTOR cluster with the specificed controller API endpoint")
-	node         = flag.String("node", "fake.node", "Node ID to pass to tests, if you're running against a real LINSTOR cluster this needs to match the name of one of the real satellites")
-	paramsFile   = flag.String("parameter-file", "", "File containing paramemers to pass to storage backend during testsing")
-	csiEndpoint  = flag.String("csi-endpoint", "unix:///tmp/csi.sock", "Unix socket for CSI communication")
-	mountForReal = flag.Bool("mount-for-real", false, "Actually try to mount volumes, needs to be ran on on a kubelet (indicted by the node flag) with it's /dev dir bind mounted into the container")
-	logLevel     = flag.String("log-level", "debug", "how much logging to do")
-	rps          = flag.Float64("linstor-api-requests-per-second", 0, "Maximum allowed number of LINSTOR API requests per second. Default: Unlimited")
-	burst        = flag.Int("linstor-api-burst", 1, "Maximum number of API requests allowed before being limited by requests-per-second. Default: 1 (no bursting)")
+	lsEndpoint            = flag.String("linstor-endpoint", "", "Run suite against a real LINSTOR cluster with the specificed controller API endpoint")
+	lsSkipTLSVerification = flag.Bool("linstor-skip-tls-verification", false, "If true, do not verify tls")
+	node                  = flag.String("node", "fake.node", "Node ID to pass to tests, if you're running against a real LINSTOR cluster this needs to match the name of one of the real satellites")
+	paramsFile            = flag.String("parameter-file", "", "File containing paramemers to pass to storage backend during testsing")
+	csiEndpoint           = flag.String("csi-endpoint", "unix:///tmp/csi.sock", "Unix socket for CSI communication")
+	mountForReal          = flag.Bool("mount-for-real", false, "Actually try to mount volumes, needs to be ran on on a kubelet (indicted by the node flag) with it's /dev dir bind mounted into the container")
+	logLevel              = flag.String("log-level", "debug", "how much logging to do")
+	rps                   = flag.Float64("linstor-api-requests-per-second", 0, "Maximum allowed number of LINSTOR API requests per second. Default: Unlimited")
+	burst                 = flag.Int("linstor-api-burst", 1, "Maximum number of API requests allowed before being limited by requests-per-second. Default: 1 (no bursting)")
 )
 
 func TestDriver(t *testing.T) {
@@ -57,6 +60,8 @@ func TestDriver(t *testing.T) {
 		}
 		c, err := lc.NewHighLevelClient(
 			lapi.BaseURL(u),
+			lapi.BasicAuth(&lapi.BasicAuthCfg{Username: os.Getenv("LS_USERNAME"), Password: os.Getenv("LS_PASSWORD")}),
+			lapi.HTTPClient(&http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: *lsSkipTLSVerification}}}),
 			lapi.Limit(r, *burst),
 			lapi.Log(&lapi.LogCfg{Level: *logLevel, Out: logFile, Formatter: &logrus.TextFormatter{}}),
 		)

@@ -140,8 +140,10 @@ func (rd *ResourceDefinitionLayer) UnmarshalJSON(b []byte) error {
 	switch rd.Type {
 	case DRBD:
 		dst := new(DrbdResourceDefinitionLayer)
-		if err := json.Unmarshal(rdIn.Data, &dst); err != nil {
-			return err
+		if rdIn.Data != nil {
+			if err := json.Unmarshal(rdIn.Data, &dst); err != nil {
+				return err
+			}
 		}
 		rd.Data = dst
 	case LUKS, STORAGE, NVME: // valid types, but do not set data
@@ -177,8 +179,10 @@ func (vd *VolumeDefinitionLayer) UnmarshalJSON(b []byte) error {
 	switch vd.Type {
 	case DRBD:
 		dst := new(DrbdVolumeDefinition)
-		if err := json.Unmarshal(vdIn.Data, &dst); err != nil {
-			return err
+		if vdIn.Data != nil {
+			if err := json.Unmarshal(vdIn.Data, &dst); err != nil {
+				return err
+			}
 		}
 		vd.Data = dst
 	case LUKS, STORAGE, NVME: // valid types, but do not set data
