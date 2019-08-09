@@ -49,6 +49,8 @@ type NetInterface struct {
 	Address                 string `json:"address"`
 	SatellitePort           int32  `json:"satellite_port,omitempty"`
 	SatelliteEncryptionType string `json:"satellite_encryption_type,omitempty"`
+	// Defines if this netinterface should be used for the satellite connection
+	IsActive bool `json:"is_active,omitempty"`
 	// unique object id
 	Uuid string `json:"uuid,omitempty"`
 }

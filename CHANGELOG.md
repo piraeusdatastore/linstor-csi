@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] - 2019-08-09
+### Added
+- `linstor-skip-tls-verification` argument for csi-plugin. Set to `"true"` to
+  disable tls verification<!-- Needs Docs -->
+- csi-plugin will read `LS_USERNAME` and `LS_PASSWORD` environment variables for
+  https auth credentials<!-- Needs Docs -->
+### Changed
+- Upgrade to golinstor v0.16.1 from v0.16.2
+
 ## [0.7.1] - 2019-08-08
 ### Changed
 - better logging for Mount calls.
@@ -17,8 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.7.0] - 2019-08-07
 ### Added
 - `placementPolicy` parameter to control where volumes are physically placed
-  on storage with the following (case sensitive!) options:<!-- Needs Docs -->
-  - `AutoPlace` uses LINSTOR autoplace<!-- Needs Docs -->
+on storage with the following (case sensitive!) options:<!-- Needs Docs -->
+- `AutoPlace` uses LINSTOR autoplace<!-- Needs Docs -->
   - `Manual` uses `clientList` and `nodeList`<!-- Needs Docs -->
   - `FollowTopology` attempts to provision volumes according to volume
   topology preferences `placementCount` number of times.<!-- Needs Docs -->

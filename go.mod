@@ -3,8 +3,9 @@ module github.com/LINBIT/linstor-csi
 go 1.12
 
 require (
-	github.com/LINBIT/golinstor v0.16.1
+	github.com/LINBIT/golinstor v0.16.2
 	github.com/container-storage-interface/spec v0.3.0
+	github.com/container-storage-interface/spec v1.1.0
 	github.com/golang/protobuf v1.3.1
 	github.com/haySwim/data v0.2.0
 	github.com/kubernetes-csi/csi-test v0.3.0-1

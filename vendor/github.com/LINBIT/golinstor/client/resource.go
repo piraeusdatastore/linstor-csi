@@ -97,6 +97,8 @@ type DrbdVolume struct {
 	UsableSizeKib    int64  `json:"usable_size_kib,omitempty"`
 	// String describing current volume state
 	DiskState string `json:"disk_state,omitempty"`
+	// Storage pool name used for external meta data; null for internal
+	ExtMetaStorPool string `json:"ext_meta_stor_pool,omitempty"`
 }
 
 // LuksResource is a struct to store storage-volumes for a luks-resource
@@ -267,26 +269,34 @@ func (v *VolumeLayer) UnmarshalJSON(b []byte) error {
 	switch v.Type {
 	case DRBD:
 		dst := new(DrbdVolume)
-		if err := json.Unmarshal(vIn.Data, &dst); err != nil {
-			return err
+		if vIn.Data != nil {
+			if err := json.Unmarshal(vIn.Data, &dst); err != nil {
+				return err
+			}
 		}
 		v.Data = dst
 	case LUKS:
 		dst := new(LuksVolume)
-		if err := json.Unmarshal(vIn.Data, &dst); err != nil {
-			return err
+		if vIn.Data != nil {
+			if err := json.Unmarshal(vIn.Data, &dst); err != nil {
+				return err
+			}
 		}
 		v.Data = dst
 	case STORAGE:
 		dst := new(StorageVolume)
-		if err := json.Unmarshal(vIn.Data, &dst); err != nil {
-			return err
+		if vIn.Data != nil {
+			if err := json.Unmarshal(vIn.Data, &dst); err != nil {
+				return err
+			}
 		}
 		v.Data = dst
 	case NVME:
 		dst := new(NvmeVolume)
-		if err := json.Unmarshal(vIn.Data, &dst); err != nil {
-			return err
+		if vIn.Data != nil {
+			if err := json.Unmarshal(vIn.Data, &dst); err != nil {
+				return err
+			}
 		}
 		v.Data = dst
 	default:

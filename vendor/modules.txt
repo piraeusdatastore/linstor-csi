@@ -1,4 +1,4 @@
-# github.com/LINBIT/golinstor v0.16.1
+# github.com/LINBIT/golinstor v0.16.2
 github.com/LINBIT/golinstor/client
 github.com/LINBIT/golinstor
 # github.com/container-storage-interface/spec v0.3.0
