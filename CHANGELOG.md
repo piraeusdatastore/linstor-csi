@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `placementPolicy` parameter to control where volumes are physically placed
 on storage with the following (case sensitive!) options:<!-- Needs Docs -->
-- `AutoPlace` uses LINSTOR autoplace<!-- Needs Docs -->
+  - `AutoPlace` uses LINSTOR autoplace<!-- Needs Docs -->
   - `Manual` uses `clientList` and `nodeList`<!-- Needs Docs -->
   - `FollowTopology` attempts to provision volumes according to volume
   topology preferences `placementCount` number of times.<!-- Needs Docs -->
