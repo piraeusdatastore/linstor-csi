@@ -34,7 +34,8 @@ const (
 	// FollowTopology place volumes local to topology preferences, in order
 	// of those preferences.
 	FollowTopology
-	// Balanced TODO: write up description.
+	// BalancedTopology places remote volumes in the same zone(Rack)
+	// and pick Node, StoragePool, PrefNic based on utilization
 	Balanced
 )
 

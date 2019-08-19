@@ -34,6 +34,7 @@ import (
 	"github.com/LINBIT/linstor-csi/pkg/topology"
 	"github.com/LINBIT/linstor-csi/pkg/topology/scheduler"
 	"github.com/LINBIT/linstor-csi/pkg/topology/scheduler/autoplace"
+	"github.com/LINBIT/linstor-csi/pkg/topology/scheduler/balancer"
 	"github.com/LINBIT/linstor-csi/pkg/topology/scheduler/followtopology"
 	"github.com/LINBIT/linstor-csi/pkg/topology/scheduler/manual"
 	"github.com/LINBIT/linstor-csi/pkg/volume"
@@ -339,6 +340,8 @@ func (s *Linstor) schedulerByPlacementPolicy(vol *volume.Info) (scheduler.Interf
 		return manual.NewScheduler(s.client), nil
 	case topology.FollowTopology:
 		return followtopology.NewScheduler(s.client, s.log), nil
+	case topology.Balanced:
+		return balancer.NewScheduler(s.client, s.log)
 	default:
 		return nil, fmt.Errorf("unsupported volume scheduler: %s", params.PlacementPolicy)
 	}
