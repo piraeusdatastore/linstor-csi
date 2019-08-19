@@ -26,7 +26,7 @@ import (
 	"github.com/LINBIT/linstor-csi/pkg/linstor/util"
 	"github.com/LINBIT/linstor-csi/pkg/topology"
 	"github.com/LINBIT/linstor-csi/pkg/volume"
-	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/container-storage-interface/spec/lib/go/csi/v0"
 )
 
 // HighLevelClient is a golinstor client with convience functions.

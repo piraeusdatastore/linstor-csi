@@ -25,7 +25,7 @@ import (
 	lc "github.com/LINBIT/linstor-csi/pkg/linstor/highlevelclient"
 	"github.com/LINBIT/linstor-csi/pkg/topology"
 	"github.com/LINBIT/linstor-csi/pkg/volume"
-	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/container-storage-interface/spec/lib/go/csi/v0"
 	"github.com/sirupsen/logrus"
 )
 
