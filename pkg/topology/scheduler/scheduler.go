@@ -22,7 +22,7 @@ import (
 	"context"
 
 	"github.com/LINBIT/linstor-csi/pkg/volume"
-	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/container-storage-interface/spec/lib/go/csi/v0"
 )
 
 // Interface determines where to place volumes and where they are accessible from.
