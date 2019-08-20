@@ -333,6 +333,10 @@ func (b BalanceScheduler) Create(ctx context.Context, vol *volume.Info, req *csi
 		return fmt.Errorf("unable to create volume due to bad parameters %+v: %v", vol.Parameters, err)
 	}
 
+	if params.StoragePool != "" {
+		return fmt.Errorf("placementPolicyBalance does not support choosing StoragePool, it should be picked automatically")
+	}
+
 	if !params.AllowRemoteVolumeAccess {
 		return fmt.Errorf("placementPolicyBalance cannot work on on local storage")
 	}
