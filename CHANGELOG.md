@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- new  `placementPolicy`:
+  - `Balanced` provisions remote volumes in the same `failure-domain.beta.kubernetes.io/zone`, picks least utilized `StoragePool`, node and `PrefNic` calculated as `(total_capacity - free_capacity) / total_capacity`<!-- Needs Docs -->
 
 ## [0.7.2] - 2019-08-09
 ### Added
