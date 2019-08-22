@@ -819,12 +819,9 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 
 	// Determine if we have exclusive access to the device. This is mostly
 	// a way to determine if a disklessly attached device's connection is down.
-	inUse, err := s.mounter.DeviceOpened(source)
+	_, err = s.mounter.DeviceOpened(source)
 	if err != nil {
-		return fmt.Errorf("checking for exclusive open failed: %v", err)
-	}
-	if inUse {
-		return fmt.Errorf("unable to get an exclusive open on %s, check device health", source)
+		return fmt.Errorf("checking for exclusive open failed: %v, check device health", err)
 	}
 
 	// This is a regular filesystem so format the device and create the mountpoint.
