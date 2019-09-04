@@ -1,9 +1,24 @@
 ---
+apiVersion: storage.k8s.io/v1beta1
+kind: CSIDriver
+metadata:
+  name: linstor.csi.linbit.com
+spec:
+  attachRequired: true
+  podInfoOnMount: false
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: linstor-csi-priority-class
+value: 1000000
+globalDefault: false
+description: "Priority class for linstor-csi components"
+---
 kind: StatefulSet
 apiVersion: apps/v1beta1
 metadata:
   name: linstor-csi-controller
-  namespace: kube-system
 spec:
   serviceName: "linstor-csi"
   replicas: 1
@@ -13,17 +28,16 @@ spec:
         app: linstor-csi-controller
         role: linstor-csi
     spec:
-      priorityClassName: system-cluster-critical
+      priorityClassName: linstor-csi-priority-class
       serviceAccount: linstor-csi-controller-sa
-      hostNetwork: true
       containers:
         - name: csi-provisioner
-          image: quay.io/k8scsi/csi-provisioner:v1.2.0
+          image: quay.io/k8scsi/csi-provisioner:v1.3.0
           args:
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
             - "--feature-gates=Topology=true"
-            - "--timeout=120s"
+            - "--timeout=4m"
           env:
             - name: ADDRESS
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
@@ -32,11 +46,11 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-attacher
-          image: quay.io/k8scsi/csi-attacher:v1.1.1
+          image: quay.io/k8scsi/csi-attacher:v1.2.0
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
-            - "--timeout=120s"
+            - "--timeout=4m"
           env:
             - name: ADDRESS
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
@@ -45,10 +59,10 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-snapshotter
-          image: quay.io/k8scsi/csi-snapshotter:v1.1.0
+          image: quay.io/k8scsi/csi-snapshotter:v1.2.1
           args:
             - "--csi-address=$(ADDRESS)"
-            - "--timeout=120s"
+            - "--timeout=4m"
           env:
             - name: ADDRESS
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
@@ -56,20 +70,8 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
-        - name: csi-cluster-driver-registrar
-          image: quay.io/k8scsi/csi-cluster-driver-registrar:v1.0.1
-          args:
-            - "--v=5"
-            - "--pod-info-mount-version=\"v1\""
-            - "--csi-address=$(ADDRESS)"
-          env:
-            - name: ADDRESS
-              value: /var/lib/csi/sockets/pluginproxy/csi.sock
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: linstor-csi-plugin
-          image: quay.io/linbit/linstor-csi:v0.7.0
+          image: quay.io/linbit/linstor-csi:v0.7.2
           args:
             - "--csi-endpoint=$(CSI_ENDPOINT)"
             - "--node=$(KUBE_NODE_NAME)"
@@ -92,13 +94,10 @@ spec:
         - name: socket-dir
           emptyDir: {}
 ---
-
 kind: ServiceAccount
 apiVersion: v1
 metadata:
   name: linstor-csi-controller-sa
-  namespace: kube-system
-
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -117,6 +116,9 @@ rules:
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["csinodes"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["list", "watch", "create", "update", "patch"]
@@ -126,9 +128,10 @@ rules:
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshotcontents"]
     verbs: ["get", "list"]
-
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
 ---
-
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -136,12 +139,12 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: linstor-csi-controller-sa
-    namespace: kube-system
+    # You must change this to the current context
+    namespace: default
 roleRef:
   kind: ClusterRole
   name: linstor-csi-provisioner-role
   apiGroup: rbac.authorization.k8s.io
-
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -169,46 +172,17 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: linstor-csi-controller-sa
-    namespace: kube-system
+    # You must change this to the current context
+    namespace: default
 roleRef:
   kind: ClusterRole
   name: linstor-csi-attacher-role
   apiGroup: rbac.authorization.k8s.io
-
----
-
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: linstor-csi-cluster-driver-registrar-role
-rules:
-  - apiGroups: ["csi.storage.k8s.io"]
-    resources: ["csidrivers"]
-    verbs: ["create", "delete", "list"]
-  - apiGroups: ["apiextensions.k8s.io"]
-    resources: ["customresourcedefinitions"]
-    verbs: ["create", "delete"]
-
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: linstor-csi-cluster-driver-registrar-binding
-subjects:
-  - kind: ServiceAccount
-    name: linstor-csi-controller-sa
-    namespace: kube-system
-roleRef:
-  kind: ClusterRole
-  name: linstor-csi-cluster-driver-registrar-role
-  apiGroup: rbac.authorization.k8s.io
-
 ---
 kind: DaemonSet
 apiVersion: apps/v1beta2
 metadata:
   name: linstor-csi-node
-  namespace: kube-system
 spec:
   selector:
     matchLabels:
@@ -219,9 +193,8 @@ spec:
         app: linstor-csi-node
         role: linstor-csi
     spec:
-      priorityClassName: system-node-critical
+      priorityClassName: linstor-csi-priority-class
       serviceAccount: linstor-csi-node-sa
-      hostNetwork: true
       containers:
         - name: csi-node-driver-registrar
           image: quay.io/k8scsi/csi-node-driver-registrar:v1.1.0
@@ -242,13 +215,18 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["SYS_ADMIN"]
+            allowPrivilegeEscalation: true
           volumeMounts:
             - name: plugin-dir
               mountPath: /csi/
             - name: registration-dir
               mountPath: /registration/
         - name: linstor-csi-plugin
-          image: quay.io/linbit/linstor-csi:v0.7.0
+          image: quay.io/linbit/linstor-csi:v0.7.2
           args:
             - "--csi-endpoint=$(CSI_ENDPOINT)"
             - "--node=$(KUBE_NODE_NAME)"
@@ -294,27 +272,20 @@ spec:
           hostPath:
             path: /dev
 ---
-
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: linstor-csi-node-sa
-  namespace: kube-system
-
 ---
-
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: linstor-csi-driver-registrar-role
-  namespace: kube-system
 rules:
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
-
 ---
-
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -322,14 +293,13 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: linstor-csi-node-sa
-    namespace: kube-system
+    # You must change this to the current context
+    namespace: default
 roleRef:
   kind: ClusterRole
   name: linstor-csi-driver-registrar-role
   apiGroup: rbac.authorization.k8s.io
-
 ---
-
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -362,9 +332,7 @@ rules:
   - apiGroups: ["apiextensions.k8s.io"]
     resources: ["customresourcedefinitions"]
     verbs: ["create", "list", "watch", "delete"]
-
 ---
-
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -372,7 +340,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: linstor-csi-controller-sa
-    namespace: kube-system
+    namespace: default
 roleRef:
   kind: ClusterRole
   name: linstor-csi-snapshotter-role
