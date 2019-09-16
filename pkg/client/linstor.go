@@ -817,6 +817,15 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 		"blockAccessMode": block,
 	}).Info("mounting volume")
 
+	// Check if the path is a device
+	isDevice, err := s.mounter.PathIsDevice(source)
+	if err != nil {
+		return fmt.Errorf("checking device path failed: %v", err)
+	}
+	if !isDevice {
+		return fmt.Errorf("%s does not appear to be a block device", source)
+	}
+
 	// Determine if we have exclusive access to the device. This is mostly
 	// a way to determine if a disklessly attached device's connection is down.
 	_, err = s.mounter.DeviceOpened(source)
