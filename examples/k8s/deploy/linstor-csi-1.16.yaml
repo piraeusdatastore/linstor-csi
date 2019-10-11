@@ -7,6 +7,10 @@ metadata:
 spec:
   serviceName: "linstor-csi"
   replicas: 1
+  selector:
+    matchLabels:
+      app: linstor-csi-controller
+      role: linstor-csi
   template:
     metadata:
       labels:
@@ -213,6 +217,7 @@ spec:
   selector:
     matchLabels:
       app: linstor-csi-node
+      role: linstor-csi
   template:
     metadata:
       labels:
