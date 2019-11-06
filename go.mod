@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/LINBIT/golinstor v0.16.2
+	github.com/alvaroloes/enumer v1.1.2 // indirect
 	github.com/container-storage-interface/spec v1.1.0
 	github.com/evanphx/json-patch v4.5.0+incompatible // indirect
 	github.com/golang/protobuf v1.3.1

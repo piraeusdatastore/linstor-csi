@@ -26,6 +26,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -263,7 +264,6 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		if req.GetReadonly() {
 			mntOpts = append(mntOpts, "ro")
 		}
-
 	}
 
 	// Retrieve device path from storage backend.
@@ -271,6 +271,7 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
 	}
+
 	assignment, err := d.Assignments.GetAssignmentOnNode(ctx, existingVolume, d.nodeID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
@@ -279,6 +280,28 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 	err = d.Mounter.Mount(existingVolume, assignment.Path, req.GetTargetPath(), fsType, mntOpts)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
+	}
+
+	// Runs post-mount xfs_io if XFS_IO_PARAM is configured
+	if fsType == "xfs" {
+
+		xfsIoParam := os.Getenv("XFS_IO_PARAM")
+
+		if xfsIoParam != "" {
+
+			d.log.WithFields(logrus.Fields{
+				"XFS_IO":     xfsIoParam,
+				"FSType":     fsType,
+				"targetPath": req.GetTargetPath(),
+			}).Debug("Post-mount XXXFS_io")
+
+			// xfs_io -c "extsize 2m" /mnt/dax
+			command := exec.Command("xfs_io", "-c", xfsIoParam, req.GetTargetPath())
+			_, err := command.CombinedOutput()
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
+			}
+		}
 	}
 
 	return &csi.NodePublishVolumeResponse{}, nil
@@ -728,7 +751,7 @@ func (d Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotReque
 func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
 	var snapshots = make([]*volume.SnapInfo, 0)
 
-	// Handle case where a single snapshot is requsted.
+	// Handle case where a single snapshot is requested.
 	switch {
 	case req.GetSnapshotId() != "":
 		snap, err := d.Snapshots.GetSnapByID(ctx, req.GetSnapshotId())
