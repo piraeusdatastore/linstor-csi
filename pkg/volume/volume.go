@@ -69,6 +69,7 @@ const (
 	replicasonsame
 	sizekib
 	storagepool
+	postmountopts
 )
 
 // Parameters configuration for linstor volumes.
@@ -80,15 +81,15 @@ type Parameters struct {
 	// at the time that the volume is first created. Specifying this overrides any
 	// other automatic placement rules.
 	NodeList []string
-	// ReplicasOnDifferent is a list that corresonds to the `linstor resource create`
+	// ReplicasOnDifferent is a list that corresponds to the `linstor resource create`
 	// option of the same name.
 	ReplicasOnDifferent []string
-	// ReplicasOnSame is a list that corresonds to the `linstor resource create`
+	// ReplicasOnSame is a list that corresponds to the `linstor resource create`
 	// option of the same name.
 	ReplicasOnSame []string
 	// DisklessStoragePool is the diskless storage pool to use for diskless assignments.
 	DisklessStoragePool string
-	// DoNotPlaceWithRegex corresonds to the `linstor resource create`
+	// DoNotPlaceWithRegex corresponds to the `linstor resource create`
 	// option of the same name.
 	DoNotPlaceWithRegex string
 	// FS is the filesystem type: ext4, xfs, and so on.
@@ -103,25 +104,27 @@ type Parameters struct {
 	SizeKiB     uint64
 	// PlacementCount is the number of replicas of the volume in total.
 	PlacementCount int32
-	// Disklessonremaining corresonds to the `linstor resource create`
+	// Disklessonremaining corresponds to the `linstor resource create`
 	// option of the same name.
 	Disklessonremaining bool
 	// Encrypt volumes if true.
 	Encryption bool
 	// AllowRemoteVolumeAccess if true, volumes may be accessed over the network.
 	AllowRemoteVolumeAccess bool
-	// LayerList is a list that corresonds to the `linstor resource create`
+	// LayerList is a list that corresponds to the `linstor resource create`
 	// option of the same name.
 	LayerList []lapi.LayerType
 	// PlacementPolicy determines where volumes are created.
 	PlacementPolicy topology.PlacementPolicy
+	// PostMountOpts is an optional string of post-mount call
+	PostMountOpts string
 }
 
 // DefaultDisklessStoragePoolName is the hidden diskless storage pool that linstor
 // assigned diskless volumes to if they're not given a user created DisklessStoragePool.
 const DefaultDisklessStoragePoolName = "DfltDisklessStorPool"
 
-// NewParameters parses out the raw parameters we get and sets appropreate
+// NewParameters parses out the raw parameters we get and sets appropriate
 // zero values
 func NewParameters(params map[string]string) (Parameters, error) {
 	// set zero values
@@ -209,6 +212,8 @@ func NewParameters(params map[string]string) (Parameters, error) {
 			p.MountOpts = v
 		case fsopts:
 			p.FSOpts = v
+		case postmountopts:
+			p.PostMountOpts = v
 		}
 	}
 

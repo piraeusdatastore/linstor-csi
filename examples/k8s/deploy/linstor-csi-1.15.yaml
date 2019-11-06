@@ -340,6 +340,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: linstor-csi-controller-sa
+    # You must change this to the current context
     namespace: default
 roleRef:
   kind: ClusterRole
