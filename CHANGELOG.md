@@ -6,7 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- XFS_IO_PARAM env variable can specify the parameter for an xfs_io called after mounting an XFS volume
+- postMountXfsOpts parameter in a storageclass spec can specify the parameter for an xfs_io called
+  after mounting an XFS volume
 - new  `placementPolicy`:
   - `Balanced` provisions remote volumes in the same `failure-domain.beta.kubernetes.io/zone`, picks least utilized `StoragePool`, node and `PrefNic` calculated as `(total_capacity - free_capacity) / total_capacity`<!-- Needs Docs -->
 

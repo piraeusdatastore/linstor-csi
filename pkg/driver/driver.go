@@ -282,10 +282,10 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
 	}
 
-	// Runs post-mount xfs_io if XFS_IO_PARAM is configured
+	// Runs post-mount xfs_io if PostMountXfsOpts is configured
 	if fsType == "xfs" {
 
-		xfsIoParam := os.Getenv("XFS_IO_PARAM")
+		xfsIoParam := existingVolume.Parameters["PostMountXfsOpts"]
 
 		if xfsIoParam != "" {
 
