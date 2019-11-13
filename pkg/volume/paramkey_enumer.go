@@ -7,9 +7,9 @@ import (
 	"fmt"
 )
 
-const _paramKeyName = "unknownallowremotevolumeaccessautoplaceclientlistdisklessonremainingdisklessstoragepooldonotplacewithregexencryptionfsfsoptslayerlistmountoptsnodelistplacementcountplacementpolicyreplicasondifferentreplicasonsamesizekibstoragepoolpostmountopts"
+const _paramKeyName = "unknownallowremotevolumeaccessautoplaceclientlistdisklessonremainingdisklessstoragepooldonotplacewithregexencryptionfsfsoptslayerlistmountoptsnodelistplacementcountplacementpolicyreplicasondifferentreplicasonsamesizekibstoragepoolpostmountxfsopts"
 
-var _paramKeyIndex = [...]uint8{0, 7, 30, 39, 49, 68, 87, 106, 116, 118, 124, 133, 142, 150, 164, 179, 198, 212, 219, 230, 243}
+var _paramKeyIndex = [...]uint8{0, 7, 30, 39, 49, 68, 87, 106, 116, 118, 124, 133, 142, 150, 164, 179, 198, 212, 219, 230, 246}
 
 func (i paramKey) String() string {
 	if i < 0 || i >= paramKey(len(_paramKeyIndex)-1) {
@@ -40,7 +40,7 @@ var _paramKeyNameToValueMap = map[string]paramKey{
 	_paramKeyName[198:212]: 16,
 	_paramKeyName[212:219]: 17,
 	_paramKeyName[219:230]: 18,
-	_paramKeyName[230:243]: 19,
+	_paramKeyName[230:246]: 19,
 }
 
 // paramKeyString retrieves an enum value from the enum constants string name.
