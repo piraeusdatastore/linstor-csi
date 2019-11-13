@@ -69,7 +69,7 @@ const (
 	replicasonsame
 	sizekib
 	storagepool
-	postmountopts
+	postmountxfsopts
 )
 
 // Parameters configuration for linstor volumes.
@@ -116,8 +116,8 @@ type Parameters struct {
 	LayerList []lapi.LayerType
 	// PlacementPolicy determines where volumes are created.
 	PlacementPolicy topology.PlacementPolicy
-	// PostMountOpts is an optional string of post-mount call
-	PostMountOpts string
+	// PostMountXfsOpts is an optional string of post-mount call
+	PostMountXfsOpts string
 }
 
 // DefaultDisklessStoragePoolName is the hidden diskless storage pool that linstor
@@ -212,8 +212,8 @@ func NewParameters(params map[string]string) (Parameters, error) {
 			p.MountOpts = v
 		case fsopts:
 			p.FSOpts = v
-		case postmountopts:
-			p.PostMountOpts = v
+		case postmountxfsopts:
+			p.PostMountXfsOpts = v
 		}
 	}
 
