@@ -51,6 +51,7 @@ type Driver struct {
 	Assignments volume.AttacherDettacher
 	Mounter     volume.Mounter
 	Snapshots   volume.SnapshotCreateDeleter
+	Expand      volume.Expand
 	srv         *grpc.Server
 	log         *logrus.Entry
 	version     string
@@ -76,6 +77,7 @@ func NewDriver(options ...func(*Driver) error) (*Driver, error) {
 		Assignments: mockStorage,
 		Mounter:     mockStorage,
 		Snapshots:   mockStorage,
+		Expand:      mockStorage,
 		log:         logrus.NewEntry(logrus.New()),
 	}
 
@@ -107,6 +109,13 @@ func NewDriver(options ...func(*Driver) error) (*Driver, error) {
 func Storage(s volume.CreateDeleter) func(*Driver) error {
 	return func(d *Driver) error {
 		d.Storage = s
+		return nil
+	}
+}
+
+func Expand(s volume.Expand) func(*Driver) error {
+	return func(d *Driver) error {
+		d.Expand = s
 		return nil
 	}
 }
@@ -309,7 +318,12 @@ func (d Driver) NodeGetVolumeStats(context.Context, *csi.NodeGetVolumeStatsReque
 
 // NodeGetCapabilities https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#nodegetcapabilities
 func (d Driver) NodeGetCapabilities(context.Context, *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	return &csi.NodeGetCapabilitiesResponse{Capabilities: []*csi.NodeServiceCapability{}}, nil
+	return &csi.NodeGetCapabilitiesResponse{Capabilities: []*csi.NodeServiceCapability{
+		{Type: &csi.NodeServiceCapability_Rpc{
+			Rpc: &csi.NodeServiceCapability_RPC{
+				Type:csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
+			}}},
+	}}, nil
 }
 
 // NodeGetInfo https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#nodegetinfo
@@ -478,7 +492,7 @@ func (d Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Controll
 	vol, err := d.Storage.GetByID(ctx, req.VolumeId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
-			"ControllerUnpublishVolume failed for %s: %v", req.GetVolumeId(), err)
+			"ControllerUnpublishVolume failed for %s: %v",req.GetVolumeId(), err)
 	}
 	// If it's not there, it's as detached as we can make it, right?
 	if vol == nil {
@@ -656,6 +670,10 @@ func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Controll
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_PUBLISH_READONLY,
 				}}},
+			{Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
+				}}},
 		},
 	}, nil
 }
@@ -795,13 +813,83 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 }
 
 // NodeExpandVolume https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#nodeexpandvolume
-func (d Driver) NodeExpandVolume(context.Context, *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "")
+func (d Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
+	d.log.WithFields(logrus.Fields{
+		"NodeExpandVolume": fmt.Sprintf("%+v", req),
+	}).Debug("Node expand volume")
+
+	if req.GetVolumeId() == "" {
+		return nil, missingAttr("NodeExpandVolume", req.GetVolumeId(), "VolumeId")
+	}
+
+	if req.GetVolumePath() == "" {
+		return nil, missingAttr("NodeExpandVolume", req.GetVolumeId(), "TargetPath")
+	}
+
+	// Retrieve device path from storage backend.
+	existingVolume, err := d.Storage.GetByID(ctx, req.GetVolumeId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "NodeExpandVolume - get resource-definitions %s failed: %v", req.GetVolumeId(), err)
+	}
+	if existingVolume == nil {
+		// Volume doesn't exist, and that's the point of this call after all.
+		return nil, status.Errorf(codes.Internal,
+			"NodeExpandVolume - resource-definitions %s not found", req.GetVolumeId())
+	}
+
+	assignment, err := d.Assignments.GetAssignmentOnNode(ctx, existingVolume, d.nodeID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "NodeExpandVolume - get assignment failed for volume %s node: %s: %v", req.GetVolumeId(), d.nodeID, err)
+	}
+
+	err = d.Expand.NodeExpand(assignment.Path, req.GetVolumePath())
+	if err!= nil {
+		return nil, status.Errorf(codes.Internal, "NodeExpandVolume - expand volume fail source %s target %s, err: %v.",
+			assignment.Path, req.GetVolumePath(), err)
+	}
+
+	return  &csi.NodeExpandVolumeResponse{}, nil
 }
 
 // ControllerExpandVolume https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#controllerexpandvolume
-func (d Driver) ControllerExpandVolume(context.Context, *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "")
+func (d Driver) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
+	if req.GetVolumeId() == "" {
+		return nil, missingAttr("ControllerExpandVolume", req.GetVolumeId(), "VolumeId")
+	}
+
+	existingVolume, err := d.Storage.GetByID(ctx, req.GetVolumeId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ControllerExpandVolume - get resource-definitions %s failed: %v", req.GetVolumeId(), err)
+	}
+	if existingVolume == nil {
+		// Volume doesn't exist, and that's the point of this call after all.
+		return nil, status.Errorf(codes.Internal,
+			"ControllerExpandVolume - resource-definitions %s not found", req.GetVolumeId())
+	}
+	d.log.WithFields(logrus.Fields{
+		"existingVolume": fmt.Sprintf("%+v", existingVolume),
+	}).Debug("found existing volume")
+
+	requiredKiB, err := d.Storage.AllocationSizeKiB(req.CapacityRange.GetRequiredBytes(), req.CapacityRange.GetLimitBytes())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ControllerExpandVolume - expand volume failed for volume id %s: %v", req.GetVolumeId(), err)
+	}
+	volumeSize := data.NewKibiByte(data.KiB * data.ByteSize(requiredKiB))
+	existingVolume.SizeBytes = int64(volumeSize.InclusiveBytes())
+
+	d.log.WithFields(logrus.Fields{
+		"ControllerExpandVolume": fmt.Sprintf("%+v", req),
+		"Size":      volumeSize,
+	}).Debug("controller expand volume")
+
+	err = d.Expand.ControllerExpand(ctx, existingVolume)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal,
+			"ControllerExpandVolume - expand volume failed for %v: %v", existingVolume, err)
+	}
+
+	return &csi.ControllerExpandVolumeResponse{
+		CapacityBytes:existingVolume.SizeBytes, NodeExpansionRequired:true}, nil
 }
 
 // Run the server.

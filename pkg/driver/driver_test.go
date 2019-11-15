@@ -81,6 +81,7 @@ func TestDriver(t *testing.T) {
 		_ = Storage(realStorageBackend)(driver)
 		_ = Assignments(realStorageBackend)(driver)
 		_ = Snapshots(realStorageBackend)(driver)
+		_ = Expand(realStorageBackend)(driver)
 
 		if *mountForReal {
 			_ = Mounter(realStorageBackend)(driver)

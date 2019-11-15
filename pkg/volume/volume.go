@@ -452,3 +452,8 @@ type Mounter interface {
 	Mount(vol *Info, source, target, fsType string, options []string) error
 	Unmount(target string) error
 }
+
+type Expand interface {
+	NodeExpand(source, target string) error
+	ControllerExpand(ctx context.Context, vol *Info) error
+}

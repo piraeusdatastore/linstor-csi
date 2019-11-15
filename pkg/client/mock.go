@@ -208,3 +208,11 @@ func (s *MockStorage) Mount(vol *volume.Info, source, target, fsType string, opt
 func (s *MockStorage) Unmount(target string) error {
 	return nil
 }
+
+func (s *MockStorage) NodeExpand(source, target string) error {
+	return nil
+}
+
+func (s *MockStorage) ControllerExpand(ctx context.Context, vol *volume.Info) error {
+	return nil
+}

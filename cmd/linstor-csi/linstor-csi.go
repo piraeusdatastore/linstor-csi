@@ -93,6 +93,7 @@ func main() {
 		driver.NodeID(*node),
 		driver.Snapshots(linstorClient),
 		driver.Storage(linstorClient),
+		driver.Expand(linstorClient),
 	)
 	if err != nil {
 		log.Fatal(err)

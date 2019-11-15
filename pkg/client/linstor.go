@@ -26,6 +26,8 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"os/exec"
+	"log"
 
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/LINBIT/linstor-csi/pkg/linstor"
@@ -989,4 +991,129 @@ func nil404(e error) error {
 		return nil
 	}
 	return e
+}
+
+func (s *Linstor) NodeExpand(source, target string) error {
+	fstype, err := GetDiskFormat(source)
+	if err != nil || fstype == "" {
+		return fmt.Errorf("error checking format for device %s: %v", source, err)
+	}
+
+	s.log.WithFields(logrus.Fields{
+		"device": fmt.Sprintf("%s", source),
+		"fstype": fmt.Sprintf("%s", fstype),
+	}).Info("expanding mounted volume")
+
+	// TODO: current only support exts3 ext4 xfs fs format.
+	switch fstype {
+	case "ext3", "ext4":
+		_, err = extResize(target)
+	case "xfs":
+		_, err = xfsResize(target)
+	default:
+		return fmt.Errorf("volume %s format is %s, unsupported expand currently",
+			source, fstype)
+	}
+	if err != nil {
+		return fmt.Errorf("resize filesystem failed, device: %s, path: %s, err: %v", source, target, err)
+	}
+
+	return nil
+}
+
+func (s *Linstor) ControllerExpand(ctx context.Context, vol *volume.Info) error {
+	s.log.WithFields(logrus.Fields{
+		"volume": fmt.Sprintf("%+v", vol),
+	}).Info("controller expand volume")
+
+	volumeDefinitionModify := lapi.VolumeDefinitionModify{
+		SizeKib: uint64(data.NewKibiByte(data.ByteSize(vol.SizeBytes)).Value()),
+	}
+
+	volumeDefinitions, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, vol.ID)
+	if err != nil || len(volumeDefinitions) < 1 {
+		return fmt.Errorf("get volumeDefinitions failed volumeInfo: %v, err: %v", vol, err)
+	}
+
+	if volumeDefinitionModify.SizeKib == volumeDefinitions[0].SizeKib {
+		return nil
+	}
+
+	if volumeDefinitionModify.SizeKib < volumeDefinitions[0].SizeKib {
+		return fmt.Errorf("storage only support expand does not support reduce.volumeInfo: %v old: %d, new: %d", vol, volumeDefinitions[0].SizeKib, volumeDefinitionModify.SizeKib)
+	}
+
+	err = s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, vol.ID, int(volumeDefinitions[0].VolumeNumber), volumeDefinitionModify)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func GetDiskFormat(disk string) (string, error) {
+	args := []string{"-p", "-s", "TYPE", "-s", "PTTYPE", "-o", "export", disk}
+	log.Printf("attempting to determine if disk %q is formatted using blkid with args: (%v)", disk, args)
+	dataOut, err := exec.Command("blkid", args...).CombinedOutput()
+	output := string(dataOut)
+	log.Printf("output: %q, err: %v", output, err)
+
+	if err != nil {
+		logrus.Errorf("could not determine if disk %q is formatted (%v)", disk, err)
+		return "", err
+	}
+
+	var fstype, pttype string
+
+	lines := strings.Split(output, "\n")
+	for _, l := range lines {
+		if len(l) <= 0 {
+			// Ignore empty line.
+			continue
+		}
+		cs := strings.Split(l, "=")
+		if len(cs) != 2 {
+			return "", fmt.Errorf("blkid returns invalid output: %s", output)
+		}
+		// TYPE is filesystem type, and PTTYPE is partition table type, according
+		// to https://www.kernel.org/pub/linux/utils/util-linux/v2.21/libblkid-docs/.
+		if cs[0] == "TYPE" {
+			fstype = cs[1]
+		} else if cs[0] == "PTTYPE" {
+			pttype = cs[1]
+		}
+	}
+
+	if len(pttype) > 0 {
+		logrus.Errorf("disk %s detected partition table type: %s", disk, pttype)
+		// Returns a special non-empty string as filesystem type, then kubelet
+		// will not format it.
+		return "unknown data, probably partitions", nil
+	}
+
+	return fstype, nil
+}
+
+func extResize(devicePath string) (bool, error) {
+	output, err := exec.Command("resize2fs", devicePath).CombinedOutput()
+	if err == nil {
+		logrus.Errorf("device %s resized successfully", devicePath)
+		return true, nil
+	}
+
+	resizeError := fmt.Errorf("resize of device %s failed: %v. resize2fs output: %s", devicePath, err, string(output))
+	return false, resizeError
+}
+
+func xfsResize(deviceMountPath string) (bool, error) {
+	args := []string{"-d", deviceMountPath}
+	output, err := exec.Command("xfs_growfs", args...).CombinedOutput()
+
+	if err == nil {
+		logrus.Infof("device %s resized successfully", deviceMountPath)
+		return true, nil
+	}
+
+	resizeError := fmt.Errorf("resize of device %s failed: %v. xfs_growfs output: %s", deviceMountPath, err, string(output))
+	return false, resizeError
 }
