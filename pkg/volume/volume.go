@@ -58,7 +58,6 @@ const (
 	disklessstoragepool
 	donotplacewithregex
 	encryption
-	fs
 	fsopts
 	layerlist
 	mountopts
@@ -92,8 +91,6 @@ type Parameters struct {
 	// DoNotPlaceWithRegex corresponds to the `linstor resource create`
 	// option of the same name.
 	DoNotPlaceWithRegex string
-	// FS is the filesystem type: ext4, xfs, and so on.
-	FS string
 	// FSOpts is a string of filesystem options passed at mount time.
 	FSOpts string
 	// MountOpts is a string of mount options passed at mount time. Comma
@@ -200,8 +197,6 @@ func NewParameters(params map[string]string) (Parameters, error) {
 				return p, fmt.Errorf("bad parameters: unable to parse %q as an unsigned 64 bit integer", v)
 			}
 			p.SizeKiB = size
-		case fs:
-			p.FS = v
 		case placementpolicy:
 			policy, err := topology.PlacementPolicyString(v)
 			if err != nil {

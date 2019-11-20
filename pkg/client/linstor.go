@@ -789,7 +789,7 @@ func (s *Linstor) GetAssignmentOnNode(ctx context.Context, vol *volume.Info, nod
 }
 
 // Mount makes volumes consumable from the source to the target.
-// Filesystems are formatted and block devics are bind mounted.
+// Filesystems are formatted and block devices are bind mounted.
 // Operates locally on the machines where it is called.
 func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options []string) error {
 	params, err := volume.NewParameters(vol.Parameters)
@@ -797,10 +797,6 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 		return fmt.Errorf("mounting volume failed: %v", err)
 	}
 
-	// Override default CSI fsType with the one passed in the StorageClass
-	if params.FS != "" {
-		fsType = params.FS
-	}
 	// If there is no fsType, then this is a block mode volume.
 	var block bool
 	if fsType == "" {

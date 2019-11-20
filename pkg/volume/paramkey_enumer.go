@@ -7,9 +7,9 @@ import (
 	"fmt"
 )
 
-const _paramKeyName = "unknownallowremotevolumeaccessautoplaceclientlistdisklessonremainingdisklessstoragepooldonotplacewithregexencryptionfsfsoptslayerlistmountoptsnodelistplacementcountplacementpolicyreplicasondifferentreplicasonsamesizekibstoragepoolpostmountxfsopts"
+const _paramKeyName = "unknownallowremotevolumeaccessautoplaceclientlistdisklessonremainingdisklessstoragepooldonotplacewithregexencryptionfsoptslayerlistmountoptsnodelistplacementcountplacementpolicyreplicasondifferentreplicasonsamesizekibstoragepoolpostmountxfsopts"
 
-var _paramKeyIndex = [...]uint8{0, 7, 30, 39, 49, 68, 87, 106, 116, 118, 124, 133, 142, 150, 164, 179, 198, 212, 219, 230, 246}
+var _paramKeyIndex = [...]uint8{0, 7, 30, 39, 49, 68, 87, 106, 116, 122, 131, 140, 148, 162, 177, 196, 210, 217, 228, 244}
 
 func (i paramKey) String() string {
 	if i < 0 || i >= paramKey(len(_paramKeyIndex)-1) {
@@ -18,7 +18,7 @@ func (i paramKey) String() string {
 	return _paramKeyName[_paramKeyIndex[i]:_paramKeyIndex[i+1]]
 }
 
-var _paramKeyValues = []paramKey{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19}
+var _paramKeyValues = []paramKey{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}
 
 var _paramKeyNameToValueMap = map[string]paramKey{
 	_paramKeyName[0:7]:     0,
@@ -29,18 +29,17 @@ var _paramKeyNameToValueMap = map[string]paramKey{
 	_paramKeyName[68:87]:   5,
 	_paramKeyName[87:106]:  6,
 	_paramKeyName[106:116]: 7,
-	_paramKeyName[116:118]: 8,
-	_paramKeyName[118:124]: 9,
-	_paramKeyName[124:133]: 10,
-	_paramKeyName[133:142]: 11,
-	_paramKeyName[142:150]: 12,
-	_paramKeyName[150:164]: 13,
-	_paramKeyName[164:179]: 14,
-	_paramKeyName[179:198]: 15,
-	_paramKeyName[198:212]: 16,
-	_paramKeyName[212:219]: 17,
-	_paramKeyName[219:230]: 18,
-	_paramKeyName[230:246]: 19,
+	_paramKeyName[116:122]: 8,
+	_paramKeyName[122:131]: 9,
+	_paramKeyName[131:140]: 10,
+	_paramKeyName[140:148]: 11,
+	_paramKeyName[148:162]: 12,
+	_paramKeyName[162:177]: 13,
+	_paramKeyName[177:196]: 14,
+	_paramKeyName[196:210]: 15,
+	_paramKeyName[210:217]: 16,
+	_paramKeyName[217:228]: 17,
+	_paramKeyName[228:244]: 18,
 }
 
 // paramKeyString retrieves an enum value from the enum constants string name.
