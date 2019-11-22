@@ -69,6 +69,7 @@ const (
 	sizekib
 	storagepool
 	postmountxfsopts
+	fstype
 )
 
 // Parameters configuration for linstor volumes.
