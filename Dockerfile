@@ -1,4 +1,4 @@
-FROM golang:1.12.7 as builder
+FROM golang:1.13.5 as builder
 COPY . /usr/local/go/src/github.com/LINBIT/linstor-csi/
 # keep on single line:
 RUN cd /usr/local/go/src/github.com/LINBIT/linstor-csi && make staticrelease && mv ./linstor-csi-linux-amd64 / # !lbbuild
