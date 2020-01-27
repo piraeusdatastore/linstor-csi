@@ -44,6 +44,7 @@ import (
 	"github.com/pborman/uuid"
 	logrus "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sys/unix"
 	"k8s.io/kubernetes/pkg/util/mount"
 )
 
@@ -919,6 +920,11 @@ func mkfsArgs(opts, source string) []string {
 	return append(strings.Split(opts, " "), source)
 }
 
+// IsNotMountPoint determines if a directory is a mountpoint.
+func (s *Linstor) IsNotMountPoint(target string) (bool, error) {
+	return s.mounter.IsNotMountPoint(target)
+}
+
 //Unmount unmounts the target. Operates locally on the machines where it is called.
 func (s *Linstor) Unmount(target string) error {
 	s.log.WithFields(logrus.Fields{
@@ -992,4 +998,22 @@ func nil404(e error) error {
 		return nil
 	}
 	return e
+}
+
+// GetVolumeStats determines filesystem usage.
+func (s *Linstor) GetVolumeStats(path string) (volume.VolumeStats, error) {
+	var statfs unix.Statfs_t
+	err := unix.Statfs(path, &statfs)
+	if err != nil {
+		return volume.VolumeStats{}, err
+	}
+
+	return volume.VolumeStats{
+		AvailableBytes:  int64(statfs.Bavail) * int64(statfs.Bsize),
+		TotalBytes:      int64(statfs.Blocks) * int64(statfs.Bsize),
+		UsedBytes:       (int64(statfs.Blocks) - int64(statfs.Bfree)) * int64(statfs.Bsize),
+		AvailableInodes: int64(statfs.Ffree),
+		TotalInodes:     int64(statfs.Files),
+		UsedInodes:      int64(statfs.Files) - int64(statfs.Ffree),
+	}, nil
 }

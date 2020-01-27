@@ -205,6 +205,15 @@ func (s *MockStorage) CapacityBytes(ctx context.Context, params map[string]strin
 func (s *MockStorage) Mount(vol *volume.Info, source, target, fsType string, options []string) error {
 	return nil
 }
+
+func (s *MockStorage) IsNotMountPoint(target string) (bool, error) {
+	return true, nil
+}
+
 func (s *MockStorage) Unmount(target string) error {
 	return nil
+}
+
+func (s *MockStorage) GetVolumeStats(path string) (volume.VolumeStats, error) {
+	return volume.VolumeStats{}, nil
 }
