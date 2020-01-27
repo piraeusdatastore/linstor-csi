@@ -21,6 +21,8 @@ package client
 import (
 	"context"
 	"fmt"
+	"os"
+	"path"
 
 	"github.com/LINBIT/linstor-csi/pkg/volume"
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -203,15 +205,29 @@ func (s *MockStorage) CapacityBytes(ctx context.Context, params map[string]strin
 }
 
 func (s *MockStorage) Mount(vol *volume.Info, source, target, fsType string, options []string) error {
-	return nil
+	return os.MkdirAll(path.Join(target, "_mounted"), 0755)
 }
 
 func (s *MockStorage) IsNotMountPoint(target string) (bool, error) {
-	return true, nil
+	_, err := os.Stat(path.Join(target, "_mounted"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, err
+	}
+	return false, nil
 }
 
 func (s *MockStorage) Unmount(target string) error {
-	return nil
+	notMounted, err := s.IsNotMountPoint(target)
+	if err != nil {
+		return err
+	}
+	if notMounted {
+		return nil
+	}
+	return os.RemoveAll(target)
 }
 
 func (s *MockStorage) GetVolumeStats(path string) (volume.VolumeStats, error) {
