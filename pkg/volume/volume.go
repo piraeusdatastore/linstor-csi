@@ -464,8 +464,8 @@ type VolumeStats struct {
 	UsedInodes      int64
 }
 
-// Statter provides info about volume/filesystem usage.
-type Statter interface {
+// VolumeStatter provides info about volume/filesystem usage.
+type VolumeStatter interface {
 	// GetVolumeStats determines filesystem usage.
 	GetVolumeStats(path string) (VolumeStats, error)
 }

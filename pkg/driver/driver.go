@@ -48,14 +48,14 @@ var Version = "UNKNOWN"
 
 // Driver fullfils CSI controller, node, and indentity server interfaces.
 type Driver struct {
-	Storage     volume.CreateDeleter
-	Assignments volume.AttacherDettacher
-	Mounter     volume.Mounter
-	Snapshots   volume.SnapshotCreateDeleter
-	Statter     volume.Statter
-	srv         *grpc.Server
-	log         *logrus.Entry
-	version     string
+	Storage       volume.CreateDeleter
+	Assignments   volume.AttacherDettacher
+	Mounter       volume.Mounter
+	Snapshots     volume.SnapshotCreateDeleter
+	VolumeStatter volume.VolumeStatter
+	srv           *grpc.Server
+	log           *logrus.Entry
+	version       string
 	// name distingushes the driver from other drivers and is used to mark
 	// volumes so that volumes provisioned by another driver are not interfered with.
 	name string
@@ -71,15 +71,15 @@ func NewDriver(options ...func(*Driver) error) (*Driver, error) {
 	mockStorage := &client.MockStorage{}
 
 	d := &Driver{
-		name:        "linstor.csi.linbit.com",
-		version:     Version,
-		nodeID:      "localhost",
-		Storage:     mockStorage,
-		Assignments: mockStorage,
-		Mounter:     mockStorage,
-		Snapshots:   mockStorage,
-		Statter:     mockStorage,
-		log:         logrus.NewEntry(logrus.New()),
+		name:          "linstor.csi.linbit.com",
+		version:       Version,
+		nodeID:        "localhost",
+		Storage:       mockStorage,
+		Assignments:   mockStorage,
+		Mounter:       mockStorage,
+		Snapshots:     mockStorage,
+		VolumeStatter: mockStorage,
+		log:           logrus.NewEntry(logrus.New()),
 	}
 
 	d.log.Logger.SetOutput(ioutil.Discard)
@@ -134,6 +134,14 @@ func Snapshots(s volume.SnapshotCreateDeleter) func(*Driver) error {
 func Mounter(m volume.Mounter) func(*Driver) error {
 	return func(d *Driver) error {
 		d.Mounter = m
+		return nil
+	}
+}
+
+// VolumeStatter configures the volume stats service backend.
+func VolumeStatter(s volume.VolumeStatter) func(*Driver) error {
+	return func(d *Driver) error {
+		d.VolumeStatter = s
 		return nil
 	}
 }
@@ -337,6 +345,15 @@ func (d Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeSt
 		return nil, missingAttr("NodeGetVolumeStats", req.GetVolumeId(), "VolumeId")
 	}
 
+	volume, err := d.Storage.GetByID(ctx, req.GetVolumeId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "NodeGetVolumeStats failed for %s: failed to check if volume exists: %v", req.GetVolumeId(), err)
+	}
+
+	if volume == nil {
+		return nil, status.Errorf(codes.NotFound, "NodeGetVolumeStats failed for %s: volume does not exist", req.GetVolumeId())
+	}
+
 	notMounted, err := d.Mounter.IsNotMountPoint(req.GetVolumePath())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodeGetVolumeStats failed for %s: failed to check if path %v is mounted: %v", req.GetVolumeId(), req.GetVolumePath(), err)
@@ -346,7 +363,7 @@ func (d Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeSt
 		return nil, status.Errorf(codes.NotFound, "NodeGetVolumeStats failed for %s: path %v is not mounted", req.GetVolumeId(), req.GetVolumePath())
 	}
 
-	stats, err := d.Statter.GetVolumeStats(req.GetVolumePath())
+	stats, err := d.VolumeStatter.GetVolumeStats(req.GetVolumePath())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodeGetVolumeStats failed for %s: failed to get stats: %v", req.GetVolumeId(), err)
 	}
