@@ -52,6 +52,7 @@ type Driver struct {
 	Assignments volume.AttacherDettacher
 	Mounter     volume.Mounter
 	Snapshots   volume.SnapshotCreateDeleter
+	Statter     volume.Statter
 	srv         *grpc.Server
 	log         *logrus.Entry
 	version     string
@@ -77,6 +78,7 @@ func NewDriver(options ...func(*Driver) error) (*Driver, error) {
 		Assignments: mockStorage,
 		Mounter:     mockStorage,
 		Snapshots:   mockStorage,
+		Statter:     mockStorage,
 		log:         logrus.NewEntry(logrus.New()),
 	}
 
@@ -326,13 +328,60 @@ func (d Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishV
 }
 
 // NodeGetVolumeStats https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#nodegetvolumestats
-func (d Driver) NodeGetVolumeStats(context.Context, *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "")
+func (d Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
+	if req.GetVolumeId() == "" {
+		return nil, missingAttr("NodeGetVolumeStats", req.GetVolumeId(), "VolumeId")
+	}
+
+	if req.GetVolumePath() == "" {
+		return nil, missingAttr("NodeGetVolumeStats", req.GetVolumeId(), "VolumeId")
+	}
+
+	notMounted, err := d.Mounter.IsNotMountPoint(req.GetVolumePath())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "NodeGetVolumeStats failed for %s: failed to check if path %v is mounted: %v", req.GetVolumeId(), req.GetVolumePath(), err)
+	}
+
+	if notMounted {
+		return nil, status.Errorf(codes.NotFound, "NodeGetVolumeStats failed for %s: path %v is not mounted", req.GetVolumeId(), req.GetVolumePath())
+	}
+
+	stats, err := d.Statter.GetVolumeStats(req.GetVolumePath())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "NodeGetVolumeStats failed for %s: failed to get stats: %v", req.GetVolumeId(), err)
+	}
+
+	return &csi.NodeGetVolumeStatsResponse{
+		Usage: []*csi.VolumeUsage{
+			{
+				Available: stats.AvailableBytes,
+				Total:     stats.TotalBytes,
+				Used:      stats.UsedBytes,
+				Unit:      csi.VolumeUsage_BYTES,
+			},
+			{
+				Available: stats.AvailableInodes,
+				Total:     stats.TotalInodes,
+				Used:      stats.UsedInodes,
+				Unit:      csi.VolumeUsage_INODES,
+			},
+		},
+	}, nil
 }
 
 // NodeGetCapabilities https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#nodegetcapabilities
 func (d Driver) NodeGetCapabilities(context.Context, *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	return &csi.NodeGetCapabilitiesResponse{Capabilities: []*csi.NodeServiceCapability{}}, nil
+	return &csi.NodeGetCapabilitiesResponse{
+		Capabilities: []*csi.NodeServiceCapability{
+			&csi.NodeServiceCapability{
+				Type: &csi.NodeServiceCapability_Rpc{
+					Rpc: &csi.NodeServiceCapability_RPC{
+						Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
+					},
+				},
+			},
+		},
+	}, nil
 }
 
 // NodeGetInfo https://github.com/container-storage-interface/spec/blob/v1.1.0/spec.md#nodegetinfo

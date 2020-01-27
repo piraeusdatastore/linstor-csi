@@ -451,4 +451,21 @@ type Querier interface {
 type Mounter interface {
 	Mount(vol *Info, source, target, fsType string, options []string) error
 	Unmount(target string) error
+	IsNotMountPoint(target string) (bool, error)
+}
+
+// VolumeStats provides details about filesystem usage.
+type VolumeStats struct {
+	AvailableBytes  int64
+	TotalBytes      int64
+	UsedBytes       int64
+	AvailableInodes int64
+	TotalInodes     int64
+	UsedInodes      int64
+}
+
+// Statter provides info about volume/filesystem usage.
+type Statter interface {
+	// GetVolumeStats determines filesystem usage.
+	GetVolumeStats(path string) (VolumeStats, error)
 }
