@@ -19,7 +19,6 @@ spec:
     spec:
       priorityClassName: system-cluster-critical
       serviceAccount: linstor-csi-controller-sa
-      hostNetwork: true
       containers:
         - name: csi-provisioner
           image: quay.io/k8scsi/csi-provisioner:v1.4.0
@@ -187,7 +186,6 @@ spec:
     spec:
       priorityClassName: system-node-critical
       serviceAccount: linstor-csi-node-sa
-      hostNetwork: true
       containers:
         - name: csi-node-driver-registrar
           image: quay.io/k8scsi/csi-node-driver-registrar:v1.2.0
