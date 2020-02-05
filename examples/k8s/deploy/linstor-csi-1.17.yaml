@@ -50,8 +50,8 @@ spec:
         - name: csi-snapshotter
           image: quay.io/k8scsi/csi-snapshotter:v2.0.1
           args:
-            - "--csi-address=$(ADDRESS)"
-            - "--timeout=120s"
+            - "-csi-address=$(ADDRESS)"
+            - "-timeout=120s"
           env:
             - name: ADDRESS
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
