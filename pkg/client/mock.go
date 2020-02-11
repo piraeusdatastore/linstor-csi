@@ -22,7 +22,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 
 	"github.com/LINBIT/linstor-csi/pkg/volume"
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -204,12 +204,21 @@ func (s *MockStorage) CapacityBytes(ctx context.Context, params map[string]strin
 	return 50000000, nil
 }
 
+func mockMountPath(target string) string {
+	return filepath.Join(os.TempDir(), filepath.Base(target), "_mounted")
+}
+
 func (s *MockStorage) Mount(vol *volume.Info, source, target, fsType string, options []string) error {
-	return os.MkdirAll(path.Join(target, "_mounted"), 0755)
+	p := mockMountPath(target)
+	if _, err := os.Stat(p); os.IsNotExist(err) {
+		return os.MkdirAll(p, 0755)
+	}
+
+	return nil
 }
 
 func (s *MockStorage) IsNotMountPoint(target string) (bool, error) {
-	_, err := os.Stat(path.Join(target, "_mounted"))
+	_, err := os.Stat(mockMountPath(target))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return true, nil
@@ -227,7 +236,11 @@ func (s *MockStorage) Unmount(target string) error {
 	if notMounted {
 		return nil
 	}
-	return os.RemoveAll(target)
+
+	// currently unused
+	// p := mockMountPath(target)
+	// return os.RemoveAll(p)
+	return nil
 }
 
 func (s *MockStorage) GetVolumeStats(path string) (volume.VolumeStats, error) {
