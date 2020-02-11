@@ -379,9 +379,16 @@ func (s *Linstor) Attach(ctx context.Context, vol *volume.Info, node string) err
 // Detach removes a volume from the node.
 func (s *Linstor) Detach(ctx context.Context, vol *volume.Info, node string) error {
 	res, err := s.client.Resources.Get(ctx, vol.ID, node)
-	if err != nil {
+	if err == lapi.NotFoundError {
+		s.log.WithFields(logrus.Fields{
+			"volume":     fmt.Sprintf("%+v", vol),
+			"targetNode": node,
+		}).Info("volume does not even exist")
+		return nil
+	} else if err != nil {
 		return err
 	}
+
 	s.log.WithFields(logrus.Fields{
 		"resource":   fmt.Sprintf("%+v", res),
 		"targetNode": node,
