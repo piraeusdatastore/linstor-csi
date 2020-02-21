@@ -129,6 +129,10 @@ func getNodesUtil(ctx context.Context, nClient NodeLinstorClient, selectedNodes 
 		}
 
 		for _, sp := range spls {
+			if sp.ProviderKind == lapi.DISKLESS {
+				continue
+			}
+
 			nicName := sp.Props[PrefNicPropKey]
 			free := sp.FreeCapacity
 			total := sp.TotalCapacity
