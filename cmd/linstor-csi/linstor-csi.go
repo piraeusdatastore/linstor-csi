@@ -78,7 +78,7 @@ func main() {
 		caPool := x509.NewCertPool()
 		ok := caPool.AppendCertsFromPEM([]byte(caPEM))
 		if !ok {
-			log.Fatal("failed to get a valid certificate from LS_CA_PEM")
+			log.Fatal("failed to get a valid certificate from LS_ROOT_CA")
 		}
 		h = &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{Certificates: []tls.Certificate{keyPair}, RootCAs: caPool, InsecureSkipVerify: *lsSkipTLSVerification}}}
 	}
