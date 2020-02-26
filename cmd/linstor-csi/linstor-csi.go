@@ -20,6 +20,7 @@ package main
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"net/http"
 	"net/url"
@@ -63,10 +64,29 @@ func main() {
 	if r <= 0 {
 		r = rate.Inf
 	}
+
+	// Setup HTTP client with optional TLS mutual auth.
+	h := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: *lsSkipTLSVerification}}}
+	certPEM, cert := os.LookupEnv("LS_USER_CERTIFICATE")
+	keyPEM, key := os.LookupEnv("LS_USER_KEY")
+	caPEM, ca := os.LookupEnv("LS_ROOT_CA")
+	if cert && key && ca {
+		keyPair, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+		if err != nil {
+			log.Fatal(err)
+		}
+		caPool := x509.NewCertPool()
+		ok := caPool.AppendCertsFromPEM([]byte(caPEM))
+		if !ok {
+			log.Fatal("failed to get a valid certificate from LS_ROOT_CA")
+		}
+		h = &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{Certificates: []tls.Certificate{keyPair}, RootCAs: caPool, InsecureSkipVerify: *lsSkipTLSVerification}}}
+	}
+
 	c, err := lc.NewHighLevelClient(
 		lapi.BaseURL(u),
 		lapi.BasicAuth(&lapi.BasicAuthCfg{Username: os.Getenv("LS_USERNAME"), Password: os.Getenv("LS_PASSWORD")}),
-		lapi.HTTPClient(&http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: *lsSkipTLSVerification}}}),
+		lapi.HTTPClient(h),
 		lapi.Limit(r, *burst),
 		lapi.Log(&lapi.LogCfg{Level: *logLevel, Out: logOut, Formatter: logFmt}),
 	)
