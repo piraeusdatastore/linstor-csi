@@ -4,7 +4,6 @@ go 1.12
 
 require (
 	github.com/LINBIT/golinstor v0.16.2
-	github.com/alvaroloes/enumer v1.1.2 // indirect
 	github.com/container-storage-interface/spec v1.1.0
 	github.com/evanphx/json-patch v4.5.0+incompatible // indirect
 	github.com/golang/protobuf v1.3.1
@@ -21,7 +20,6 @@ require (
 	golang.org/x/sys v0.0.0-20190613124609-5ed2794edfdc
 	golang.org/x/text v0.3.2 // indirect
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
-	golang.org/x/tools v0.0.0-20190613204242-ed0dc450797f // indirect
 	google.golang.org/grpc v1.19.0
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/api v0.0.0-20190602205700-9b8cae951d65
