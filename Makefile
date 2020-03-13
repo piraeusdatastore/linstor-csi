@@ -3,12 +3,6 @@ REGISTRY ?= piraeusdatastore
 TAG ?= latest
 NOCACHE ?= false
 
-GO ?= go
-OS ?= linux
-ARCH ?= amd64
-VERSION=$(shell git describe --tags --always --dirty)
-LDFLAGS = -X github.com/piraeusdatastore/linstor-csi/pkg/driver.Version=${VERSION}
-
 help:
 	@echo "Useful targets: 'update', 'upload'"
 
