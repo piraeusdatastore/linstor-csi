@@ -30,9 +30,9 @@ import (
 	"golang.org/x/time/rate"
 
 	lapi "github.com/LINBIT/golinstor/client"
-	"github.com/LINBIT/linstor-csi/pkg/client"
-	"github.com/LINBIT/linstor-csi/pkg/driver"
-	lc "github.com/LINBIT/linstor-csi/pkg/linstor/highlevelclient"
+	"github.com/piraeusdatastore/linstor-csi/pkg/client"
+	"github.com/piraeusdatastore/linstor-csi/pkg/driver"
+	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
 )
 
 func main() {

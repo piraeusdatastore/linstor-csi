@@ -21,7 +21,7 @@ package scheduler
 import (
 	"context"
 
-	"github.com/LINBIT/linstor-csi/pkg/volume"
+	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 )
 

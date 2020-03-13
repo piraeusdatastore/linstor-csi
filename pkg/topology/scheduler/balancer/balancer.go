@@ -6,10 +6,10 @@ import (
 
 	golinstor "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
-	lc "github.com/LINBIT/linstor-csi/pkg/linstor/highlevelclient"
-	"github.com/LINBIT/linstor-csi/pkg/linstor/util"
-	"github.com/LINBIT/linstor-csi/pkg/topology"
-	"github.com/LINBIT/linstor-csi/pkg/volume"
+	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
+	"github.com/piraeusdatastore/linstor-csi/pkg/linstor/util"
+	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
+	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"

@@ -24,7 +24,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/LINBIT/linstor-csi/pkg/volume"
+	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	ptypes "github.com/golang/protobuf/ptypes"
 	"github.com/pborman/uuid"

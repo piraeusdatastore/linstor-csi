@@ -23,9 +23,9 @@ import (
 	"fmt"
 
 	lapi "github.com/LINBIT/golinstor/client"
-	"github.com/LINBIT/linstor-csi/pkg/linstor/util"
-	"github.com/LINBIT/linstor-csi/pkg/topology"
-	"github.com/LINBIT/linstor-csi/pkg/volume"
+	"github.com/piraeusdatastore/linstor-csi/pkg/linstor/util"
+	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
+	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 )
 

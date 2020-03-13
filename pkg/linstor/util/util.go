@@ -21,7 +21,7 @@ package util
 import (
 	apiconst "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
-	"github.com/LINBIT/linstor-csi/pkg/volume"
+	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
 // NodeIsAccessible returns true if the appropriate StoragePool is present for

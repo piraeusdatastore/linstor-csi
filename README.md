@@ -6,7 +6,7 @@ that implement CSI, such as Kubernetes.
 # Building
 
 If you wish to create a docker image for a local registry
-run `make dockerimage DOCKERREGISTRY=example.com`.
+run `make staticrelease`.
 
 # Deployment
 

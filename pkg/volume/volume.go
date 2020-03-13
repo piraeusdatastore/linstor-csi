@@ -29,8 +29,8 @@ import (
 
 	lc "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
-	"github.com/LINBIT/linstor-csi/pkg/linstor"
-	"github.com/LINBIT/linstor-csi/pkg/topology"
+	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
+	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 )
 

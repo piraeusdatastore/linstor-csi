@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	lapi "github.com/LINBIT/golinstor/client"
-	"github.com/LINBIT/linstor-csi/pkg/client"
-	lc "github.com/LINBIT/linstor-csi/pkg/linstor/highlevelclient"
+	"github.com/piraeusdatastore/linstor-csi/pkg/client"
+	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
 	"github.com/kubernetes-csi/csi-test/pkg/sanity"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
