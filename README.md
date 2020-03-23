@@ -45,6 +45,3 @@ present on the Kubelets themselves for volumes attached over the network.
 Most of the documentation for using this project with Kubernetes is located
 [here](https://docs.linbit.com/docs/users-guide-9.0/#ch-kubernetes).
 
-# License
-
-GPL 2
