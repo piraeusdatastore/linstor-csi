@@ -28,6 +28,10 @@ import (
 	"strings"
 
 	lapi "github.com/LINBIT/golinstor/client"
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	ptypes "github.com/golang/protobuf/ptypes"
+	"github.com/haySwim/data"
+	"github.com/pborman/uuid"
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor/util"
@@ -38,10 +42,6 @@ import (
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler/followtopology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler/manual"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	ptypes "github.com/golang/protobuf/ptypes"
-	"github.com/haySwim/data"
-	"github.com/pborman/uuid"
 	logrus "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sys/unix"
@@ -274,13 +274,6 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, req *csi.CreateV
 		return err
 	}
 
-	// Create the volume definition, now that vol has been updated with its ID.
-	if err := s.client.ResourceDefinitions.CreateVolumeDefinition(ctx, vol.ID,
-		lapi.VolumeDefinitionCreate{
-			VolumeDefinition: lapi.VolumeDefinition{SizeKib: uint64(data.NewKibiByte(data.ByteSize(vol.SizeBytes)).Value())}}); err != nil {
-		return err
-	}
-
 	volumeScheduler, err := s.schedulerByPlacementPolicy(vol)
 	if err != nil {
 		return err
@@ -315,7 +308,16 @@ func (s *Linstor) Delete(ctx context.Context, vol *volume.Info) error {
 	}
 
 	// No snapshots, remove the resource.
-	return nil404(s.client.ResourceDefinitions.Delete(ctx, vol.ID))
+
+	// try to rm the RG, but don't consider it a failure if we can not (maybe other resources,...)
+	rd, rdErr := s.client.ResourceDefinitions.Get(ctx, vol.ID)
+	retErr := nil404(s.client.ResourceDefinitions.Delete(ctx, vol.ID))
+
+	if rdErr == nil && rd.ResourceGroupName != "" {
+		_ = s.client.ResourceGroups.Delete(ctx, rd.ResourceGroupName)
+	}
+
+	return retErr
 }
 
 // AccessibleTopologies returns a list of pointers to csi.Topology from where the
@@ -565,14 +567,63 @@ func (s *Linstor) VolFromVol(ctx context.Context, sourceVol, vol *volume.Info) e
 	)
 }
 
+func (s *Linstor) createSyncResourceGroup(ctx context.Context, vol *volume.Info) (string, error) {
+	params, err := volume.NewParameters(vol.Parameters)
+	if err != nil {
+		return "", err
+	}
+	rgName := params.ResourceGroup
+	if rgName == "" {
+		return rgName, errors.New("Volume requires a LINSTOR resource group, but parameter 'resourceGroup' is empty")
+	}
+
+	// does the RG already exist?
+	rg, err := s.client.ResourceGroups.Get(ctx, rgName)
+	if err == lapi.NotFoundError {
+		// just create the minimal RG/VG, we sync all the props then anyways.
+		resourceGroup := lapi.ResourceGroup{
+			Name:         rgName,
+			Props:        make(map[string]string),
+			SelectFilter: lapi.AutoSelectFilter{},
+		}
+		volumeGroup := lapi.VolumeGroup{}
+		if err := s.client.ResourceGroups.Create(ctx, resourceGroup); err != nil {
+			return rgName, err
+		}
+		if err := s.client.ResourceGroups.CreateVolumeGroup(ctx, rgName, volumeGroup); err != nil {
+			return rgName, err
+		}
+		rg, err = s.client.ResourceGroups.Get(ctx, rgName)
+		if err != nil {
+			return rgName, err
+		}
+	}
+
+	rgModify, err := vol.ToResourceGroupModify(rg)
+	if err != nil {
+		return rgName, err
+	}
+	if err := s.client.ResourceGroups.Modify(ctx, rgName, rgModify); err != nil {
+		return rgName, err
+	}
+
+	return rgName, nil
+}
+
 // Creates a resourceDefinition, updating the vol.ID if successful.
 func (s *Linstor) createResourceDefinition(ctx context.Context, vol *volume.Info) error {
-	resDefCreate, err := vol.ToResourceDefinitionCreate()
+	rgName, err := s.createSyncResourceGroup(ctx, vol)
 	if err != nil {
 		return err
 	}
 
-	if err := s.client.ResourceDefinitions.Create(ctx, resDefCreate); err != nil {
+	// "spawns" only the resource-definition, does not autodeploy it.
+	spawnDefCreate, err := vol.ToResourceGroupSpawn()
+	if err != nil {
+		return err
+	}
+
+	if err := s.client.ResourceGroups.Spawn(ctx, rgName, spawnDefCreate); err != nil {
 		return err
 	}
 

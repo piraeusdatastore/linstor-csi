@@ -414,7 +414,6 @@ func (b BalanceScheduler) AccessibleTopologies(ctx context.Context, vol *volume.
 
 func volToDiskfullResourceCreate(vol *volume.Info, params volume.Parameters, node string, storagePool string) lapi.ResourceCreate {
 	return lapi.ResourceCreate{
-		LayerList: params.LayerList,
 		Resource: lapi.Resource{
 			Name:     vol.ID,
 			NodeName: node,

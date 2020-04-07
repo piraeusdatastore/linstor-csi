@@ -83,12 +83,21 @@ func main() {
 		h = &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{Certificates: []tls.Certificate{keyPair}, RootCAs: caPool, InsecureSkipVerify: *lsSkipTLSVerification}}}
 	}
 
+	logger := log.NewEntry(log.New())
+	level, err := log.ParseLevel(*logLevel)
+	if err != nil {
+		log.Fatal(err)
+	}
+	logger.Logger.SetLevel(level)
+	logger.Logger.SetOutput(logOut)
+	logger.Logger.SetFormatter(logFmt)
+
 	c, err := lc.NewHighLevelClient(
 		lapi.BaseURL(u),
 		lapi.BasicAuth(&lapi.BasicAuthCfg{Username: os.Getenv("LS_USERNAME"), Password: os.Getenv("LS_PASSWORD")}),
 		lapi.HTTPClient(h),
 		lapi.Limit(r, *burst),
-		lapi.Log(&lapi.LogCfg{Level: *logLevel, Out: logOut, Formatter: logFmt}),
+		lapi.Log(logger),
 	)
 	if err != nil {
 		log.Fatal(err)
