@@ -194,7 +194,6 @@ func TestDeployedDisklessly(t *testing.T) {
 			res: lapi.Resource{
 				Name:     "foo1",
 				NodeName: "bar",
-				Volumes:  []lapi.Volume{{}},
 			},
 			expected: false,
 		},
@@ -202,7 +201,6 @@ func TestDeployedDisklessly(t *testing.T) {
 			res: lapi.Resource{
 				Name:     "foo2",
 				NodeName: "bar",
-				Volumes:  []lapi.Volume{{}},
 				Flags:    []string{apiconst.FlagDiskless},
 			},
 			expected: true,
@@ -211,7 +209,6 @@ func TestDeployedDisklessly(t *testing.T) {
 			res: lapi.Resource{
 				Name:     "foo3",
 				NodeName: "bar",
-				Volumes:  []lapi.Volume{{}},
 				Flags:    []string{apiconst.FlagDiskless, apiconst.FlagDelete},
 			},
 			expected: false,

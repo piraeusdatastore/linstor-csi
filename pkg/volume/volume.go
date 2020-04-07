@@ -20,7 +20,6 @@ package volume
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -29,9 +28,9 @@ import (
 
 	lc "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
-	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
-	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/haySwim/data"
+	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 )
 
 // Info provides the everything need to manipulate volumes.
@@ -69,6 +68,7 @@ const (
 	sizekib
 	storagepool
 	postmountxfsopts
+	resourcegroup
 )
 
 // Parameters configuration for linstor volumes.
@@ -115,11 +115,17 @@ type Parameters struct {
 	PlacementPolicy topology.PlacementPolicy
 	// PostMountXfsOpts is an optional string of post-mount call
 	PostMountXfsOpts string
+	// ResourceGroup is the resource-group name in LINSTOR.
+	ResourceGroup string
+	// DRBDOpts are the options than can be set on DRBD resources
+	DRBDOpts map[string]string
 }
 
 // DefaultDisklessStoragePoolName is the hidden diskless storage pool that linstor
 // assigned diskless volumes to if they're not given a user created DisklessStoragePool.
 const DefaultDisklessStoragePoolName = "DfltDisklessStorPool"
+
+const drbdOptsPrefix = "DrbdOptions/"
 
 // NewParameters parses out the raw parameters we get and sets appropriate
 // zero values
@@ -132,9 +138,15 @@ func NewParameters(params map[string]string) (Parameters, error) {
 		Encryption:              false,
 		PlacementPolicy:         topology.AutoPlace,
 		AllowRemoteVolumeAccess: true,
+		DRBDOpts:                make(map[string]string),
 	}
 
 	for k, v := range params {
+		if strings.HasPrefix(k, drbdOptsPrefix) {
+			p.DRBDOpts[k] = v
+			continue
+		}
+
 		key, err := paramKeyString(strings.ToLower(k))
 		if err != nil {
 			return p, fmt.Errorf("invalid parameter: %v", err)
@@ -209,6 +221,8 @@ func NewParameters(params map[string]string) (Parameters, error) {
 			p.FSOpts = v
 		case postmountxfsopts:
 			p.PostMountXfsOpts = v
+		case resourcegroup:
+			p.ResourceGroup = v
 		}
 	}
 
@@ -251,42 +265,78 @@ func Sort(vols []*Info) {
 	})
 }
 
-// ToResourceDefinitionCreate prepares a lapi.ResourceDefinitionCreate from
+// ToResourceGroupSpawn creates a lapi.ResourceDefinitionSpawn from
 // a volume.Info.
-func (i *Info) ToResourceDefinitionCreate() (lapi.ResourceDefinitionCreate, error) {
-	resDef, err := i.ToResourceDefinition()
-	if err != nil {
-		return lapi.ResourceDefinitionCreate{}, err
-	}
-	return lapi.ResourceDefinitionCreate{ResourceDefinition: resDef}, nil
+func (i *Info) ToResourceGroupSpawn() (lapi.ResourceGroupSpawn, error) {
+	return lapi.ResourceGroupSpawn{
+		ResourceDefinitionName:         "",
+		ResourceDefinitionExternalName: i.Name,
+		VolumeSizes:                    []int64{int64(data.NewKibiByte(data.ByteSize(i.SizeBytes)).Value())},
+		DefinitionsOnly:                true,
+	}, nil
 }
 
-// ToResourceDefinition prepares a lapi.ResourceDefinition from a volume.Info.
-func (i *Info) ToResourceDefinition() (lapi.ResourceDefinition, error) {
+func (i *Info) ToResourceGroupModify(rg lapi.ResourceGroup) (lapi.ResourceGroupModify, error) {
+	rgModify := lapi.ResourceGroupModify{
+		OverrideProps: make(map[string]string),
+	}
+
+	if rg.Props == nil {
+		rg.Props = make(map[string]string)
+	}
+
 	params, err := NewParameters(i.Parameters)
 	if err != nil {
-		return lapi.ResourceDefinition{}, err
+		return rgModify, err
 	}
 
-	resDef := lapi.ResourceDefinition{
-		ExternalName: i.Name,
+	rgModify.SelectFilter.PlaceCount = params.PlacementCount
+
+	rgModify.SelectFilter.StoragePool = params.StoragePool
+	rgModify.OverrideProps[lc.KeyStorPoolName] = params.StoragePool
+
+	for _, p := range params.ReplicasOnDifferent {
+		rgModify.SelectFilter.ReplicasOnDifferent = append(rgModify.SelectFilter.ReplicasOnDifferent, p)
+	}
+
+	for _, p := range params.ReplicasOnSame {
+		rgModify.SelectFilter.ReplicasOnSame = append(rgModify.SelectFilter.ReplicasOnSame, p)
+	}
+
+	for _, p := range params.LayerList {
+		rgModify.SelectFilter.LayerStack = append(rgModify.SelectFilter.LayerStack, string(p))
+	}
+
+	rgModify.SelectFilter.NotPlaceWithRscRegex = params.DoNotPlaceWithRegex
+	rgModify.SelectFilter.DisklessOnRemaining = params.Disklessonremaining
+
+	for k, v := range params.DRBDOpts {
+		rgModify.OverrideProps[k] = v
+	}
+	// delete the ones that we had, but do no longer exist
+	// this is mainly for the sake of completeness, one can not edit a SC in k8s
+	for k := range rg.Props {
+		if _, ok := rgModify.OverrideProps[k]; !ok {
+			rgModify.DeleteProps = append(rgModify.DeleteProps, k)
+		}
+	}
+
+	return rgModify, nil
+}
+
+// ToResourceGroup creates a LINSTOR ResourceGroup struct that can be used to create a RG
+func (i *Info) ToResourceGroup() (lapi.ResourceGroup, error) {
+	resourceGroup := lapi.ResourceGroup{
 		Props:        make(map[string]string),
-		LayerData:    make([]lapi.ResourceDefinitionLayer, len(params.LayerList)),
+		SelectFilter: lapi.AutoSelectFilter{},
 	}
-
-	for k := range resDef.LayerData {
-		resDef.LayerData[k].Type = params.LayerList[k]
-	}
-
-	serializedVol, err := json.Marshal(i)
+	params, err := NewParameters(i.Parameters)
 	if err != nil {
-		return resDef, err
+		return resourceGroup, err
 	}
+	resourceGroup.Name = params.ResourceGroup
 
-	// TODO: Support for other annotations.
-	resDef.Props[linstor.AnnotationsKey] = string(serializedVol)
-
-	return resDef, nil
+	return resourceGroup, nil
 }
 
 // ToResourceCreateList prepares a list of lapi.ResourceCreate to be used to
@@ -323,7 +373,6 @@ func (i *Info) ToDiskfullResourceCreate(node string) (lapi.ResourceCreate, error
 	}
 
 	res := i.toGenericResourceCreate(params, node)
-	res.Resource.Props[lc.KeyStorPoolName] = params.StoragePool
 	return res, nil
 }
 
@@ -343,7 +392,6 @@ func (i *Info) ToDisklessResourceCreate(node string) (lapi.ResourceCreate, error
 
 func (i *Info) toGenericResourceCreate(params Parameters, node string) lapi.ResourceCreate {
 	return lapi.ResourceCreate{
-		LayerList: params.LayerList,
 		Resource: lapi.Resource{
 			Name:     i.ID,
 			NodeName: node,
@@ -354,21 +402,8 @@ func (i *Info) toGenericResourceCreate(params Parameters, node string) lapi.Reso
 
 // ToAutoPlace prepares a Info to be deployed by linstor via autoplace.
 func (i *Info) ToAutoPlace() (lapi.AutoPlaceRequest, error) {
-	params, err := NewParameters(i.Parameters)
-	if err != nil {
-		return lapi.AutoPlaceRequest{}, err
-	}
-
-	return lapi.AutoPlaceRequest{
-		DisklessOnRemaining: params.Disklessonremaining,
-		LayerList:           params.LayerList,
-		SelectFilter: lapi.AutoSelectFilter{
-			PlaceCount:           params.PlacementCount,
-			StoragePool:          params.StoragePool,
-			NotPlaceWithRscRegex: params.DoNotPlaceWithRegex,
-			ReplicasOnSame:       params.ReplicasOnSame,
-			ReplicasOnDifferent:  params.ReplicasOnDifferent,
-		}}, nil
+	// kept for abstraction
+	return lapi.AutoPlaceRequest{}, nil
 }
 
 // SnapInfo provides everything needed to manipulate snapshots.

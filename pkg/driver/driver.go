@@ -32,11 +32,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/haySwim/data"
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/haySwim/data"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

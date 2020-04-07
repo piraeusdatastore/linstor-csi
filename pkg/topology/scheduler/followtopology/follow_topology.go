@@ -22,10 +22,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
-	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
 )
 

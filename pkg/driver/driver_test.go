@@ -11,9 +11,9 @@ import (
 	"testing"
 
 	lapi "github.com/LINBIT/golinstor/client"
+	"github.com/kubernetes-csi/csi-test/pkg/sanity"
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
-	"github.com/kubernetes-csi/csi-test/pkg/sanity"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 )
@@ -58,12 +58,20 @@ func TestDriver(t *testing.T) {
 		if r <= 0 {
 			r = rate.Inf
 		}
+		logger := logrus.NewEntry(logrus.New())
+		level, err := logrus.ParseLevel(*logLevel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		logger.Logger.SetLevel(level)
+		logger.Logger.SetOutput(logFile)
+		logger.Logger.SetFormatter(&logrus.TextFormatter{})
 		c, err := lc.NewHighLevelClient(
 			lapi.BaseURL(u),
 			lapi.BasicAuth(&lapi.BasicAuthCfg{Username: os.Getenv("LS_USERNAME"), Password: os.Getenv("LS_PASSWORD")}),
 			lapi.HTTPClient(&http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: *lsSkipTLSVerification}}}),
 			lapi.Limit(r, *burst),
-			lapi.Log(&lapi.LogCfg{Level: *logLevel, Out: logFile, Formatter: &logrus.TextFormatter{}}),
+			lapi.Log(logger),
 		)
 		if err != nil {
 			t.Fatal(err)

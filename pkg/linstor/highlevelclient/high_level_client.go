@@ -23,10 +23,10 @@ import (
 	"fmt"
 
 	lapi "github.com/LINBIT/golinstor/client"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor/util"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
-	"github.com/container-storage-interface/spec/lib/go/csi"
 )
 
 // HighLevelClient is a golinstor client with convience functions.
@@ -35,7 +35,7 @@ type HighLevelClient struct {
 }
 
 // NewHighLevelClient returns a pointer to a golinstor client with convience.
-func NewHighLevelClient(options ...func(*lapi.Client) error) (*HighLevelClient, error) {
+func NewHighLevelClient(options ...lapi.Option) (*HighLevelClient, error) {
 	c, err := lapi.NewClient(options...)
 	if err != nil {
 		return nil, err
