@@ -6,3 +6,4 @@ provisioner: linstor.csi.linbit.com
 parameters:
   placementCount: "2"
   storagePool: "my-storage-pool"
+  resourceGroup: "linstor-basic-storage"
