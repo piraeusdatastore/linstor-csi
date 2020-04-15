@@ -308,16 +308,37 @@ func (s *Linstor) Delete(ctx context.Context, vol *volume.Info) error {
 	}
 
 	// No snapshots, remove the resource.
-
-	// try to rm the RG, but don't consider it a failure if we can not (maybe other resources,...)
-	rd, rdErr := s.client.ResourceDefinitions.Get(ctx, vol.ID)
-	retErr := nil404(s.client.ResourceDefinitions.Delete(ctx, vol.ID))
-
-	if rdErr == nil && rd.ResourceGroupName != "" {
-		_ = s.client.ResourceGroups.Delete(ctx, rd.ResourceGroupName)
+	rd, err := s.client.ResourceDefinitions.Get(ctx, vol.ID)
+	if err != nil {
+		return err
 	}
 
-	return retErr
+	if nil404(s.client.ResourceDefinitions.Delete(ctx, vol.ID)); err != nil {
+		return err
+	}
+
+	// try to delte the RG if this was the last volume
+	// currenlty LINSTOR does not provide an easier way, filter manually
+	rds, err := s.client.ResourceDefinitions.GetAll(ctx)
+	if err != nil {
+		return nil
+	}
+
+	deleteRG := true
+	for _, d := range rds {
+		if d.ResourceGroupName == rd.ResourceGroupName {
+			deleteRG = false
+			break
+		}
+	}
+
+	if deleteRG && rd.ResourceGroupName != "DfltRscGrp" {
+		if err := s.client.ResourceGroups.Delete(ctx, rd.ResourceGroupName); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // AccessibleTopologies returns a list of pointers to csi.Topology from where the
