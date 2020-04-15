@@ -565,6 +565,10 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.SnapInfo, vol *v
 	return nil
 }
 
+func (s *Linstor) fallbackNameUUIDNew() string {
+	return s.fallbackPrefix + uuid.New()
+}
+
 // VolFromVol creates the volume using the data contained within the source volume.
 func (s *Linstor) VolFromVol(ctx context.Context, sourceVol, vol *volume.Info) error {
 	s.log.WithFields(logrus.Fields{
@@ -572,7 +576,7 @@ func (s *Linstor) VolFromVol(ctx context.Context, sourceVol, vol *volume.Info) e
 		"sourceVolume": fmt.Sprintf("%+v", sourceVol),
 	}).Info("creating volume from snapshot")
 
-	tmpName := s.fallbackPrefix + uuid.New()
+	tmpName := s.fallbackNameUUIDNew()
 	if err := s.client.Resources.CreateSnapshot(ctx,
 		lapi.Snapshot{
 			Name:         tmpName,
@@ -595,7 +599,10 @@ func (s *Linstor) createSyncResourceGroup(ctx context.Context, vol *volume.Info)
 	}
 	rgName := params.ResourceGroup
 	if rgName == "" {
-		return rgName, errors.New("Volume requires a LINSTOR resource group, but parameter 'resourceGroup' is empty")
+		s.log.WithFields(logrus.Fields{
+			"volume": fmt.Sprintf("%+v", vol),
+		}).Warn("Storage Class without 'resourceGroup'. Retire this SC now!")
+		rgName = s.fallbackNameUUIDNew()
 	}
 
 	// does the RG already exist?
