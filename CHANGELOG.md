@@ -5,6 +5,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- moved upstream to [piraeus](https://github.com/piraeusdatastore/linstor-csi)
+- Licence changed to Apache2 (from GPLv2)
+### Deprecated
+- SCs without a `resourceGroup` parameter. For now we create a random LINSTOR RG for every PVC of a SC that does not specify `resourceGroup`. You should get rid of these SCs soon.
+### Added
+- TLS mutual auth support for LINSTOR API endpoint
+- support for LINSTOR resource groups. Every storage class mapps now to a LINSTOR resource group.
+- DRBD options can now be specified in the SC as "parameter". See the example in `class.yaml`. Keys as specified in the LINSTOR REST API.
+
+## [0.7.4] - 2020-02-27
+### Changed
+- disable host network
+### Fixed
+- do not cosider diskless storage pools for placement in `Balanced` placer
+### Added
+- implement NodeGetVolumeStats
+- update to recent tool chain
+
+## [0.7.3] - 2020-01-07
 ### Added
 - postMountXfsOpts parameter in a storageclass spec can specify the parameter for an xfs_io called
   after mounting an XFS volume
