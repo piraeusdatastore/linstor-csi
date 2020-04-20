@@ -1,4 +1,4 @@
-PROJECT ?= linstor-csi
+PROJECT ?= piraeus-csi
 REGISTRY ?= piraeusdatastore
 TAG ?= latest
 NOCACHE ?= false
