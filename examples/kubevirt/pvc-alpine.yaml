@@ -1,0 +1,13 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: "alpine"
+  annotations:
+    volume.beta.kubernetes.io/storage-class: linstor-kubevirt-storage
+spec:
+  accessModes:
+    - ReadWriteMany
+  volumeMode: Block
+  resources:
+    requests:
+      storage: 1Gi

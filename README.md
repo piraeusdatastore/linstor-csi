@@ -45,3 +45,7 @@ present on the Kubelets themselves for volumes attached over the network.
 Most of the documentation for using this project with Kubernetes is located
 [here](https://docs.linbit.com/docs/users-guide-9.0/#ch-kubernetes).
 
+## Kubevirt
+
+An example of using the CSI driver in combination with kubevirt (block device mode, live migration) can be
+found in the `examples/kubevirt/` directory.
