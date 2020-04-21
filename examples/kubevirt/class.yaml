@@ -1,0 +1,10 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: linstor-kubevirt-storage
+provisioner: linstor.csi.linbit.com
+parameters:
+  placementCount: "2"
+  storagePool: "lvm-thin"
+  resourceGroup: "kubevirt"
+  DrbdOptions/Net/allow-two-primaries: "yes"
