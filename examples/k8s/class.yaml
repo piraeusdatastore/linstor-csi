@@ -3,6 +3,7 @@ kind: StorageClass
 metadata:
   name: linstor-basic-storage
 provisioner: linstor.csi.linbit.com
+allowVolumeExpansion: true
 parameters:
   placementCount: "2"
   storagePool: "my-storage-pool"
