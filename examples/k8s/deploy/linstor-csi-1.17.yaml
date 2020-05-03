@@ -47,6 +47,18 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: csi-resizer
+          image: quay.io/k8scsi/csi-resizer:v0.5.0
+          args:
+          - "--v=5"
+          - "--csi-address=$(ADDRESS)"
+          env:
+          - name: ADDRESS
+            value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          imagePullPolicy: "Always"
+          volumeMounts:
+          - mountPath: /var/lib/csi/sockets/pluginproxy/
+            name: socket-dir
         - name: csi-snapshotter
           image: quay.io/k8scsi/csi-snapshotter:v2.0.1
           args:
@@ -60,7 +72,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: linstor-csi-plugin
-          image: quay.io/linbit/linstor-csi:v0.7.3
+          image: quay.io/piraeusdatastore/piraeus-csi:v0.8.3
           args:
             - "--csi-endpoint=$(CSI_ENDPOINT)"
             - "--node=$(KUBE_NODE_NAME)"
@@ -164,6 +176,39 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: linstor-csi-resizer-role
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims/status"]
+    verbs: ["patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
+
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: linstor-csi-resizer-binding
+subjects:
+  - kind: ServiceAccount
+    name: linstor-csi-controller-sa
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: linstor-csi-resizer-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
 
 kind: DaemonSet
 apiVersion: apps/v1
@@ -209,7 +254,7 @@ spec:
             - name: registration-dir
               mountPath: /registration/
         - name: linstor-csi-plugin
-          image: quay.io/linbit/linstor-csi:v0.7.3
+          image: quay.io/piraeusdatastore/piraeus-csi:v0.8.3
           args:
             - "--csi-endpoint=$(CSI_ENDPOINT)"
             - "--node=$(KUBE_NODE_NAME)"
