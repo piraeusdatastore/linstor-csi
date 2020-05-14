@@ -292,8 +292,10 @@ func (i *Info) ToResourceGroupModify(rg lapi.ResourceGroup) (lapi.ResourceGroupM
 
 	rgModify.SelectFilter.PlaceCount = params.PlacementCount
 
-	rgModify.SelectFilter.StoragePool = params.StoragePool
-	rgModify.OverrideProps[lc.KeyStorPoolName] = params.StoragePool
+	if params.StoragePool != "" { // otherwise we set the storagepool to "", which does not make LINSTOR happy
+		rgModify.SelectFilter.StoragePool = params.StoragePool
+		rgModify.OverrideProps[lc.KeyStorPoolName] = params.StoragePool
+	}
 
 	for _, p := range params.ReplicasOnDifferent {
 		rgModify.SelectFilter.ReplicasOnDifferent = append(rgModify.SelectFilter.ReplicasOnDifferent, p)
