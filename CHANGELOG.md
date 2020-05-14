@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2020-05-14
+### Fixed
+- allow empty/unset LINSTOR storage pools, LINSTOR will chose one. Do not set "", which breaks
+
 ## [0.8.0] - 2020-04-16
 ### Changed
 - moved upstream to [piraeus](https://github.com/piraeusdatastore/linstor-csi)
