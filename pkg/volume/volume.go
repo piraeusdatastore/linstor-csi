@@ -29,7 +29,6 @@ import (
 	lc "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/haySwim/data"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 )
 
@@ -238,56 +237,14 @@ func NewParameters(params map[string]string) (Parameters, error) {
 	return p, nil
 }
 
-//ParseLayerList returns a slice of LayerType from a string of space-separated layers.
-func ParseLayerList(s string) ([]lapi.LayerType, error) {
-	list := strings.Split(s, " ")
-	var layers = make([]lapi.LayerType, 0)
-	knownLayers := []lapi.LayerType{lapi.DRBD, lapi.STORAGE, lapi.LUKS, lapi.NVME}
-
-userLayers:
-	for _, l := range list {
-		for _, k := range knownLayers {
-			if strings.EqualFold(l, string(k)) {
-				layers = append(layers, k)
-				continue userLayers
-			}
-		}
-		// Reached the bottom without finding a match.
-		return layers, fmt.Errorf("unknown layer type %s, known layer types %v", l, knownLayers)
-	}
-	return layers, nil
-}
-
-// Sort sorts a list of snaphosts.
-func Sort(vols []*Info) {
-	sort.Slice(vols, func(j, k int) bool {
-		return vols[j].CreationTime.Before(vols[k].CreationTime)
-	})
-}
-
-// ToResourceGroupSpawn creates a lapi.ResourceDefinitionSpawn from
-// a volume.Info.
-func (i *Info) ToResourceGroupSpawn() (lapi.ResourceGroupSpawn, error) {
-	return lapi.ResourceGroupSpawn{
-		ResourceDefinitionName:         "",
-		ResourceDefinitionExternalName: i.Name,
-		VolumeSizes:                    []int64{int64(data.NewKibiByte(data.ByteSize(i.SizeBytes)).Value())},
-		DefinitionsOnly:                true,
-	}, nil
-}
-
-func (i *Info) ToResourceGroupModify(rg lapi.ResourceGroup) (lapi.ResourceGroupModify, error) {
+// Convert parameters into a modify-object that reconciles any differences between parameters and resource group
+func (params *Parameters) ToResourceGroupModify(rg *lapi.ResourceGroup) (lapi.ResourceGroupModify, error) {
 	rgModify := lapi.ResourceGroupModify{
 		OverrideProps: make(map[string]string),
 	}
 
 	if rg.Props == nil {
 		rg.Props = make(map[string]string)
-	}
-
-	params, err := NewParameters(i.Parameters)
-	if err != nil {
-		return rgModify, err
 	}
 
 	rgModify.SelectFilter.PlaceCount = params.PlacementCount
@@ -326,19 +283,31 @@ func (i *Info) ToResourceGroupModify(rg lapi.ResourceGroup) (lapi.ResourceGroupM
 	return rgModify, nil
 }
 
-// ToResourceGroup creates a LINSTOR ResourceGroup struct that can be used to create a RG
-func (i *Info) ToResourceGroup() (lapi.ResourceGroup, error) {
-	resourceGroup := lapi.ResourceGroup{
-		Props:        make(map[string]string),
-		SelectFilter: lapi.AutoSelectFilter{},
-	}
-	params, err := NewParameters(i.Parameters)
-	if err != nil {
-		return resourceGroup, err
-	}
-	resourceGroup.Name = params.ResourceGroup
+//ParseLayerList returns a slice of LayerType from a string of space-separated layers.
+func ParseLayerList(s string) ([]lapi.LayerType, error) {
+	list := strings.Split(s, " ")
+	var layers = make([]lapi.LayerType, 0)
+	knownLayers := []lapi.LayerType{lapi.DRBD, lapi.STORAGE, lapi.LUKS, lapi.NVME}
 
-	return resourceGroup, nil
+userLayers:
+	for _, l := range list {
+		for _, k := range knownLayers {
+			if strings.EqualFold(l, string(k)) {
+				layers = append(layers, k)
+				continue userLayers
+			}
+		}
+		// Reached the bottom without finding a match.
+		return layers, fmt.Errorf("unknown layer type %s, known layer types %v", l, knownLayers)
+	}
+	return layers, nil
+}
+
+// Sort sorts a list of snaphosts.
+func Sort(vols []*Info) {
+	sort.Slice(vols, func(j, k int) bool {
+		return vols[j].CreationTime.Before(vols[k].CreationTime)
+	})
 }
 
 // ToResourceCreateList prepares a list of lapi.ResourceCreate to be used to
