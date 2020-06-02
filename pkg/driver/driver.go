@@ -959,6 +959,10 @@ func (d Driver) Stop() error {
 }
 
 func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
+	logger := d.log.WithFields(logrus.Fields{
+		"request": req.Name,
+	})
+
 	requiredKiB, err := d.Storage.AllocationSizeKiB(req.CapacityRange.GetRequiredBytes(), req.CapacityRange.GetLimitBytes())
 	if err != nil {
 		return &csi.CreateVolumeResponse{}, status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", req.Name, err)
@@ -978,7 +982,7 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 	for k, v := range req.Parameters {
 		vol.Parameters[k] = v
 	}
-	d.log.WithFields(logrus.Fields{
+	logger.WithFields(logrus.Fields{
 		"newVolume": fmt.Sprintf("%+v", vol),
 		"size":      volumeSize,
 	}).Debug("creating new volume")
@@ -992,6 +996,7 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 				return &csi.CreateVolumeResponse{}, status.Errorf(codes.InvalidArgument,
 					"CreateVolume failed for %s: empty snapshotId", req.GetName())
 			}
+			logger.Debugf("pre-populate volume from snapshot: %+v", snapshotID)
 
 			snap, err := d.Snapshots.GetSnapByID(ctx, snapshotID)
 			if err != nil {
@@ -1019,7 +1024,14 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 			}
 			// We're cloning from a whole volume.
 		case req.GetVolumeContentSource().GetVolume() != nil:
-			sourceVol, err := d.Storage.GetByID(ctx, req.GetVolumeContentSource().GetVolume().GetVolumeId())
+			volumeId := req.GetVolumeContentSource().GetVolume().GetVolumeId()
+			if volumeId == "" {
+				return &csi.CreateVolumeResponse{}, status.Errorf(codes.InvalidArgument,
+					"CreateVolume failed for %s: empty volumeId", req.GetName())
+			}
+			logger.Debugf("pre-populate volume from snapshot: %+v", volumeId)
+
+			sourceVol, err := d.Storage.GetByID(ctx, volumeId)
 			if err != nil {
 				return &csi.CreateVolumeResponse{}, status.Errorf(codes.Internal,
 					"CreateVolume failed for %s: %v", req.GetName(), err)
@@ -1057,6 +1069,7 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
 			VolumeId:           vol.ID,
+			ContentSource:      req.GetVolumeContentSource(),
 			CapacityBytes:      int64(volumeSize.InclusiveBytes()),
 			AccessibleTopology: topos,
 		}}, nil

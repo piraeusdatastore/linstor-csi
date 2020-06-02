@@ -266,11 +266,41 @@ func (s *Linstor) GetByID(ctx context.Context, id string) (*volume.Info, error) 
 // Create creates the resource definition, volume definition, and assigns the
 // resulting resource to LINSTOR nodes.
 func (s *Linstor) Create(ctx context.Context, vol *volume.Info, req *csi.CreateVolumeRequest) error {
-	s.log.WithFields(logrus.Fields{
+	logger := s.log.WithFields(logrus.Fields{
 		"volume": fmt.Sprintf("%+v", vol),
-	}).Info("creating volume")
+	})
 
-	if err := s.createResourceDefinition(ctx, vol); err != nil {
+	logger.Debug("convert volume parameters")
+	params, err := volume.NewParameters(vol.Parameters)
+	if err != nil {
+		logger.Debugf("conversion failed: %v", err)
+		return err
+	}
+
+	logger.Debug("reconcile resource group from storage class")
+	rGroup, err := s.reconcileResourceGroup(ctx, params)
+	if err != nil {
+		logger.Debugf("reconcile resource group failed: %v", err)
+		return err
+	}
+
+	logger.Debug("reconcile resource definition for volume")
+	rDef, err := s.reconcileResourceDefinition(ctx, vol, rGroup.Name)
+	if err != nil {
+		logger.Debugf("reconcile resource definition failed: %v", err)
+		return err
+	}
+
+	logger.Debug("reconcile volume definition for volume")
+	_, err = s.reconcileVolumeDefinition(ctx, vol, rDef.Name)
+	if err != nil {
+		logger.Debugf("reconcile volume definition failed: %v", err)
+		return err
+	}
+
+	logger.Debug("update volume information with resource definition information")
+	vol.ID = rDef.Name
+	if err := s.saveVolume(ctx, vol); err != nil {
 		return err
 	}
 
@@ -535,33 +565,53 @@ func (s *Linstor) SnapDelete(ctx context.Context, snap *volume.SnapInfo) error {
 
 // VolFromSnap creates the volume using the data contained within the snapshot.
 func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.SnapInfo, vol *volume.Info) error {
-	s.log.WithFields(logrus.Fields{
-		"volume":   fmt.Sprintf("%+v", vol),
+	logger := s.log.WithFields(logrus.Fields{
+		"volume": fmt.Sprintf("%+v", vol),
 		"snapshot": fmt.Sprintf("%+v", snap),
-	}).Info("creating volume from snapshot")
+	})
 
-	if err := s.createResourceDefinition(ctx, vol); err != nil {
+	logger.Debug("convert volume parameters")
+	params, err := volume.NewParameters(vol.Parameters)
+	if err != nil {
+		logger.Debugf("conversion failed: %v", err)
 		return err
 	}
 
-	r, err := s.client.Resources.GetAll(ctx, vol.ID)
+	logger.Debug("reconcile resource group from storage class")
+	rGroup, err := s.reconcileResourceGroup(ctx, params)
 	if err != nil {
+		logger.Debugf("reconcile resource group failed: %v", err)
+		return err
+	}
+
+	logger.Debug("reconcile resource definition for volume")
+	rDef, err := s.reconcileResourceDefinition(ctx, vol, rGroup.Name)
+	if err != nil {
+		logger.Debugf("reconcile resource definition failed: %v", err)
+		return err
+	}
+
+	logger.Debug("update volume information with resource definition information")
+	vol.ID = rDef.Name
+	if err := s.saveVolume(ctx, vol); err != nil {
 		return err
 	}
 
 	snapRestore := lapi.SnapshotRestore{
-		ToResource: vol.ID,
-		Nodes:      util.DeployedDiskfullyNodes(r),
+		ToResource: rDef.Name,
 	}
 
+	logger.Debug("restore VolumeDefinition from snapshot")
 	if err := s.client.Resources.RestoreVolumeDefinitionSnapshot(ctx, snap.CsiSnap.SourceVolumeId, snap.Name, snapRestore); err != nil {
 		return err
 	}
 
+	logger.Debug("restore snapshot")
 	if err := s.client.Resources.RestoreSnapshot(ctx, snap.CsiSnap.SourceVolumeId, snap.Name, snapRestore); err != nil {
 		return err
 	}
 
+	logger.Debug("success")
 	return nil
 }
 
@@ -592,16 +642,15 @@ func (s *Linstor) VolFromVol(ctx context.Context, sourceVol, vol *volume.Info) e
 	)
 }
 
-func (s *Linstor) createSyncResourceGroup(ctx context.Context, vol *volume.Info) (string, error) {
-	params, err := volume.NewParameters(vol.Parameters)
-	if err != nil {
-		return "", err
-	}
+// Reconcile a ResourceGroup based on the values passed to the StorageClass
+func (s *Linstor) reconcileResourceGroup(ctx context.Context, params volume.Parameters) (*lapi.ResourceGroup, error) {
+	logger := s.log.WithFields(logrus.Fields{
+		"params": params,
+	})
+
 	rgName := params.ResourceGroup
 	if rgName == "" {
-		s.log.WithFields(logrus.Fields{
-			"volume": fmt.Sprintf("%+v", vol),
-		}).Warn("Storage Class without 'resourceGroup'. Retire this SC now!")
+		logger.Warn("Storage Class without 'resourceGroup'. Retire this SC now!")
 		rgName = s.fallbackNameUUIDNew()
 	}
 
@@ -616,63 +665,107 @@ func (s *Linstor) createSyncResourceGroup(ctx context.Context, vol *volume.Info)
 		}
 		volumeGroup := lapi.VolumeGroup{}
 		if err := s.client.ResourceGroups.Create(ctx, resourceGroup); err != nil {
-			return rgName, err
+			return nil, err
 		}
 		if err := s.client.ResourceGroups.CreateVolumeGroup(ctx, rgName, volumeGroup); err != nil {
-			return rgName, err
+			return nil, err
 		}
 		rg, err = s.client.ResourceGroups.Get(ctx, rgName)
 		if err != nil {
-			return rgName, err
+			return nil, err
 		}
 	}
 
-	rgModify, err := vol.ToResourceGroupModify(rg)
+	rgModify, err := params.ToResourceGroupModify(&rg)
 	if err != nil {
-		return rgName, err
+		return nil, err
 	}
 	if err := s.client.ResourceGroups.Modify(ctx, rgName, rgModify); err != nil {
-		return rgName, err
+		return nil, err
 	}
 
-	return rgName, nil
+	rg, err = s.client.ResourceGroups.Get(ctx, rgName)
+	if err != nil {
+		return nil, err
+	}
+
+	return &rg, nil
 }
 
-// Creates a resourceDefinition, updating the vol.ID if successful.
-func (s *Linstor) createResourceDefinition(ctx context.Context, vol *volume.Info) error {
-	rgName, err := s.createSyncResourceGroup(ctx, vol)
+func (s *Linstor) reconcileResourceDefinition(ctx context.Context, info *volume.Info, rgName string) (*lapi.ResourceDefinition, error) {
+	logger := s.log.WithFields(logrus.Fields{
+		"volume": info.Name,
+	})
+	logger.Info("reconcile resource definition for volume")
+
+	logger.Debugf("check if resource definition already exists")
+	allRds, err := s.client.ResourceDefinitions.GetAll(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	// "spawns" only the resource-definition, does not autodeploy it.
-	spawnDefCreate, err := vol.ToResourceGroupSpawn()
-	if err != nil {
-		return err
-	}
-
-	if err := s.client.ResourceGroups.Spawn(ctx, rgName, spawnDefCreate); err != nil {
-		return err
-	}
-
-	// Find the volume ID of the volume we just created.
-	rds, err := s.client.ResourceDefinitions.GetAll(ctx)
-	if err != nil {
-		return err
-	}
-
-	for _, rd := range rds {
-		if rd.ExternalName == vol.Name {
-			vol.ID = rd.Name
+	for _, rd := range allRds {
+		if rd.ExternalName == info.Name {
+			logger.Debugf("resource definition already exists")
+			return &rd, nil
 		}
 	}
 
-	// Annotate resource definition with updated volume ID.
-	if err := s.saveVolume(ctx, vol); err != nil {
-		return err
+	logger.Debugf("resource definition does not exist, create now")
+	rdCreate := lapi.ResourceDefinitionCreate{
+		ResourceDefinition: lapi.ResourceDefinition{
+			ExternalName:      info.Name,
+			ResourceGroupName: rgName,
+		},
+	}
+	err = s.client.ResourceDefinitions.Create(ctx, rdCreate)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	logger.Debugf("find newly created ResourceDefinition")
+	allRds, err = s.client.ResourceDefinitions.GetAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, rd := range allRds {
+		if rd.ExternalName == info.Name {
+			return &rd, nil
+		}
+	}
+
+	logger.Warn("could not find created ResourceDefinition")
+	return nil, fmt.Errorf("could not find ResourceDefinition, but it was just created without error: %s", info.Name)
+}
+
+func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.Info, rdName string) (*lapi.VolumeDefinition, error) {
+	logger := s.log.WithFields(logrus.Fields{
+		"volume": info.Name,
+	})
+	logger.Info("reconcile volume definition for volume")
+
+	logger.Debug("check if volume definition already exists")
+	vDef, err := s.client.Client.ResourceDefinitions.GetVolumeDefinition(ctx, rdName, 0)
+	if err == lapi.NotFoundError {
+		vdCreate := lapi.VolumeDefinitionCreate{
+			VolumeDefinition: lapi.VolumeDefinition{
+				VolumeNumber: 0,
+				SizeKib:      uint64(data.NewKibiByte(data.ByteSize(info.SizeBytes)).Value()),
+			},
+		}
+
+		err = s.client.ResourceDefinitions.CreateVolumeDefinition(ctx, rdName, vdCreate)
+		if err != nil {
+			return nil, err
+		}
+
+		vDef, err = s.client.Client.ResourceDefinitions.GetVolumeDefinition(ctx, rdName, 0)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vDef, nil
 }
 
 // store a representation of a volume into the aux props of a resource definition.
