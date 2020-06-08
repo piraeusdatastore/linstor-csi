@@ -591,12 +591,6 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.SnapInfo, vol *v
 		return err
 	}
 
-	logger.Debug("update volume information with resource definition information")
-	vol.ID = rDef.Name
-	if err := s.saveVolume(ctx, vol); err != nil {
-		return err
-	}
-
 	snapRestore := lapi.SnapshotRestore{
 		ToResource: rDef.Name,
 	}
@@ -608,6 +602,16 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.SnapInfo, vol *v
 
 	logger.Debug("restore snapshot")
 	if err := s.client.Resources.RestoreSnapshot(ctx, snap.CsiSnap.SourceVolumeId, snap.Name, snapRestore); err != nil {
+		return err
+	}
+
+	// Note: saveVolume() sets annotations that are:
+	// 1. needed to determine which volume to mount in the CSINode code
+	// 2. overwritten on restore from snapshot
+	// to make sure its not overwritten, this is the last step in this method.
+	logger.Debug("update volume information with resource definition information")
+	vol.ID = rDef.Name
+	if err := s.saveVolume(ctx, vol); err != nil {
 		return err
 	}
 
