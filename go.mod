@@ -5,7 +5,7 @@ go 1.12
 require (
 	github.com/LINBIT/golinstor v0.24.2
 	github.com/alvaroloes/enumer v1.1.2
-	github.com/container-storage-interface/spec v1.1.0
+	github.com/container-storage-interface/spec v1.2.0
 	github.com/golang/protobuf v1.3.2
 	github.com/haySwim/data v0.2.0
 	github.com/kubernetes-csi/csi-test v2.0.1+incompatible

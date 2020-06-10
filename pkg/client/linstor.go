@@ -46,6 +46,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sys/unix"
 	"k8s.io/kubernetes/pkg/util/mount"
+	"k8s.io/kubernetes/pkg/util/resizefs"
 )
 
 // Linstor is a high-level client for use with CSI.
@@ -1192,4 +1193,40 @@ func (s *Linstor) GetVolumeStats(path string) (volume.VolumeStats, error) {
 		TotalInodes:     int64(statfs.Files),
 		UsedInodes:      int64(statfs.Files) - int64(statfs.Ffree),
 	}, nil
+}
+
+func (s *Linstor) NodeExpand(source, target string) error {
+	resizer := resizefs.NewResizeFs(s.mounter)
+	_, err := resizer.Resize(source, target)
+	return err
+}
+
+func (s *Linstor) ControllerExpand(ctx context.Context, vol *volume.Info) error {
+	s.log.WithFields(logrus.Fields{
+		"volume": fmt.Sprintf("%+v", vol),
+	}).Info("controller expand volume")
+
+	volumeDefinitionModify := lapi.VolumeDefinitionModify{
+		SizeKib: uint64(data.NewKibiByte(data.ByteSize(vol.SizeBytes)).Value()),
+	}
+
+	volumeDefinitions, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, vol.ID)
+	if err != nil || len(volumeDefinitions) < 1 {
+		return fmt.Errorf("get volumeDefinitions failed volumeInfo: %v, err: %v", vol, err)
+	}
+
+	if volumeDefinitionModify.SizeKib == volumeDefinitions[0].SizeKib {
+		return nil
+	}
+
+	if volumeDefinitionModify.SizeKib < volumeDefinitions[0].SizeKib {
+		return fmt.Errorf("storage only support expand does not support reduce.volumeInfo: %v old: %d, new: %d", vol, volumeDefinitions[0].SizeKib, volumeDefinitionModify.SizeKib)
+	}
+
+	err = s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, vol.ID, int(volumeDefinitions[0].VolumeNumber), volumeDefinitionModify)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -24,10 +24,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	ptypes "github.com/golang/protobuf/ptypes"
 	"github.com/pborman/uuid"
+	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
 type MockStorage struct {
@@ -245,4 +245,12 @@ func (s *MockStorage) Unmount(target string) error {
 
 func (s *MockStorage) GetVolumeStats(path string) (volume.VolumeStats, error) {
 	return volume.VolumeStats{}, nil
+}
+
+func (s *MockStorage) NodeExpand(source, target string) error {
+	return nil
+}
+
+func (s *MockStorage) ControllerExpand(ctx context.Context, vol *volume.Info) error {
+	return nil
 }
