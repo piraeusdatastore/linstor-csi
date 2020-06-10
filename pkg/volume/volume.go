@@ -475,3 +475,9 @@ type VolumeStatter interface {
 	// GetVolumeStats determines filesystem usage.
 	GetVolumeStats(path string) (VolumeStats, error)
 }
+
+// Expander handles the resizing operations for volumes.
+type Expander interface {
+	NodeExpand(source, target string) error
+	ControllerExpand(ctx context.Context, vol *Info) error
+}

@@ -123,6 +123,7 @@ func main() {
 		driver.Snapshots(linstorClient),
 		driver.Storage(linstorClient),
 		driver.VolumeStatter(linstorClient),
+		driver.Expander(linstorClient),
 	)
 	if err != nil {
 		log.Fatal(err)
