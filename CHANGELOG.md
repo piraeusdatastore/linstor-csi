@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- "layerlist" is respected when auto-placing volumes on older LINSTOR versions. ([#77])
+
+[#77]: https://github.com/piraeusdatastore/linstor-csi/issues/77
 
 ## [0.9.0] - 2020-06-15
 ### Added

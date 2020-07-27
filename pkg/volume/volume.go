@@ -373,8 +373,15 @@ func (i *Info) toGenericResourceCreate(params Parameters, node string) lapi.Reso
 
 // ToAutoPlace prepares a Info to be deployed by linstor via autoplace.
 func (i *Info) ToAutoPlace() (lapi.AutoPlaceRequest, error) {
-	// kept for abstraction
-	return lapi.AutoPlaceRequest{}, nil
+	// Workaround for LINSTOR bug prior to v1.8.0. The default layer list for auto-place requests was '[]',
+	// which is then defaulted to drbd,storage. This would override any layer list specified in the resource group.
+	// This workaround alleviates the issue by setting the layer list on the auto-place request explicitly.
+	params, err := NewParameters(i.Parameters)
+	if err != nil {
+		return lapi.AutoPlaceRequest{}, err
+	}
+
+	return lapi.AutoPlaceRequest{LayerList: params.LayerList}, nil
 }
 
 // SnapInfo provides everything needed to manipulate snapshots.
