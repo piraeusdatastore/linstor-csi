@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          # Fetch all tags + branches so "git describe" can find the latest tag
+          fetch-depth: 0
       - name: build
         run: |
           make update TAG="$(git describe --dirty --tags --long --match "v*.*")"
