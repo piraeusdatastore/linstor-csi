@@ -1,0 +1,27 @@
+name: build
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: build
+        run: |
+          make update TAG="$(git describe --dirty --tags --long --match "v*.*")"
+      - name: login to registry
+        if: github.event_name != 'pull_request'
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          docker login --username=${DOCKER_USERNAME} --password-stdin quay.io <<< "${DOCKER_PASSWORD}"
+      - name: push
+        if: github.event_name != 'pull_request'
+        run: |
+          make upload TAG="$(git describe --dirty --tags --long --match "v*.*")" REGISTRY=quay.io/piraeusdatastore
