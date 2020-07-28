@@ -16,7 +16,7 @@ jobs:
           fetch-depth: 0
       - name: build
         run: |
-          make update TAG="$(git describe --dirty --tags --long --match "v*.*")"
+          make update TAG="$(git describe --dirty --tags --match "v*.*")"
       - name: login to registry
         if: github.event_name != 'pull_request'
         env:
@@ -27,4 +27,4 @@ jobs:
       - name: push
         if: github.event_name != 'pull_request'
         run: |
-          make upload TAG="$(git describe --dirty --tags --long --match "v*.*")" REGISTRY=quay.io/piraeusdatastore
+          make upload TAG="$(git describe --dirty --tags --match "v*.*")" REGISTRY=quay.io/piraeusdatastore
