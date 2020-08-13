@@ -255,11 +255,11 @@ func (params *Parameters) ToResourceGroupModify(rg *lapi.ResourceGroup) (lapi.Re
 	}
 
 	for _, p := range params.ReplicasOnDifferent {
-		rgModify.SelectFilter.ReplicasOnDifferent = append(rgModify.SelectFilter.ReplicasOnDifferent, p)
+		rgModify.SelectFilter.ReplicasOnDifferent = append(rgModify.SelectFilter.ReplicasOnDifferent, maybeAddAux(p))
 	}
 
 	for _, p := range params.ReplicasOnSame {
-		rgModify.SelectFilter.ReplicasOnSame = append(rgModify.SelectFilter.ReplicasOnSame, p)
+		rgModify.SelectFilter.ReplicasOnSame = append(rgModify.SelectFilter.ReplicasOnSame, maybeAddAux(p))
 	}
 
 	for _, p := range params.LayerList {
@@ -487,4 +487,13 @@ type VolumeStatter interface {
 type Expander interface {
 	NodeExpand(source, target string) error
 	ControllerExpand(ctx context.Context, vol *Info) error
+}
+
+func maybeAddAux(prop string) string {
+	auxPrefix := lc.NamespcAuxiliary + "/"
+	if strings.HasPrefix(prop, auxPrefix) {
+		return prop
+	}
+
+	return auxPrefix + prop
 }
