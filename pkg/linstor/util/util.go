@@ -21,42 +21,11 @@ package util
 import (
 	apiconst "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
-	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
-
-// NodeIsAccessible returns true if the appropriate StoragePool is present for
-// diskfull or diskless resources.
-func NodeIsAccessible(sp lapi.StoragePool, p volume.Parameters) bool {
-	return p.AllowRemoteVolumeAccess && matchDisklessPool(sp, p)
-}
-
-func matchDiskfullPool(sp lapi.StoragePool, p volume.Parameters) bool {
-	return sp.StoragePoolName == p.StoragePool && sp.ProviderKind != lapi.DISKLESS
-}
-
-func matchDisklessPool(sp lapi.StoragePool, p volume.Parameters) bool {
-	// The default diskless storage pool doesn't show up in the list and by
-	// default all network attachable resources can use it.
-	return p.DisklessStoragePool == volume.DefaultDisklessStoragePoolName ||
-		// Otherwise, the user is using a particular diskless storage pool
-		(sp.StoragePoolName == p.DisklessStoragePool && sp.ProviderKind == lapi.DISKLESS)
-}
 
 // DeployedDiskfullyNodes lists all nodes where a resource has volumes physically
 // present.
 func DeployedDiskfullyNodes(res []lapi.Resource) []string {
-	var nodes = make([]string, 0)
-	for _, r := range res {
-		if DeployedDiskfully(r) {
-			nodes = append(nodes, r.NodeName)
-		}
-	}
-	return nodes
-}
-
-// DeployedDisklesslyNodes list all nodes where a resource has volumes that are
-// attached over the network.
-func DeployedDisklesslyNodes(res []lapi.Resource) []string {
 	var nodes = make([]string, 0)
 	for _, r := range res {
 		if DeployedDiskfully(r) {

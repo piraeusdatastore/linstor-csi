@@ -56,41 +56,19 @@ func (c *HighLevelClient) GenericAccessibleTopologies(ctx context.Context, vol *
 	if err != nil {
 		return nil, fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
 	}
+
+	// Volume is definitely accessible on the nodes it's deployed on.
 	nodes := util.DeployedDiskfullyNodes(r)
-
-	// Get all nodes where the resource could be attached to.
-	pools, err := c.Nodes.GetStoragePoolView(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
-	}
-	for _, sp := range pools {
-		if util.NodeIsAccessible(sp, params) {
-			nodes = append(nodes, sp.NodeName)
-		}
-	}
-
-	// Return the deduplicated list of accessible nodes.
 	var topos = make([]*csi.Topology, 0)
-	for _, n := range uniq(nodes) {
-		topos = append(topos, &csi.Topology{Segments: map[string]string{topology.LinstorNodeKey: n}})
+	for _, node := range nodes {
+		topos = append(topos, &csi.Topology{Segments: map[string]string{topology.LinstorNodeKey: node}})
+	}
+
+	// If remote access is allowed, give access to all nodes with diskless storage pool.
+	if params.AllowRemoteVolumeAccess {
+		disklessPoolLabel := topology.ToStoragePoolLabel(params.DisklessStoragePool)
+		topos = append(topos, &csi.Topology{Segments: map[string]string{disklessPoolLabel: topology.LinstorStoragePoolValue}})
 	}
 
 	return topos, nil
-}
-
-// remove duplicates from a slice.
-func uniq(strs []string) []string {
-	var seen = make(map[string]bool, len(strs))
-	var j int
-
-	for _, s := range strs {
-		if seen[s] {
-			continue
-		}
-		seen[s] = true
-		strs[j] = s
-		j++
-	}
-
-	return strs[:j]
 }

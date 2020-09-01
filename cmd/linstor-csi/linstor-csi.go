@@ -124,6 +124,7 @@ func main() {
 		driver.Storage(linstorClient),
 		driver.VolumeStatter(linstorClient),
 		driver.Expander(linstorClient),
+		driver.NodeInformer(linstorClient),
 	)
 	if err != nil {
 		log.Fatal(err)

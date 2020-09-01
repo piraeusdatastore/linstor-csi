@@ -27,7 +27,6 @@ const (
 	RackLabel      = "failure-domain.beta.kubernetes.io/zone"
 	StorageLabel   = "node-role.kubernetes.io/storage"
 	PrefNicPropKey = "PrefNic"
-	layerListKey   = "layerlist"
 )
 
 type StoragePool struct {
@@ -407,9 +406,9 @@ func (b BalanceScheduler) AccessibleTopologies(ctx context.Context, vol *volume.
 	if err != nil {
 		return nil, err
 	}
-	var topos = make([]*csi.Topology, 0)
-	topos = append(topos, &csi.Topology{Segments: map[string]string{RackLabel: rack}})
-	return topos, nil
+	return []*csi.Topology{
+		{Segments: map[string]string{RackLabel: rack}},
+	}, nil
 }
 
 func volToDiskfullResourceCreate(vol *volume.Info, params volume.Parameters, node string, storagePool string) lapi.ResourceCreate {
@@ -423,5 +422,4 @@ func volToDiskfullResourceCreate(vol *volume.Info, params volume.Parameters, nod
 			Flags: make([]string, 0),
 		},
 	}
-
 }
