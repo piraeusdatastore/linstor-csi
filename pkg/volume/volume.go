@@ -483,6 +483,10 @@ type VolumeStatter interface {
 	GetVolumeStats(path string) (VolumeStats, error)
 }
 
+type NodeInformer interface {
+	GetNodeTopologies(ctx context.Context, nodename string) (*csi.Topology, error)
+}
+
 // Expander handles the resizing operations for volumes.
 type Expander interface {
 	NodeExpand(source, target string) error

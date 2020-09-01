@@ -18,6 +18,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 package topology
 
+import "fmt"
+
 //go:generate enumer -type=PlacementPolicy
 
 // PlacementPolicy determines which scheduler will create volumes and report
@@ -39,6 +41,26 @@ const (
 	Balanced
 )
 
-// LinstorNodeKey refers to a node running the LINSTOR csi node service
-// and the linstor Satellite and is therefore capabile of hosting LINSTOR volumes.
-const LinstorNodeKey = "linbit.com/hostname"
+const (
+	// LinstorNodeKey refers to a node running the LINSTOR csi node service
+	// and the linstor Satellite and is therefore capable of hosting LINSTOR volumes.
+	LinstorNodeKey = "linbit.com/hostname"
+
+	// LinstorStoragePoolKeyPrefix is the prefix used when specifying the available storage
+	// pools on a node via CSI topology keys.
+	LinstorStoragePoolKeyPrefix = "linbit.com"
+
+	// The value assigned to the storage pool label, given that the node has access to the storage pool.
+	LinstorStoragePoolValue = "true"
+)
+
+// Converts the storage pool name into a CSI Topology compatible label.
+//
+// There is an upper limit on the length of these keys (63 chars for prefix + 63 chars for the key) as per CSI Spec.
+// LINSTOR enforces a stricter limit of 48 characters for storage pools, so this should not be an issue.
+func ToStoragePoolLabel(storagePoolName string) string {
+	// No additional checks since
+	// a. storage pool names should always expand to valid label names.
+	// b. invalid names are caught by the node-registrar sidecar in any case.
+	return fmt.Sprintf("%s/sp-%s", LinstorStoragePoolKeyPrefix, storagePoolName)
+}

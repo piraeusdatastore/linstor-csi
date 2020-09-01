@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Use storage pools for CSI topology support. ([#83])
+
+[#83]: https://github.com/piraeusdatastore/linstor-csi/pull/83
+
 ## [0.9.1] - 2020-07-28
 ### Fixed
 - "layerlist" is respected when auto-placing volumes on older LINSTOR versions. ([#77])

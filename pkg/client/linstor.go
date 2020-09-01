@@ -1230,3 +1230,27 @@ func (s *Linstor) ControllerExpand(ctx context.Context, vol *volume.Info) error 
 
 	return nil
 }
+
+func (s *Linstor) GetNodeTopologies(ctx context.Context, nodename string) (*csi.Topology, error) {
+	topo := &csi.Topology{
+		Segments: map[string]string{
+			topology.LinstorNodeKey: nodename,
+		},
+	}
+
+	pools, err := s.client.Nodes.GetStoragePools(ctx, nodename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get storage pools for node: %w", err)
+	}
+
+	// Ideally we could pass the configured storage pools as a single "linbit.com/storage-pool = [pool1, pool2, ...]".
+	// Unfortunately, setting a list for topologies is not supported. Instead we create a unique key for each storage
+	// pool.
+	// See https://github.com/container-storage-interface/spec/issues/255
+	for i := range pools {
+		label := topology.ToStoragePoolLabel(pools[i].StoragePoolName)
+		topo.Segments[label] = "true"
+	}
+
+	return topo, nil
+}

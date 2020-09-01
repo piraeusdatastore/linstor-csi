@@ -254,3 +254,11 @@ func (s *MockStorage) NodeExpand(source, target string) error {
 func (s *MockStorage) ControllerExpand(ctx context.Context, vol *volume.Info) error {
 	return nil
 }
+
+func (s *MockStorage) GetNodeTopologies(_ context.Context, node string) (*csi.Topology, error) {
+	return &csi.Topology{
+		Segments: map[string]string{
+			"mock.example.com/node": node,
+		},
+	}, nil
+}

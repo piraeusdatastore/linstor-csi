@@ -35,7 +35,6 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/haySwim/data"
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
-	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -54,6 +53,7 @@ type Driver struct {
 	Snapshots     volume.SnapshotCreateDeleter
 	VolumeStatter volume.VolumeStatter
 	Expander      volume.Expander
+	NodeInformer  volume.NodeInformer
 	srv           *grpc.Server
 	log           *logrus.Entry
 	version       string
@@ -81,6 +81,7 @@ func NewDriver(options ...func(*Driver) error) (*Driver, error) {
 		Snapshots:     mockStorage,
 		Expander:      mockStorage,
 		VolumeStatter: mockStorage,
+		NodeInformer:  mockStorage,
 		log:           logrus.NewEntry(logrus.New()),
 	}
 
@@ -151,6 +152,13 @@ func Mounter(m volume.Mounter) func(*Driver) error {
 func VolumeStatter(s volume.VolumeStatter) func(*Driver) error {
 	return func(d *Driver) error {
 		d.VolumeStatter = s
+		return nil
+	}
+}
+
+func NodeInformer(n volume.NodeInformer) func(*Driver) error {
+	return func(d *Driver) error {
+		d.NodeInformer = n
 		return nil
 	}
 }
@@ -418,14 +426,16 @@ func (d Driver) NodeGetCapabilities(context.Context, *csi.NodeGetCapabilitiesReq
 }
 
 // NodeGetInfo https://github.com/container-storage-interface/spec/blob/v1.2.0/spec.md#nodegetinfo
-func (d Driver) NodeGetInfo(context.Context, *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
+func (d Driver) NodeGetInfo(ctx context.Context, _ *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
+	topology, err := d.NodeInformer.GetNodeTopologies(ctx, d.nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve node topology: %w", err)
+	}
+
 	return &csi.NodeGetInfoResponse{
 		NodeId:            d.nodeID,
 		MaxVolumesPerNode: 1048576, // DRBD volumes per node limit.
-		AccessibleTopology: &csi.Topology{
-			Segments: map[string]string{
-				topology.LinstorNodeKey: d.nodeID,
-			}},
+		AccessibleTopology: topology,
 	}, nil
 }
 
