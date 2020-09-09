@@ -13,6 +13,11 @@ run `make staticrelease`.
 
 # Deployment
 
+If you are looking to deploy a full LINSTOR setup with LINSTOR controller and satellites,
+take a look at [our operator](https://github.com/piraeusdatastore/piraeus-operator).
+
+This project _ONLY_ deploys the CSI components, a working LINSTOR cluster is required.
+
 ## Kubernetes
 
 The yaml file in `examples/k8s/deploy` shows an example configuration which
