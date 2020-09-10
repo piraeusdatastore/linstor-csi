@@ -283,11 +283,38 @@ func (params *Parameters) ToResourceGroupModify(rg *lapi.ResourceGroup) (lapi.Re
 	return rgModify, nil
 }
 
+// DisklessFlag returns the diskless flag passed to resource create calls.
+// It will select the flag matching the top-most layer that supports disk-less resources.
+func (params *Parameters) DisklessFlag() (string, error) {
+	for _, l := range params.LayerList {
+		if l == lapi.DRBD {
+			return lc.FlagDrbdDiskless, nil
+		}
+		if l == lapi.NVME {
+			return lc.FlagNvmeInitiator, nil
+		}
+		if l == lapi.OPENFLEX {
+			// Openflex volumes are connected via NVMe
+			return lc.FlagNvmeInitiator, nil
+		}
+	}
+
+	return "", fmt.Errorf("could not determine diskless flag for layers: %v", params.LayerList)
+}
+
 //ParseLayerList returns a slice of LayerType from a string of space-separated layers.
 func ParseLayerList(s string) ([]lapi.LayerType, error) {
 	list := strings.Split(s, " ")
 	var layers = make([]lapi.LayerType, 0)
-	knownLayers := []lapi.LayerType{lapi.DRBD, lapi.STORAGE, lapi.LUKS, lapi.NVME}
+	knownLayers := []lapi.LayerType{
+		lapi.DRBD,
+		lapi.STORAGE,
+		lapi.LUKS,
+		lapi.NVME,
+		lapi.CACHE,
+		lapi.OPENFLEX,
+		lapi.WRITECACHE,
+	}
 
 userLayers:
 	for _, l := range list {
@@ -355,9 +382,15 @@ func (i *Info) ToDisklessResourceCreate(node string) (lapi.ResourceCreate, error
 		return lapi.ResourceCreate{}, err
 	}
 
+	diskless, err := params.DisklessFlag()
+	if err != nil {
+		return lapi.ResourceCreate{}, err
+	}
+
 	res := i.toGenericResourceCreate(params, node)
 	res.Resource.Props[lc.KeyStorPoolName] = params.DisklessStoragePool
-	res.Resource.Flags = append(res.Resource.Flags, lc.FlagDiskless)
+	res.Resource.Flags = append(res.Resource.Flags, diskless)
+
 	return res, nil
 }
 
