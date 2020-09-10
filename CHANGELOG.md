@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Support all currently available LINSTOR layers
+  - DRBD
+  - STORAGE
+  - LUKS
+  - NVME
+  - CACHE (new)
+  - OPENFLEX (new)
+  - WRITECACHE (new)
+
 ### Changed
 - Use storage pools for CSI topology support. ([#83])
 
