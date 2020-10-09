@@ -208,7 +208,7 @@ func mockMountPath(target string) string {
 	return filepath.Join(os.TempDir(), filepath.Base(target), "_mounted")
 }
 
-func (s *MockStorage) Mount(vol *volume.Info, source, target, fsType string, options []string) error {
+func (s *MockStorage) Mount(vol *volume.Info, source, target, fsType string, readonly bool, options []string) error {
 	p := mockMountPath(target)
 	if _, err := os.Stat(p); os.IsNotExist(err) {
 		return os.MkdirAll(p, 0755)

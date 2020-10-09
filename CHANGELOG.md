@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Support for ROX filesystem volumes ([#87])
+- Support for ROX filesystem and block volumes ([#87] and [#88])
 - Support all currently available LINSTOR layers
   - DRBD
   - STORAGE
@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Use storage pools for CSI topology support. ([#83])
 
+[#88]: https://github.com/piraeusdatastore/linstor-csi/pull/88
 [#87]: https://github.com/piraeusdatastore/linstor-csi/pull/87
 [#83]: https://github.com/piraeusdatastore/linstor-csi/pull/83
 
