@@ -974,7 +974,7 @@ func (s *Linstor) GetAssignmentOnNode(ctx context.Context, vol *volume.Info, nod
 // Mount makes volumes consumable from the source to the target.
 // Filesystems are formatted and block devices are bind mounted.
 // Operates locally on the machines where it is called.
-func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options []string) error {
+func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, readonly bool, options []string) error {
 	params, err := volume.NewParameters(vol.Parameters)
 	if err != nil {
 		return fmt.Errorf("mounting volume failed: %v", err)
@@ -1012,6 +1012,23 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, options
 	_, err = s.mounter.DeviceOpened(source)
 	if err != nil {
 		return fmt.Errorf("checking for exclusive open failed: %v, check device health", err)
+	}
+
+	// Ensure the exported device is RO comes in 2 flavours:
+	// * For fs volumes: just mount with the "ro" flag.
+	// * For block volumes: using the "ro" flag to bind-mount the original device will have no effect, the device
+	//   can then still be opened using O_RDWR. Kubernetes itself sets up a loop device which uses open(..,  O_RDWR) by
+	//   default. This would mean that DRBD would automatically try to promote this node to primary. The fix applied
+	//   here is to introduce another indirection in the form of another loop device, set RO using the --readonly flag.
+	if readonly {
+		options = append(options, "ro")
+
+		if block {
+			source, err = s.setupReadonlyLoopDevice(source)
+			if err != nil {
+				return fmt.Errorf("failed to setup readonly loop device: %w", err)
+			}
+		}
 	}
 
 	// This is a regular filesystem so format the device and create the mountpoint.
@@ -1097,12 +1114,29 @@ func mkfsArgs(opts, source string) []string {
 	return append(strings.Split(opts, " "), source)
 }
 
+func (s *Linstor) setupReadonlyLoopDevice(srcPath string) (string, error) {
+	out, err := s.mounter.Exec.Run("losetup", "--associated", srcPath)
+	if err != nil {
+		return "", fmt.Errorf("couldn't check on existing loop device for '%s': %w", srcPath, err)
+	}
+
+	if len(out) == 0 {
+		out, err = s.mounter.Exec.Run("losetup", "--find", "--show", "--read-only", srcPath)
+		if err != nil {
+			return "", fmt.Errorf("couldn't set up new loop device for '%s': %w", srcPath, err)
+		}
+	}
+
+	return losetupParseDevice(string(out)), nil
+}
+
 // IsNotMountPoint determines if a directory is a mountpoint.
 func (s *Linstor) IsNotMountPoint(target string) (bool, error) {
 	return s.mounter.IsNotMountPoint(target)
 }
 
-//Unmount unmounts the target. Operates locally on the machines where it is called.
+// Unmount unmounts the target. Operates locally on the machines where it is called.
+// It also detaches any loop device set-up during the Mount call.
 func (s *Linstor) Unmount(target string) error {
 	s.log.WithFields(logrus.Fields{
 		"target": target,
@@ -1117,7 +1151,37 @@ func (s *Linstor) Unmount(target string) error {
 		return nil
 	}
 
-	return s.mounter.Unmount(target)
+	err = s.detachLoopDevice(target)
+	if err != nil {
+		return fmt.Errorf("unable to remove possible loop devices for target '%s': %w", target, err)
+	}
+
+	err = s.mounter.Unmount(target)
+	if err != nil {
+		return fmt.Errorf("unable to unmount target '%s': %w", target, err)
+	}
+
+	return nil
+}
+
+func (s *Linstor) detachLoopDevice(devicePath string) error {
+	_, err := s.mounter.Exec.Run("losetup", "--list", devicePath)
+	if err != nil {
+		// Not a loop device
+		return nil
+	}
+
+	_, err = s.mounter.Exec.Run("losetup", "--detach", devicePath)
+	return err
+}
+
+// Parses the output of losetup calls to get the returned loop device path
+func losetupParseDevice(input string) string {
+	// losetup --associated outputs:
+	// /dev/loop1: [0073]:148662 (/dev/sda)
+	// losetup --find --show outputs:
+	// /dev/loop1
+	return strings.TrimSpace(strings.SplitN(input, ":", 2)[0])
 }
 
 // validResourceName returns an error if the input string is not a valid LINSTOR name

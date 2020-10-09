@@ -311,14 +311,7 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
 	}
 
-	// Set the ro option even in block device mode. In tests, it seems that the device is actually RO
-	// *inside* the container. The same is not always true for the backing device on the host. This seems
-	// to depend on what device is used and more. At least we tried.
-	if req.GetReadonly() {
-		mntOpts = append(mntOpts, "ro")
-	}
-
-	err = d.Mounter.Mount(existingVolume, assignment.Path, req.GetTargetPath(), fsType, mntOpts)
+	err = d.Mounter.Mount(existingVolume, assignment.Path, req.GetTargetPath(), fsType, req.GetReadonly(), mntOpts)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
 	}
@@ -654,19 +647,9 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 	}).Debug("found existing volume")
 
 	for _, requested := range req.VolumeCapabilities {
-		switch {
-		case requested.GetMount() != nil:
-			requestedMode := requested.GetAccessMode().GetMode()
-			if requestedMode != csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER && requestedMode != csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
-				return nil, status.Errorf(codes.InvalidArgument, "ValidateVolumeCapabilities failed for %s: volume of 'mount' type support only RWO and ROX mode")
-			}
-		case requested.GetBlock() != nil:
-			requestedMode := requested.GetAccessMode().GetMode()
-			if requestedMode != csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER {
-				return nil, status.Errorf(codes.InvalidArgument, "ValidateVolumeCapabilities failed for %s: volume of 'block' type support only RWO mode")
-			}
-		default:
-			return nil, status.Errorf(codes.InvalidArgument, "ValidateVolumeCapabilities failed for %s: volume is neither 'mount' nor 'block' type")
+		requestedMode := requested.GetAccessMode().GetMode()
+		if requestedMode != csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER && requestedMode != csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
+			return nil, status.Errorf(codes.InvalidArgument, "ValidateVolumeCapabilities failed for %s: volumes support only RWO and ROX mode", req.GetVolumeId())
 		}
 	}
 
@@ -682,11 +665,15 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 					Mount: &csi.VolumeCapability_MountVolume{}},
 					AccessMode: &csi.VolumeCapability_AccessMode{
 						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY}},
-				// Tell CO we can provision RWO block volumes.
+				// Tell CO we can provision RWO and ROX block volumes.
 				{AccessType: &csi.VolumeCapability_Block{
 					Block: &csi.VolumeCapability_BlockVolume{}},
 					AccessMode: &csi.VolumeCapability_AccessMode{
 						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER}},
+				{AccessType: &csi.VolumeCapability_Block{
+					Block: &csi.VolumeCapability_BlockVolume{}},
+					AccessMode: &csi.VolumeCapability_AccessMode{
+						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY}},
 			},
 		}}, nil
 }
