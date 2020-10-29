@@ -8,3 +8,4 @@ parameters:
   placementCount: "2"
   storagePool: "my-storage-pool"
   resourceGroup: "linstor-basic-storage"
+  csi.storage.k8s.io/fstype: xfs
