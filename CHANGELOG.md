@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2020-11-11
+
 ### Added
 - Support for ROX filesystem and block volumes ([#87] and [#88])
 - Support all currently available LINSTOR layers
@@ -19,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Use storage pools for CSI topology support. ([#83])
+- `replicasOnSame` and `replicasOnDifferent` always use auxiliary properties
 
 [#88]: https://github.com/piraeusdatastore/linstor-csi/pull/88
 [#87]: https://github.com/piraeusdatastore/linstor-csi/pull/87
