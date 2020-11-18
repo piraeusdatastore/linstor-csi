@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- ROX block volumes support requires DRBD v9.0.26 ([#93])
+
+[#93]: https://github.com/piraeusdatastore/linstor-csi/pull/93
+
 ## [0.10.0] - 2020-11-11
 
 ### Added
