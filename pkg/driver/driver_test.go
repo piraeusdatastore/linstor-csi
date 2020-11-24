@@ -3,7 +3,6 @@ package driver
 import (
 	"crypto/tls"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -11,7 +10,7 @@ import (
 	"testing"
 
 	lapi "github.com/LINBIT/golinstor/client"
-	"github.com/kubernetes-csi/csi-test/pkg/sanity"
+	"github.com/kubernetes-csi/csi-test/v3/pkg/sanity"
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
 	"github.com/sirupsen/logrus"
@@ -19,19 +18,19 @@ import (
 )
 
 var (
-	lsEndpoint            = flag.String("linstor-endpoint", "", "Run suite against a real LINSTOR cluster with the specificed controller API endpoint")
-	lsSkipTLSVerification = flag.Bool("linstor-skip-tls-verification", false, "If true, do not verify tls")
-	node                  = flag.String("node", "fake.node", "Node ID to pass to tests, if you're running against a real LINSTOR cluster this needs to match the name of one of the real satellites")
-	paramsFile            = flag.String("parameter-file", "", "File containing paramemers to pass to storage backend during testsing")
-	csiEndpoint           = flag.String("csi-endpoint", "unix:///tmp/csi.sock", "Unix socket for CSI communication")
-	mountForReal          = flag.Bool("mount-for-real", false, "Actually try to mount volumes, needs to be ran on on a kubelet (indicted by the node flag) with it's /dev dir bind mounted into the container")
-	logLevel              = flag.String("log-level", "debug", "how much logging to do")
-	rps                   = flag.Float64("linstor-api-requests-per-second", 0, "Maximum allowed number of LINSTOR API requests per second. Default: Unlimited")
-	burst                 = flag.Int("linstor-api-burst", 1, "Maximum number of API requests allowed before being limited by requests-per-second. Default: 1 (no bursting)")
+	lsEndpoint            = flag.String("sanity.linstor-endpoint", "", "Run suite against a real LINSTOR cluster with the specificed controller API endpoint")
+	lsSkipTLSVerification = flag.Bool("sanity.linstor-skip-tls-verification", false, "If true, do not verify tls")
+	node                  = flag.String("sanity.node", "fake.node", "Node ID to pass to tests, if you're running against a real LINSTOR cluster this needs to match the name of one of the real satellites")
+	paramsFile            = flag.String("sanity.parameter-file", "", "File containing paramemers to pass to storage backend during testsing")
+	csiEndpoint           = flag.String("sanity.csi-endpoint", "unix:///tmp/csi.sock", "Unix socket for CSI communication")
+	mountForReal          = flag.Bool("sanity.mount-for-real", false, "Actually try to mount volumes, needs to be ran on on a kubelet (indicted by the node flag) with it's /dev dir bind mounted into the container")
+	logLevel              = flag.String("sanity.log-level", "debug", "how much logging to do")
+	rps                   = flag.Float64("sanity.linstor-api-requests-per-second", 0, "Maximum allowed number of LINSTOR API requests per second. Default: Unlimited")
+	burst                 = flag.Int("sanity.linstor-api-burst", 1, "Maximum number of API requests allowed before being limited by requests-per-second. Default: 1 (no bursting)")
+	junitfile             = flag.String("sanity.junitfile", "", "File to write the test results to")
 )
 
 func TestDriver(t *testing.T) {
-
 	logFile, err := ioutil.TempFile("", "csi-test-logs")
 	if err != nil {
 		t.Fatal(err)
@@ -112,35 +111,13 @@ func TestDriver(t *testing.T) {
 	}
 	defer os.RemoveAll(mntStageDir)
 
-	cfg := &sanity.Config{
-		TargetPath:               mntDir + "/csi-target",
-		StagingPath:              mntStageDir + "/csi-staging",
-		Address:                  *csiEndpoint,
-		TestVolumeParametersFile: *paramsFile,
-		CreateTargetDir: func(targetPath string) (string, error) {
-			return targetPath, createTargetDir(targetPath)
-		},
-		CreateStagingDir: func(targetPath string) (string, error) {
-			return targetPath, createTargetDir(targetPath)
-		},
-	}
+	cfg := sanity.NewTestConfig()
+	cfg.Address = *csiEndpoint
+	cfg.TargetPath = mntDir + "/csi-target"
+	cfg.StagingPath = mntStageDir + "/csi-staging"
+	cfg.TestVolumeParametersFile = *paramsFile
+	cfg.JUnitFile = *junitfile
 
 	// Now call the test suite
 	sanity.Test(t, cfg)
-}
-
-// Make a custom function, so we don't have to worry about the test complaining
-// the directories it created exist.
-func createTargetDir(targetPath string) error {
-	fileInfo, err := os.Stat(targetPath)
-	if err != nil && os.IsNotExist(err) {
-		return os.MkdirAll(targetPath, 0755)
-	} else if err != nil {
-		return err
-	}
-	if !fileInfo.IsDir() {
-		return fmt.Errorf("Target location %s is not a directory", targetPath)
-	}
-
-	return nil
 }

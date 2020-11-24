@@ -1,6 +1,7 @@
 # Linstor CSI Plugin
 
 ![build](https://github.com/piraeusdatastore/linstor-csi/workflows/build/badge.svg)
+![tests](https://github.com/piraeusdatastore/linstor-csi/workflows/tests/badge.svg)
 ![latest version](https://img.shields.io/github/v/tag/piraeusdatastore/linstor-csi?label=version&sort=semver)
 
 This CSI plugin allows for the use of LINSTOR volumes on Container Orchestrators

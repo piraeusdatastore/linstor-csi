@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	ptypes "github.com/golang/protobuf/ptypes"
@@ -183,7 +184,7 @@ func (s *MockStorage) Detach(ctx context.Context, vol *volume.Info, node string)
 
 func (s *MockStorage) NodeAvailable(ctx context.Context, node string) error {
 	// Hard coding magic string to pass csi-test.
-	if node == "some-fake-node-id" {
+	if strings.Contains(node, "fake-node-id") {
 		return fmt.Errorf("it's obvious that %s is a fake node", node)
 	}
 
