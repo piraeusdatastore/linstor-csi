@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"regexp"
 	"strings"
 
@@ -1124,8 +1125,19 @@ func (s *Linstor) setDevReadWrite(srcPath string) error {
 }
 
 // IsNotMountPoint determines if a directory is a mountpoint.
+//
+// Non-existent paths return (true, nil).
 func (s *Linstor) IsNotMountPoint(target string) (bool, error) {
-	return s.mounter.IsNotMountPoint(target)
+	notMounted, err := s.mounter.IsNotMountPoint(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+
+		return false, err
+	}
+
+	return notMounted, nil
 }
 
 // Unmount unmounts the target. Operates locally on the machines where it is called.
@@ -1134,18 +1146,23 @@ func (s *Linstor) Unmount(target string) error {
 		"target": target,
 	}).Info("unmounting volume")
 
-	notMounted, err := s.mounter.IsNotMountPoint(target)
+	notMounted, err := s.IsNotMountPoint(target)
 	if err != nil {
 		return fmt.Errorf("unable to determine mount status of %s %v", target, err)
 	}
 
-	if notMounted {
-		return nil
+	if !notMounted {
+		// Still needs to be unmounted
+		err := s.mounter.Unmount(target)
+		if err != nil {
+			return fmt.Errorf("unable to unmount target '%s': %w", target, err)
+		}
 	}
 
-	err = s.mounter.Unmount(target)
-	if err != nil {
-		return fmt.Errorf("unable to unmount target '%s': %w", target, err)
+	// Remove the file/directory created in Mount()
+	err = os.Remove(target)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("unable to remove target '%s': %w", target, err)
 	}
 
 	return nil
