@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Crash when calling NodePublishVolume on non-existent volume ([#96])
+
+[#96]: https://github.com/piraeusdatastore/linstor-csi/issues/96
+
 ## [0.10.1] - 2020-11-19
 
 ### Changed

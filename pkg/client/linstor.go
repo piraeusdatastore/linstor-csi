@@ -223,9 +223,9 @@ func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinition) (*v
 	return vol, nil
 }
 
-// GetByName retrives a volume.Info that has a name that matches the CSI volume
+// FindByID retrives a volume.Info that has a name that matches the CSI volume
 // Name, not nessesarily the LINSTOR resource name or UUID.
-func (s *Linstor) GetByName(ctx context.Context, name string) (*volume.Info, error) {
+func (s *Linstor) FindByName(ctx context.Context, name string) (*volume.Info, error) {
 	s.log.WithFields(logrus.Fields{
 		"csiVolumeName": name,
 	}).Debug("looking up resource by CSI volume name")
@@ -249,9 +249,9 @@ func (s *Linstor) GetByName(ctx context.Context, name string) (*volume.Info, err
 	return nil, nil
 }
 
-// GetByID retrives a volume.Info that has an id that matches the CSI volume
+// FindByID retrives a volume.Info that has an id that matches the CSI volume
 // id. Matches the LINSTOR resource name.
-func (s *Linstor) GetByID(ctx context.Context, id string) (*volume.Info, error) {
+func (s *Linstor) FindByID(ctx context.Context, id string) (*volume.Info, error) {
 	s.log.WithFields(logrus.Fields{
 		"csiVolumeID": id,
 	}).Debug("looking up resource by CSI volume id")
@@ -486,7 +486,7 @@ func (s *Linstor) CapacityBytes(ctx context.Context, parameters map[string]strin
 // SnapCreate calls linstor to create a new snapshot on the volume indicated by
 // the SourceVolumeId contained in the CSI Snapshot.
 func (s *Linstor) SnapCreate(ctx context.Context, snap *volume.SnapInfo) (*volume.SnapInfo, error) {
-	vol, err := s.GetByID(ctx, snap.CsiSnap.SourceVolumeId)
+	vol, err := s.FindByID(ctx, snap.CsiSnap.SourceVolumeId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve volume info from id %s", snap.CsiSnap.SourceVolumeId)
 	}
@@ -533,7 +533,7 @@ func (s *Linstor) SnapCreate(ctx context.Context, snap *volume.SnapInfo) (*volum
 
 // SnapDelete calls LINSTOR to delete the snapshot based on the CSI Snapshot ID.
 func (s *Linstor) SnapDelete(ctx context.Context, snap *volume.SnapInfo) error {
-	vol, err := s.GetByID(ctx, snap.CsiSnap.SourceVolumeId)
+	vol, err := s.FindByID(ctx, snap.CsiSnap.SourceVolumeId)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve volume info from id %s", snap.CsiSnap.SourceVolumeId)
 	}

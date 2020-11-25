@@ -301,9 +301,13 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 	}
 
 	// Retrieve device path from storage backend.
-	existingVolume, err := d.Storage.GetByID(ctx, req.GetVolumeId())
+	existingVolume, err := d.Storage.FindByID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
+	}
+
+	if existingVolume == nil {
+		return nil, status.Errorf(codes.NotFound, "NodePublishVolume failed for %s: volume not found", req.GetVolumeId())
 	}
 
 	assignment, err := d.Assignments.GetAssignmentOnNode(ctx, existingVolume, d.nodeID)
@@ -369,7 +373,7 @@ func (d Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeSt
 		return nil, missingAttr("NodeGetVolumeStats", req.GetVolumeId(), "VolumeId")
 	}
 
-	volume, err := d.Storage.GetByID(ctx, req.GetVolumeId())
+	volume, err := d.Storage.FindByID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodeGetVolumeStats failed for %s: failed to check if volume exists: %v", req.GetVolumeId(), err)
 	}
@@ -465,7 +469,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 	volumeSize := data.NewKibiByte(data.KiB * data.ByteSize(requiredKiB))
 
 	// Handle case were a volume of the same name is already present.
-	existingVolume, err := d.Storage.GetByName(ctx, req.Name)
+	existingVolume, err := d.Storage.FindByName(ctx, req.Name)
 	if err != nil {
 		return &csi.CreateVolumeResponse{}, status.Errorf(
 			codes.Internal, "CreateVolume failed for %s: %v", req.Name, err)
@@ -521,7 +525,7 @@ func (d Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) 
 		return nil, missingAttr("DeleteVolume", req.GetVolumeId(), "VolumeId")
 	}
 
-	existingVolume, err := d.Storage.GetByID(ctx, req.GetVolumeId())
+	existingVolume, err := d.Storage.FindByID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, err
 	}
@@ -552,7 +556,7 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 	}
 
 	// Don't try to assign volumes that don't exist.
-	existingVolume, err := d.Storage.GetByID(ctx, req.GetVolumeId())
+	existingVolume, err := d.Storage.FindByID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err)
@@ -597,7 +601,7 @@ func (d Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Controll
 		return nil, missingAttr("ControllerUnpublishVolume", req.GetNodeId(), "NodeId")
 	}
 
-	vol, err := d.Storage.GetByID(ctx, req.VolumeId)
+	vol, err := d.Storage.FindByID(ctx, req.VolumeId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"ControllerUnpublishVolume failed for %s: %v", req.GetVolumeId(), err)
@@ -633,7 +637,7 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 		return nil, missingAttr("ValidateVolumeCapabilities", req.GetVolumeId(), "VolumeCapabilities")
 	}
 
-	existingVolume, err := d.Storage.GetByID(ctx, req.GetVolumeId())
+	existingVolume, err := d.Storage.FindByID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"ValidateVolumeCapabilities failed for %s: %v", req.GetVolumeId(), err)
@@ -880,7 +884,7 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 
 		// Handle case where a single volumes snapshots are requested.
 	case req.GetSourceVolumeId() != "":
-		vol, err := d.Storage.GetByID(ctx, req.GetSourceVolumeId())
+		vol, err := d.Storage.FindByID(ctx, req.GetSourceVolumeId())
 		if err != nil {
 			return nil, fmt.Errorf("failed to list snapshots: %v", err)
 		}
@@ -943,7 +947,7 @@ func (d Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeR
 	}
 
 	// Retrieve device path from storage backend.
-	existingVolume, err := d.Storage.GetByID(ctx, req.GetVolumeId())
+	existingVolume, err := d.Storage.FindByID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodeExpandVolume - get resource-definitions %s failed: %v", req.GetVolumeId(), err)
 	}
@@ -973,7 +977,7 @@ func (d Driver) ControllerExpandVolume(ctx context.Context, req *csi.ControllerE
 		return nil, missingAttr("ControllerExpandVolume", req.GetVolumeId(), "VolumeId")
 	}
 
-	existingVolume, err := d.Storage.GetByID(ctx, req.GetVolumeId())
+	existingVolume, err := d.Storage.FindByID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "ControllerExpandVolume - get resource-definitions %s failed: %v", req.GetVolumeId(), err)
 	}
@@ -1124,7 +1128,7 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 				return &csi.CreateVolumeResponse{}, status.Errorf(codes.NotFound,
 					"CreateVolume failed for %s: snapshot not found in storage backend", req.GetName())
 			}
-			sourceVol, err := d.Storage.GetByID(ctx, snap.CsiSnap.SourceVolumeId)
+			sourceVol, err := d.Storage.FindByID(ctx, snap.CsiSnap.SourceVolumeId)
 			if err != nil {
 				return &csi.CreateVolumeResponse{}, status.Errorf(codes.Internal,
 					"CreateVolume failed for %s: %v", req.GetName(), err)
@@ -1148,7 +1152,7 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 			}
 			logger.Debugf("pre-populate volume from snapshot: %+v", volumeId)
 
-			sourceVol, err := d.Storage.GetByID(ctx, volumeId)
+			sourceVol, err := d.Storage.FindByID(ctx, volumeId)
 			if err != nil {
 				return &csi.CreateVolumeResponse{}, status.Errorf(codes.Internal,
 					"CreateVolume failed for %s: %v", req.GetName(), err)
