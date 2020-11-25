@@ -47,7 +47,7 @@ func (s *MockStorage) AllocationSizeKiB(requiredBytes, limitBytes int64) (int64,
 	return requiredBytes / 1024, nil
 }
 
-func (s *MockStorage) GetByName(ctx context.Context, name string) (*volume.Info, error) {
+func (s *MockStorage) FindByName(ctx context.Context, name string) (*volume.Info, error) {
 	for _, vol := range s.createdVolumes {
 		if vol.Name == name {
 			return vol, nil
@@ -56,7 +56,7 @@ func (s *MockStorage) GetByName(ctx context.Context, name string) (*volume.Info,
 	return nil, nil
 }
 
-func (s *MockStorage) GetByID(ctx context.Context, id string) (*volume.Info, error) {
+func (s *MockStorage) FindByID(ctx context.Context, id string) (*volume.Info, error) {
 	for _, vol := range s.createdVolumes {
 		if vol.ID == id {
 			return vol, nil
@@ -101,7 +101,7 @@ func (s *MockStorage) SnapCreate(ctx context.Context, snap *volume.SnapInfo) (*v
 		ReadyToUse:     true,
 	}
 
-	vol, _ := s.GetByID(ctx, snap.CsiSnap.SourceVolumeId)
+	vol, _ := s.FindByID(ctx, snap.CsiSnap.SourceVolumeId)
 	vol.Snapshots = append(vol.Snapshots, snap)
 
 	return snap, nil

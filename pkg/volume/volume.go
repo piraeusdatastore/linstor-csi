@@ -484,9 +484,10 @@ type AttacherDettacher interface {
 type Querier interface {
 	// ListAll should return a sorted list of pointers to Info.
 	ListAll(ctx context.Context) ([]*Info, error)
-	GetByName(ctx context.Context, name string) (*Info, error)
-	//GetByID should return nil when volume is not found.
-	GetByID(ctx context.Context, ID string) (*Info, error)
+	// FindByName returns nil when volume is not found.
+	FindByName(ctx context.Context, name string) (*Info, error)
+	// FindByID returns nil when volume is not found.
+	FindByID(ctx context.Context, ID string) (*Info, error)
 	// AllocationSizeKiB returns the number of KiB required to provision required bytes.
 	AllocationSizeKiB(requiredBytes, limitBytes int64) (int64, error)
 	// CapacityBytes determines the capacity of the underlying storage in Bytes.
