@@ -293,24 +293,30 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, req *csi.CreateV
 		return err
 	}
 
+	vol.ID = rDef.Name
+
 	logger.Debug("reconcile volume definition for volume")
-	_, err = s.reconcileVolumeDefinition(ctx, vol, rDef.Name)
+	_, err = s.reconcileVolumeDefinition(ctx, vol)
 	if err != nil {
 		logger.Debugf("reconcile volume definition failed: %v", err)
 		return err
 	}
 
+	logger.Debug("reconcile volume placement")
+	err = s.reconcileResourcePlacement(ctx, vol, &params, req)
+	if err != nil {
+		logger.Debugf("reconcile volume placement failed: %v", err)
+		return err
+	}
+
+	// saveVolume() makes the volume eligible for further use, i.e. this method will not be called again once saveVolume
+	// succeeded.
 	logger.Debug("update volume information with resource definition information")
-	vol.ID = rDef.Name
 	if err := s.saveVolume(ctx, vol); err != nil {
 		return err
 	}
 
-	volumeScheduler, err := s.schedulerByPlacementPolicy(vol)
-	if err != nil {
-		return err
-	}
-	return volumeScheduler.Create(ctx, vol, req)
+	return nil
 }
 
 // Delete removes a resource, all of its volumes, and snapshots from LINSTOR.
@@ -743,14 +749,14 @@ func (s *Linstor) reconcileResourceDefinition(ctx context.Context, info *volume.
 	return nil, fmt.Errorf("could not find ResourceDefinition, but it was just created without error: %s", info.Name)
 }
 
-func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.Info, rdName string) (*lapi.VolumeDefinition, error) {
+func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.Info) (*lapi.VolumeDefinition, error) {
 	logger := s.log.WithFields(logrus.Fields{
 		"volume": info.Name,
 	})
 	logger.Info("reconcile volume definition for volume")
 
 	logger.Debug("check if volume definition already exists")
-	vDef, err := s.client.Client.ResourceDefinitions.GetVolumeDefinition(ctx, rdName, 0)
+	vDef, err := s.client.Client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ID, 0)
 	if err == lapi.NotFoundError {
 		vdCreate := lapi.VolumeDefinitionCreate{
 			VolumeDefinition: lapi.VolumeDefinition{
@@ -759,12 +765,12 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 			},
 		}
 
-		err = s.client.ResourceDefinitions.CreateVolumeDefinition(ctx, rdName, vdCreate)
+		err = s.client.ResourceDefinitions.CreateVolumeDefinition(ctx, info.ID, vdCreate)
 		if err != nil {
 			return nil, err
 		}
 
-		vDef, err = s.client.Client.ResourceDefinitions.GetVolumeDefinition(ctx, rdName, 0)
+		vDef, err = s.client.Client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ID, 0)
 	}
 
 	if err != nil {
@@ -772,6 +778,39 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 	}
 
 	return &vDef, nil
+}
+
+func (s *Linstor) reconcileResourcePlacement(ctx context.Context, vol *volume.Info, volParams *volume.Parameters, req *csi.CreateVolumeRequest) error {
+	logger := s.log.WithFields(logrus.Fields{
+		"volume": vol.Name,
+	})
+	logger.Info("reconcile resource placement for volume")
+
+
+	resources, err := s.client.Resources.GetAll(ctx, vol.ID)
+	if err != nil {
+		return err
+	}
+
+	// Check that at least as many resources are placed as specified in the volume parameters
+	expectedAutoResources := int(volParams.PlacementCount)
+	expectedManualResources := len(volParams.ClientList) + len(volParams.NodeList)
+	if len(resources) >= expectedAutoResources && len(resources) >= expectedManualResources {
+		logger.Debug("resources already placed")
+		return nil
+	}
+
+	volumeScheduler, err := s.schedulerByPlacementPolicy(vol)
+	if err != nil {
+		return err
+	}
+
+	err = volumeScheduler.Create(ctx, vol, req)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // store a representation of a volume into the aux props of a resource definition.

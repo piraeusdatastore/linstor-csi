@@ -8,8 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Crash when calling NodePublishVolume on non-existent volume ([#96])
+- Fix an issue where newly created volumes would not be placed on any nodes, leaving them unusable ([#99])
 
 [#96]: https://github.com/piraeusdatastore/linstor-csi/issues/96
+[#99]: https://github.com/piraeusdatastore/linstor-csi/issues/99
 
 ## [0.10.1] - 2020-11-19
 
