@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2020-12-04
+
 ### Fixed
 - Crash when calling NodePublishVolume on non-existent volume ([#96])
 - Fix an issue where newly created volumes would not be placed on any nodes, leaving them unusable ([#99])
@@ -206,3 +208,23 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
   - 0, f, F, FALSE, false, and False
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
+
+[0.10.2]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.10.1...v0.10.2
+[0.10.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.10.0...v0.10.1
+[0.10.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.9.1...v0.10.0
+[0.9.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.8.3...v0.9.0
+[0.8.3]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.8.2...v0.8.3
+[0.8.2]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.8.1...v0.8.2
+[0.8.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.8.0...v0.8.1
+[0.8.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.7.4...v0.8.0
+[0.7.4]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.7.3...v0.7.4
+[0.7.3]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.7.2...v0.7.3
+[0.7.2]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.7.1...v0.7.2
+[0.7.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.6.4...v0.7.0
+[0.6.4]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.6.3...v0.6.4
+[0.6.3]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.6.2...v0.6.3
+[0.6.2]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.6.1...v0.6.2
+[0.6.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/piraeusdatastore/linstor-csi/tree/v0.6.0
