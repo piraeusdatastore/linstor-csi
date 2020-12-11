@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,7 +13,6 @@ import (
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
 	hlc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
-	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,8 +21,7 @@ var (
 		SnapshotId:     "snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956",
 		SourceVolumeId: "pvc-5113e62a-2874-421c-979a-ef08e1543581",
 		CreationTime: &timestamp.Timestamp{
-			Seconds: 1607588003,
-			Nanos:   699615502,
+			Seconds: 1607588002,
 		},
 		SizeBytes:  838860800,
 		ReadyToUse: true,
@@ -32,8 +31,7 @@ var (
 		SnapshotId:     "snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831",
 		SourceVolumeId: "pvc-9f0cceb1-6ef7-425e-9f29-15c482b3ac65",
 		CreationTime: &timestamp.Timestamp{
-			Seconds: 1607588003,
-			Nanos:   274799909,
+			Seconds: 1607588001,
 		},
 		SizeBytes:  524288000,
 		ReadyToUse: true,
@@ -100,38 +98,39 @@ func TestCompatListSnaps(t *testing.T) {
 
 	compatClient := prepareFakeClient(t)
 
-	snaps, err := compatClient.ListSnaps(ctx)
+	snaps, err := compatClient.ListSnaps(ctx, 0, 0)
 	assert.NoError(t, err)
 
-	expectedSnaps := []*volume.SnapInfo{
-		{
-			Name:    snapshotA.SnapshotId,
-			CsiSnap: snapshotA,
-		},
-		{
-			Name:    snapshotB.SnapshotId,
-			CsiSnap: snapshotB,
-		},
-	}
+	expectedSnaps := []*csi.Snapshot{snapshotA, snapshotB}
 	assert.ElementsMatch(t, expectedSnaps, snaps)
 }
 
-func TestCompatGetSnapByID(t *testing.T) {
+func TestCompatFindSnapByID(t *testing.T) {
 	ctx := context.Background()
 
 	compatClient := prepareFakeClient(t)
 
-	empty, err := compatClient.GetSnapByID(ctx, "none")
+	empty, err := compatClient.FindSnapByID(ctx, "none")
 	assert.NoError(t, err)
 	assert.Empty(t, empty)
 
-	actual, err := compatClient.GetSnapByID(ctx, snapshotA.SnapshotId)
+	actual, err := compatClient.FindSnapByID(ctx, snapshotA.SnapshotId)
 	assert.NoError(t, err)
-	assert.NotNil(t, actual)
+	assert.Equal(t, snapshotA, actual)
+}
 
-	expected := &volume.SnapInfo{
-		Name:    snapshotA.SnapshotId,
-		CsiSnap: snapshotA,
-	}
-	assert.Equal(t, expected, actual)
+func TestCompatFindSnapBySource(t *testing.T) {
+	ctx := context.Background()
+
+	compatClient := prepareFakeClient(t)
+
+	fakeVol := &volume.Info{Name: "fake", ID: "fake"}
+	empty, err := compatClient.FindSnapsBySource(ctx, fakeVol, 0, 0)
+	assert.NoError(t, err)
+	assert.Empty(t, empty)
+
+	volB := &volume.Info{Name: snapshotB.SourceVolumeId, ID: snapshotB.SourceVolumeId}
+	actual, err := compatClient.FindSnapsBySource(ctx, volB, 0, 0)
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, []*csi.Snapshot{snapshotB}, actual)
 }

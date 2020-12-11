@@ -27,13 +27,13 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	ptypes "github.com/golang/protobuf/ptypes"
-	"github.com/pborman/uuid"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
 type MockStorage struct {
 	createdVolumes  []*volume.Info
 	assignedVolumes []*volume.Assignment
+	snapshots       []*csi.Snapshot
 }
 
 func (s *MockStorage) ListAll(ctx context.Context) ([]*volume.Info, error) {
@@ -88,74 +88,85 @@ func (s *MockStorage) AccessibleTopologies(ctx context.Context, vol *volume.Info
 	return nil, nil
 }
 
-func (s *MockStorage) CanonicalizeSnapshotName(ctx context.Context, suggestedName string) string {
-	return suggestedName
+func (s *MockStorage) CompatibleSnapshotId(name string) string {
+	return name
 }
 
-func (s *MockStorage) SnapCreate(ctx context.Context, snap *volume.SnapInfo) (*volume.SnapInfo, error) {
+func (s *MockStorage) SnapCreate(ctx context.Context, id string, sourceVol *volume.Info) (*csi.Snapshot, error) {
+	for _, snap := range s.snapshots {
+		if snap.SnapshotId == id {
+			return nil, fmt.Errorf("snapshot '%s' already exists", id)
+		}
+	}
 
 	// Fill in missing snapshot fields on creation, keep original SourceVolumeId.
-	snap.CsiSnap = &csi.Snapshot{
-		SnapshotId:     uuid.New(),
-		SourceVolumeId: snap.CsiSnap.SourceVolumeId,
+	snap := &csi.Snapshot{
+		SnapshotId:     id,
+		SourceVolumeId: sourceVol.ID,
 		CreationTime:   ptypes.TimestampNow(),
+		SizeBytes: 		sourceVol.SizeBytes,
 		ReadyToUse:     true,
 	}
 
-	vol, _ := s.FindByID(ctx, snap.CsiSnap.SourceVolumeId)
-	vol.Snapshots = append(vol.Snapshots, snap)
+	s.snapshots = append(s.snapshots, snap)
 
 	return snap, nil
 }
 
-func (s *MockStorage) SnapDelete(ctx context.Context, snap *volume.SnapInfo) error {
-	for _, vol := range s.createdVolumes {
-		for i, ss := range vol.Snapshots {
-			if snap.CsiSnap.SnapshotId == ss.CsiSnap.SnapshotId {
-				// csi-test counts numbers of snapshots, so we have to actually delete it.
-				vol.Snapshots[i] = vol.Snapshots[len(vol.Snapshots)-1]
-				vol.Snapshots[len(vol.Snapshots)-1] = nil
-				vol.Snapshots = vol.Snapshots[:len(vol.Snapshots)-1]
-				return nil
-			}
+func (s *MockStorage) SnapDelete(ctx context.Context, snap *csi.Snapshot) error {
+	for i, item := range s.snapshots {
+		if item.GetSnapshotId() == snap.GetSnapshotId() {
+			s.snapshots = append(s.snapshots[:i], s.snapshots[i+1:]...)
+			break
 		}
 	}
+
 	return nil
 }
 
-func (s *MockStorage) GetSnapByName(ctx context.Context, name string) (*volume.SnapInfo, error) {
-	for _, vol := range s.createdVolumes {
-		for _, ss := range vol.Snapshots {
-			if ss.Name == name {
-				return ss, nil
-			}
+func (s *MockStorage) ListSnaps(ctx context.Context, start, limit int) ([]*csi.Snapshot, error) {
+	if limit == 0 {
+		limit = len(s.snapshots) - start
+	}
+
+	end := start+limit
+	if end > len(s.snapshots) {
+		end = len(s.snapshots)
+	}
+
+	return s.snapshots[start:end], nil
+}
+
+func (s *MockStorage) FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, error) {
+	for _, snap := range s.snapshots {
+		if snap.GetSnapshotId() == id {
+			return snap, nil
 		}
 	}
 	return nil, nil
 }
 
-func (s *MockStorage) ListSnaps(ctx context.Context) ([]*volume.SnapInfo, error) {
-	var snaps = make([]*volume.SnapInfo, 0)
-	for _, vol := range s.createdVolumes {
-		snaps = append(snaps, vol.Snapshots...)
-	}
-	volume.SnapSort(snaps)
+func (s *MockStorage) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info, start, limit int) ([]*csi.Snapshot, error) {
+	var results []*csi.Snapshot
 
-	return snaps, nil
-}
-
-func (s *MockStorage) GetSnapByID(ctx context.Context, id string) (*volume.SnapInfo, error) {
-	for _, vol := range s.createdVolumes {
-		for _, ss := range vol.Snapshots {
-			if ss.CsiSnap.SnapshotId == id {
-				return ss, nil
-			}
+	for _, snap := range s.snapshots {
+		if snap.GetSourceVolumeId() == sourceVol.ID {
+			results = append(results, snap)
 		}
 	}
-	return nil, nil
+
+	if limit == 0 {
+		limit = len(s.snapshots) - start
+	}
+
+	end := start+limit
+	if end > len(results) {
+		end = len(results)
+	}
+	return results[start:end], nil
 }
 
-func (s *MockStorage) VolFromSnap(ctx context.Context, snap *volume.SnapInfo, vol *volume.Info) error {
+func (s *MockStorage) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volume.Info) error {
 	vol.ID = vol.Name
 	s.createdVolumes = append(s.createdVolumes, vol)
 	return nil

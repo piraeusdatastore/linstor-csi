@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Snapshot information is persisted using native LINSTOR Snapshots instead of storing it in properties of RDs.
+- Snapshots are marked as ready only after LINSTOR reports success
+- Generate fallback id for a snapshot based on the suggested name using UUIDv5
+- Only create a single snapshot in volume-from-volume scenarios
+
 ### Fixed
 - LayerList was ignored when not using the AutoPlace scheduler. All schedulers not pass this information to LINSTOR. [#102]
 

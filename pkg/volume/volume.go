@@ -41,7 +41,6 @@ type Info struct {
 	SizeBytes    int64             `json:"sizeBytes"`
 	Readonly     bool              `json:"readonly"`
 	Parameters   map[string]string `json:"parameters"`
-	Snapshots    []*SnapInfo       `json:"snapshots"`
 }
 
 //go:generate enumer -type=paramKey
@@ -419,22 +418,6 @@ func (i *Info) ToAutoPlace() (lapi.AutoPlaceRequest, error) {
 	return lapi.AutoPlaceRequest{LayerList: params.LayerList}, nil
 }
 
-// SnapInfo provides everything needed to manipulate snapshots.
-type SnapInfo struct {
-	Name    string        `json:"name"`
-	CsiSnap *csi.Snapshot `json:"csiSnapshot"`
-}
-
-// SnapSort sorts a list of snaphosts.
-func SnapSort(snaps []*SnapInfo) {
-	sort.Slice(snaps, func(j, k int) bool {
-		if snaps[j].CsiSnap.CreationTime.Seconds == snaps[k].CsiSnap.CreationTime.Seconds {
-			return snaps[j].CsiSnap.CreationTime.Nanos < snaps[k].CsiSnap.CreationTime.Nanos
-		}
-		return snaps[j].CsiSnap.CreationTime.Seconds < snaps[k].CsiSnap.CreationTime.Seconds
-	})
-}
-
 // Assignment represents a volume situated on a particular node.
 type Assignment struct {
 	Vol *Info
@@ -457,20 +440,16 @@ type CreateDeleter interface {
 
 // SnapshotCreateDeleter handles the creation and deletion of snapshots.
 type SnapshotCreateDeleter interface {
-	SnapCreate(ctx context.Context, snap *SnapInfo) (*SnapInfo, error)
-	SnapDelete(ctx context.Context, snap *SnapInfo) error
-	GetSnapByName(ctx context.Context, name string) (*SnapInfo, error)
-	GetSnapByID(ctx context.Context, ID string) (*SnapInfo, error)
+	// CompatibleSnapshotId returns an ID unique to the suggested name
+	CompatibleSnapshotId(name string) string
+	SnapCreate(ctx context.Context, id string, sourceVol *Info) (*csi.Snapshot, error)
+	SnapDelete(ctx context.Context, snap *csi.Snapshot) error
+	FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, error)
+	FindSnapsBySource(ctx context.Context, sourceVol *Info, start, limit int) ([]*csi.Snapshot, error)
 	// List Snapshots should return a sorted list of snapshots.
-	ListSnaps(ctx context.Context) ([]*SnapInfo, error)
-	// CanonicalizeSnapshotName tries to return a relatively similar version
-	// of the suggestedName if the storage backend cannot use the suggestedName
-	// in its original form.
-	CanonicalizeSnapshotName(ctx context.Context, suggestedName string) string
-	// VolFromSnap creats a new volume based on the provided snapshot.
-	VolFromSnap(ctx context.Context, snap *SnapInfo, vol *Info) error
-	// VolFromVol creats a new volume based on the provided volume.
-	VolFromVol(ctx context.Context, sourceVol, vol *Info) error
+	ListSnaps(ctx context.Context, start, limit int) ([]*csi.Snapshot, error)
+	// VolFromSnap creates a new volume based on the provided snapshot.
+	VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *Info) error
 }
 
 // AttacherDettacher handles operations relating to volume accessiblity on nodes.
