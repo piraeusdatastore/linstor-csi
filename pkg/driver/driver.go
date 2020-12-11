@@ -476,7 +476,6 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 	}
 
 	if existingVolume != nil {
-
 		d.log.WithFields(logrus.Fields{
 			"requestedVolumeName": req.GetName(),
 			"existingVolume":      fmt.Sprintf("%+v", existingVolume),
@@ -501,6 +500,23 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 			"existingVolume":      fmt.Sprintf("%+v", existingVolume),
 		}).Info("volume already present, but matches request")
 
+		d.log.Debug("check if source snapshot exists")
+
+		snapId := d.Snapshots.CompatibleSnapshotId(snapshotForVolumeName(req.GetName()))
+		leftoverSnap, err := d.Snapshots.FindSnapByID(ctx, snapId)
+		if err != nil {
+			return &csi.CreateVolumeResponse{}, status.Errorf(codes.Internal, "failed to check on potential left-over source snapshot: %v", err)
+		}
+
+		if leftoverSnap != nil {
+			d.log.Debug("found left-over source snapshot, removing...")
+
+			err := d.Snapshots.SnapDelete(ctx, leftoverSnap)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to delete source snapshot for volume '%s': %v", existingVolume.ID, err)
+			}
+		}
+
 		topos, err := d.Storage.AccessibleTopologies(ctx, existingVolume)
 		if err != nil {
 			return &csi.CreateVolumeResponse{}, status.Errorf(
@@ -512,6 +528,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 			Volume: &csi.Volume{
 				VolumeId:           existingVolume.ID,
 				CapacityBytes:      existingVolume.SizeBytes,
+				ContentSource:      req.GetVolumeContentSource(),
 				AccessibleTopology: topos,
 			}}, nil
 	}
@@ -536,6 +553,15 @@ func (d Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) 
 	d.log.WithFields(logrus.Fields{
 		"existingVolume": fmt.Sprintf("%+v", existingVolume),
 	}).Debug("found existing volume")
+
+	snaps, err := d.Snapshots.FindSnapsBySource(ctx, existingVolume, 0, 0)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to check for existing snapshots on volume: %v", err)
+	}
+
+	if len(snaps) > 0 {
+		return nil, status.Errorf(codes.FailedPrecondition, "resource has associated snapshots: %v", err)
+	}
 
 	if err := d.Storage.Delete(ctx, existingVolume); err != nil {
 		return nil, err
@@ -690,7 +716,7 @@ func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*
 		return &csi.ListVolumesResponse{}, status.Errorf(codes.Aborted, "ListVolumes failed: %v", err)
 	}
 
-	start, err := parseStartingToken(req.GetStartingToken())
+	start, err := parseAsInt(req.GetStartingToken())
 	if err != nil {
 		return nil, status.Errorf(codes.Aborted, "ListVolumes failed for: %v", err)
 	}
@@ -807,34 +833,45 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 		return nil, missingAttr("CreateSnapshot", req.GetName(), "Name")
 	}
 
-	existingSnap, err := d.Snapshots.GetSnapByName(ctx, req.GetName())
+	id := d.Snapshots.CompatibleSnapshotId(req.GetName())
+
+	d.log.WithField("snapshot id", id).Debug("using snapshot id")
+
+	existingSnap, err := d.Snapshots.FindSnapByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check for existing snapshot: %v", err)
+		return nil, status.Errorf(codes.Internal, "failed to check for existing snapshot: %v", err)
 	}
 
 	if existingSnap != nil {
-		// Needed for idempotentcy.
+		// Needed for idempotency.
 		d.log.WithFields(logrus.Fields{
 			"requestedSnapshotName":         req.GetName(),
 			"requestedSnapshotSourceVolume": req.GetSourceVolumeId(),
 			"existingSnapshot":              fmt.Sprintf("%+v", existingSnap),
 		}).Debug("found existing snapshot")
-		if existingSnap.CsiSnap.SourceVolumeId == req.GetSourceVolumeId() {
-			return &csi.CreateSnapshotResponse{Snapshot: existingSnap.CsiSnap}, nil
+
+		if existingSnap.GetSourceVolumeId() == req.GetSourceVolumeId() {
+			return &csi.CreateSnapshotResponse{Snapshot: existingSnap}, nil
 		}
 		return nil, status.Errorf(codes.AlreadyExists, "can't use %q for snapshot name for volume %q, snapshot name is in use for volume %q",
-			existingSnap.Name, req.GetSourceVolumeId(), existingSnap.CsiSnap.SourceVolumeId)
+			req.GetName(), req.GetSourceVolumeId(), existingSnap.GetSourceVolumeId())
 	}
 
-	snap, err := d.Snapshots.SnapCreate(ctx, &volume.SnapInfo{
-		Name:    d.Snapshots.CanonicalizeSnapshotName(ctx, req.GetName()),
-		CsiSnap: &csi.Snapshot{SourceVolumeId: req.GetSourceVolumeId()},
-	})
+	info, err := d.Storage.FindByID(ctx, req.GetSourceVolumeId())
 	if err != nil {
-		return nil, fmt.Errorf("failed to create snapshot: %v", err)
+		return nil, status.Errorf(codes.Internal, "could not find source for snapshot: %v", err)
 	}
 
-	return &csi.CreateSnapshotResponse{Snapshot: snap.CsiSnap}, nil
+	if info == nil {
+		return nil, status.Errorf(codes.NotFound, "source '%s' for snapshot does not exist", req.GetSourceVolumeId())
+	}
+
+	snap, err := d.Snapshots.SnapCreate(ctx, id, info)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to create snapshot: %v", err)
+	}
+
+	return &csi.CreateSnapshotResponse{Snapshot: snap}, nil
 }
 
 // DeleteSnapshot https://github.com/container-storage-interface/spec/blob/v1.2.0/spec.md#deletesnapshot
@@ -843,7 +880,7 @@ func (d Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotReque
 		return nil, missingAttr("DeleteSnapshot", req.GetSnapshotId(), "SnapshotId")
 	}
 
-	snap, err := d.Snapshots.GetSnapByID(ctx, req.GetSnapshotId())
+	snap, err := d.Snapshots.FindSnapByID(ctx, req.GetSnapshotId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "unable to find snapshot %s: %v",
 			req.GetSnapshotId(), err)
@@ -864,69 +901,66 @@ func (d Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotReque
 
 // ListSnapshots https://github.com/container-storage-interface/spec/blob/v1.2.0/spec.md#listsnapshots
 func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
-	var snapshots = make([]*volume.SnapInfo, 0)
+	limit := int(req.GetMaxEntries())
+	start, err := parseAsInt(req.GetStartingToken())
+	if err != nil {
+		return nil, status.Errorf(codes.Aborted, "Invalid starting token: %v", err)
+	}
 
-	// Handle case where a single snapshot is requested.
+	var snapshots []*csi.Snapshot
 	switch {
+	// Handle case where a single snapshot is requested.
 	case req.GetSnapshotId() != "":
-		snap, err := d.Snapshots.GetSnapByID(ctx, req.GetSnapshotId())
+		snap, err := d.Snapshots.FindSnapByID(ctx, req.GetSnapshotId())
 		if err != nil {
-			return nil, fmt.Errorf("failed to list snapshots: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to list snapshots: %v", err)
 		}
+
 		if snap == nil {
 			return &csi.ListSnapshotsResponse{}, nil
 		}
+
 		d.log.WithFields(logrus.Fields{
 			"requestedSnapshot": req.GetSnapshotId(),
 			"napshot":           fmt.Sprintf("%+v", snap),
 		}).Debug("found single snapshot")
-		snapshots = []*volume.SnapInfo{snap}
+		snapshots = []*csi.Snapshot{snap}
 
 		// Handle case where a single volumes snapshots are requested.
 	case req.GetSourceVolumeId() != "":
-		vol, err := d.Storage.FindByID(ctx, req.GetSourceVolumeId())
+		info, err := d.Storage.FindByID(ctx, req.GetSourceVolumeId())
 		if err != nil {
-			return nil, fmt.Errorf("failed to list snapshots: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to list snapshots for volume '%s': %v", req.GetSourceVolumeId(), err)
 		}
-		if vol == nil {
+
+		if info == nil {
 			return &csi.ListSnapshotsResponse{}, nil
 		}
 
-		snapshots = vol.Snapshots
+		snaps, err := d.Snapshots.FindSnapsBySource(ctx, info, start, limit)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to list snapshots: %v", err)
+		}
+
+		snapshots = snaps
 
 		// Regular list of all snapshots.
 	default:
-		snaps, err := d.Snapshots.ListSnaps(ctx)
+		snaps, err := d.Snapshots.ListSnaps(ctx, start, limit)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list snapshots: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to list snapshots: %v", err)
 		}
 		snapshots = snaps
 	}
 
-	// Handle pagination.
-	var (
-		end       int32
-		nextToken string
-	)
-	totalSnaps := int32(len(snapshots))
-	if req.GetMaxEntries() == 0 || (totalSnaps <= req.GetMaxEntries()) {
-		end = totalSnaps
-	} else {
-		end = req.GetMaxEntries()
-		nextToken = strconv.Itoa(int(end))
+	nextToken := ""
+	if limit > 0 && len(snapshots) == limit {
+		nextToken = fmt.Sprintf("%d", start+limit)
 	}
 
-	start, err := parseStartingToken(req.GetStartingToken())
-	if err != nil {
-		return nil, fmt.Errorf("failed to list snapshots: %v", err)
-	}
-
-	snapshots = snapshots[start:end]
-
-	// Build up entires list from paginated snapshots.
-	entries := make([]*csi.ListSnapshotsResponse_Entry, 0)
-	for _, snap := range snapshots {
-		entries = append(entries, &csi.ListSnapshotsResponse_Entry{Snapshot: snap.CsiSnap})
+	entries := make([]*csi.ListSnapshotsResponse_Entry, len(snapshots))
+	for i, snap := range snapshots {
+		entries[i] = &csi.ListSnapshotsResponse_Entry{Snapshot: snap}
 	}
 
 	return &csi.ListSnapshotsResponse{Entries: entries, NextToken: nextToken}, nil
@@ -1098,7 +1132,6 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 		CreatedBy:    d.name,
 		CreationTime: time.Now(),
 		Parameters:   make(map[string]string),
-		Snapshots:    []*volume.SnapInfo{},
 	}
 	for k, v := range req.Parameters {
 		vol.Parameters[k] = v
@@ -1119,7 +1152,7 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 			}
 			logger.Debugf("pre-populate volume from snapshot: %+v", snapshotID)
 
-			snap, err := d.Snapshots.GetSnapByID(ctx, snapshotID)
+			snap, err := d.Snapshots.FindSnapByID(ctx, snapshotID)
 			if err != nil {
 				return &csi.CreateVolumeResponse{}, status.Errorf(
 					codes.Internal, "CreateVolume failed for %s: %v", req.GetName(), err)
@@ -1128,7 +1161,7 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 				return &csi.CreateVolumeResponse{}, status.Errorf(codes.NotFound,
 					"CreateVolume failed for %s: snapshot not found in storage backend", req.GetName())
 			}
-			sourceVol, err := d.Storage.FindByID(ctx, snap.CsiSnap.SourceVolumeId)
+			sourceVol, err := d.Storage.FindByID(ctx, snap.GetSourceVolumeId())
 			if err != nil {
 				return &csi.CreateVolumeResponse{}, status.Errorf(codes.Internal,
 					"CreateVolume failed for %s: %v", req.GetName(), err)
@@ -1161,8 +1194,22 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 				return &csi.CreateVolumeResponse{}, status.Errorf(codes.NotFound,
 					"CreateVolume failed for %s: source volume not found in storage backend", req.GetName())
 			}
-			if err := d.Snapshots.VolFromVol(ctx, sourceVol, vol); err != nil {
+
+			snap, err := d.CreateSnapshot(ctx, &csi.CreateSnapshotRequest{Name: snapshotForVolumeName(req.GetName()), SourceVolumeId: sourceVol.ID})
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: failed to create snapshot for source volume: %v", req.GetName(), err)
+			}
+
+			if !snap.Snapshot.ReadyToUse {
+				return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: snapshot not ready", req.GetName())
+			}
+
+			defer d.Snapshots.SnapDelete(ctx, snap.Snapshot)
+
+			err = d.Snapshots.VolFromSnap(ctx, snap.Snapshot, vol)
+			if err != nil {
 				d.failpathDelete(ctx, vol)
+
 				return &csi.CreateVolumeResponse{}, status.Errorf(codes.Internal,
 					"CreateVolume failed for %s: %v", req.GetName(), err)
 			}
@@ -1204,9 +1251,9 @@ func missingAttr(methodCall, volumeID, attr string) error {
 		"%s failed for %s: it requires a %s and none was provided", methodCall, volumeID, attr)
 }
 
-func parseStartingToken(s string) (int, error) {
+func parseAsInt(s string) (int, error) {
 	if s == "" {
-		return int(0), nil
+		return 0, nil
 	}
 
 	i, err := strconv.ParseInt(s, 10, 32)
@@ -1214,6 +1261,11 @@ func parseStartingToken(s string) (int, error) {
 		return 0, fmt.Errorf("failed to parse starting token: %v", err)
 	}
 	return int(i), nil
+}
+
+// Returns the name of the snapshot used to populate data in volume-from-volume scenarios
+func snapshotForVolumeName(name string) string {
+	return fmt.Sprintf("for-%s", name)
 }
 
 // failpathDelete deletes volumes and logs if that fails. Mostly useful

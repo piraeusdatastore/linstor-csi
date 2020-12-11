@@ -38,6 +38,20 @@ This project must be used in conjunction with a working LINSTOR cluster, version
 [LINSTOR's documentation](https://www.linbit.com/drbd-user-guide/linstor-guide-1_0-en/)
 is the foremost guide on setting up and administering LINSTOR.
 
+## :warning:️ Known issues
+
+* Due to the way [ZFS snapshots work], provisioning new Volumes from existing Volumes
+  does not work using ZFS storage pools. The internal temporary snapshot cannot be
+  deleted after the new volume is created.
+
+  As a workaround, first create a VolumeSnapshot of the existing volume and restore from
+  that snapshot. Also read the issue below!
+
+* Deletion of VolumeSnapshots will fail for ZFS based volumes if a volume restored from
+  the snapshot exists in the cluster.
+
+[ZFS snapshots work]: https://docs.oracle.com/cd/E23824_01/html/821-1448/gbciq.html
+
 ## Kubernetes
 
 After the plugin has been deployed, you're free to create storage classes
