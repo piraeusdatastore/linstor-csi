@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2020-12-21
+
 ### Changed
 - Snapshot information is persisted using native LINSTOR Snapshots instead of storing it in properties of RDs.
 - Snapshots are marked as ready only after LINSTOR reports success
@@ -220,6 +222,7 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
+[0.11.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.9.1...v0.10.0
