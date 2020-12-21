@@ -421,5 +421,6 @@ func volToDiskfullResourceCreate(vol *volume.Info, params volume.Parameters, nod
 			},
 			Flags: make([]string, 0),
 		},
+		LayerList: params.LayerList,
 	}
 }

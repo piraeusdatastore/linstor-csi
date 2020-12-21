@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- LayerList was ignored when not using the AutoPlace scheduler. All schedulers not pass this information to LINSTOR. [#102]
+
+[#102]: https://github.com/piraeusdatastore/linstor-csi/issues/102
+
 ## [0.10.2] - 2020-12-04
 
 ### Fixed

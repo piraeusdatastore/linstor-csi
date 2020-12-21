@@ -401,7 +401,9 @@ func (i *Info) toGenericResourceCreate(params Parameters, node string) lapi.Reso
 			NodeName: node,
 			Props:    make(map[string]string, 1),
 			Flags:    make([]string, 0),
-		}}
+		},
+		LayerList: params.LayerList,
+	}
 }
 
 // ToAutoPlace prepares a Info to be deployed by linstor via autoplace.
