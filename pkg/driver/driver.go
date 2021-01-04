@@ -300,6 +300,12 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		}
 	}
 
+	if fsType == "xfs" {
+		// Restored snapshots inherit the XFS UUID of the original source. If mounted on the same node as the original
+		// without this option, XFS will complain about a duplicate UUID and refuse to mount.
+		mntOpts = append(mntOpts, "nouuid")
+	}
+
 	// Retrieve device path from storage backend.
 	existingVolume, err := d.Storage.FindByID(ctx, req.GetVolumeId())
 	if err != nil {
