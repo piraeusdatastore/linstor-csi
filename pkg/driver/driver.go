@@ -560,15 +560,6 @@ func (d Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) 
 		"existingVolume": fmt.Sprintf("%+v", existingVolume),
 	}).Debug("found existing volume")
 
-	snaps, err := d.Snapshots.FindSnapsBySource(ctx, existingVolume, 0, 0)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to check for existing snapshots on volume: %v", err)
-	}
-
-	if len(snaps) > 0 {
-		return nil, status.Errorf(codes.FailedPrecondition, "resource has associated snapshots: %v", err)
-	}
-
 	if err := d.Storage.Delete(ctx, existingVolume); err != nil {
 		return nil, err
 	}
@@ -1166,15 +1157,6 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 			if snap == nil {
 				return &csi.CreateVolumeResponse{}, status.Errorf(codes.NotFound,
 					"CreateVolume failed for %s: snapshot not found in storage backend", req.GetName())
-			}
-			sourceVol, err := d.Storage.FindByID(ctx, snap.GetSourceVolumeId())
-			if err != nil {
-				return &csi.CreateVolumeResponse{}, status.Errorf(codes.Internal,
-					"CreateVolume failed for %s: %v", req.GetName(), err)
-			}
-			if sourceVol == nil {
-				return &csi.CreateVolumeResponse{}, status.Errorf(codes.NotFound,
-					"CreateVolume failed for %s: source volume not found in storage backend", req.GetName())
 			}
 
 			if err := d.Snapshots.VolFromSnap(ctx, snap, vol); err != nil {

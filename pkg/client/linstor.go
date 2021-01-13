@@ -311,10 +311,10 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, req *csi.CreateV
 		return err
 	}
 
-	// saveVolume() makes the volume eligible for further use, i.e. this method will not be called again once saveVolume
+	// saveVolumeMetadata() makes the volume eligible for further use, i.e. this method will not be called again once saveVolumeMetadata
 	// succeeded.
 	logger.Debug("update volume information with resource definition information")
-	if err := s.saveVolume(ctx, vol); err != nil {
+	if err := s.saveVolumeMetadata(ctx, vol); err != nil {
 		return err
 	}
 
@@ -322,52 +322,33 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, req *csi.CreateV
 }
 
 // Delete removes a resource, all of its volumes from LINSTOR.
+// Only removes the ResourceDefinition if no snapshots of the resource exist.
 func (s *Linstor) Delete(ctx context.Context, vol *volume.Info) error {
 	s.log.WithFields(logrus.Fields{
 		"volume": fmt.Sprintf("%+v", vol),
 	}).Info("deleting volume")
 
-	rd, err := s.client.ResourceDefinitions.Get(ctx, vol.ID)
+	resources, err := s.client.Resources.GetAll(ctx, vol.ID)
 	if err != nil {
-		if err == lapi.NotFoundError {
-			return nil
-		}
-
-		return err
+		return nil404(err)
 	}
 
-
-	err = s.client.ResourceDefinitions.Delete(ctx, vol.ID)
-	if err != nil {
-		if err == lapi.NotFoundError {
-			return nil
+	for _, res := range resources {
+		err := s.client.Resources.Delete(ctx, vol.ID, res.NodeName)
+		if err != nil {
+			// If two deletions run in parallel, one could get a 404 message, which we treat as "everything finished"
+			return nil404(err)
 		}
-
-		return err
 	}
 
-	// try to delete the RG if this was the last volume
-	// currently LINSTOR does not provide an easier way, filter manually
-	rds, err := s.client.ResourceDefinitions.GetAll(ctx)
+	err = s.deleteResourceDefinitionAndGroupIfUnused(ctx, vol.ID)
 	if err != nil {
 		return err
 	}
 
-	deleteRG := true
-	for _, d := range rds {
-		if d.ResourceGroupName == rd.ResourceGroupName {
-			deleteRG = false
-			break
-		}
-	}
-
-	if deleteRG && rd.ResourceGroupName != "DfltRscGrp" {
-		if err := s.client.ResourceGroups.Delete(ctx, rd.ResourceGroupName); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	// After this call succeeds, we won't be able to recover the Info struct. To keep this function idempotent, this
+	// is the last call in the function.
+	return s.deleteVolumeMetadata(ctx, vol)
 }
 
 // AccessibleTopologies returns a list of pointers to csi.Topology from where the
@@ -519,19 +500,14 @@ func (s *Linstor) SnapCreate(ctx context.Context, id string, sourceVol *volume.I
 func (s *Linstor) SnapDelete(ctx context.Context, snap *csi.Snapshot) error {
 	log := s.log.WithField("snapshot", snap)
 
-	log.Debug("fetching source volume information")
-
-	vol, err := s.FindByID(ctx, snap.GetSourceVolumeId())
-	if err != nil {
-		return fmt.Errorf("failed to retrieve volume info from id %s", snap.GetSourceVolumeId())
-	}
-
 	log.Debug("deleting snapshot")
 
-	err = s.client.Resources.DeleteSnapshot(ctx, vol.Name, snap.SnapshotId)
+	err := s.client.Resources.DeleteSnapshot(ctx, snap.GetSourceVolumeId(), snap.SnapshotId)
 	if nil404(err) != nil {
 		return fmt.Errorf("failed to remove snaphsot: %v", err)
 	}
+
+	err = s.deleteResourceDefinitionAndGroupIfUnused(ctx, snap.GetSourceVolumeId())
 
 	return nil
 }
@@ -576,13 +552,13 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volu
 		return err
 	}
 
-	// Note: saveVolume() sets annotations that are:
+	// Note: saveVolumeMetadata() sets annotations that are:
 	// 1. needed to determine which volume to mount in the CSINode code
 	// 2. overwritten on restore from snapshot
 	// to make sure its not overwritten, this is the last step in this method.
 	logger.Debug("update volume information with resource definition information")
 	vol.ID = rDef.Name
-	if err := s.saveVolume(ctx, vol); err != nil {
+	if err := s.saveVolumeMetadata(ctx, vol); err != nil {
 		return err
 	}
 
@@ -797,50 +773,30 @@ func (s *Linstor) reconcileResourcePlacement(ctx context.Context, vol *volume.In
 }
 
 // store a representation of a volume into the aux props of a resource definition.
-func (s *Linstor) saveVolume(ctx context.Context, vol *volume.Info) error {
+func (s *Linstor) saveVolumeMetadata(ctx context.Context, vol *volume.Info) error {
 	serializedVol, err := json.Marshal(vol)
 	if err != nil {
 		return err
 	}
-	return s.setProps(ctx, vol, map[string]string{linstor.AnnotationsKey: string(serializedVol)})
+
+	return s.client.ResourceDefinitions.Modify(ctx, vol.ID, lapi.GenericPropsModify{
+		OverrideProps: map[string]string{linstor.AnnotationsKey: string(serializedVol)},
+	})
 }
 
-func (s *Linstor) setProps(ctx context.Context, vol *volume.Info, props map[string]string) error {
-	return s.client.ResourceDefinitions.Modify(ctx, vol.ID,
-		lapi.GenericPropsModify{
-			OverrideProps: props,
-		})
-}
-
-// ListVolumes returns all volumes that have metadata that is understandable
-// by this plugin, so volumes from multiple compatible plugins may be returned.
-func (s *Linstor) ListVolumes(ctx context.Context) ([]*volume.Info, error) {
-	allResDefs, err := s.client.ResourceDefinitions.GetAll(ctx)
+// Delete the representation of a volume from the aux props of a resource definition.
+// Returns nil if:
+// * Metadata was removed
+// * RD didn't exist to start with
+func (s *Linstor) deleteVolumeMetadata(ctx context.Context, vol *volume.Info) error {
+	err := s.client.ResourceDefinitions.Modify(ctx, vol.ID, lapi.GenericPropsModify{
+		DeleteProps: []string{linstor.AnnotationsKey},
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve resource definitions: %v", err)
+		return nil404(err)
 	}
 
-	var vols = make([]*volume.Info, 0)
-
-	for _, rd := range allResDefs {
-		// If we encounter a failure here, we can assume that the resource was
-		// not created by a CSI driver, but we can't check here that it was
-		// created by this instance of the CSI driver in particular.
-		// Linstor names are CSI IDs.
-		vol, err := s.resourceDefinitionToVolume(rd)
-		if err != nil {
-			s.log.WithFields(logrus.Fields{
-				"resourceDefinition": fmt.Sprintf("%+v", rd),
-			}).WithError(err).Error("failed to internally represent volume but continuing — likely non-CSI volume")
-			continue
-		}
-
-		if vol != nil {
-			vols = append(vols, vol)
-		}
-	}
-
-	return vols, nil
+	return nil
 }
 
 func (s *Linstor) FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, error) {
@@ -1340,4 +1296,75 @@ func (s *Linstor) GetNodeTopologies(ctx context.Context, nodename string) (*csi.
 	}
 
 	return topo, nil
+}
+
+// Delete the given resource definition and linked resource group, but only if:
+// * No resources are placed
+// * No snapshots of the resource exist
+func (s *Linstor) deleteResourceDefinitionAndGroupIfUnused(ctx context.Context, rdName string) error {
+	log := s.log.WithField("rd", rdName)
+	log.Debug("checking for undeleted resources")
+
+	resources, err := s.client.Resources.GetAll(ctx, rdName)
+	if err != nil {
+		// Returns nil if api call returned 404, i.e. someone else already deleted the RD
+		return nil404(err)
+	}
+
+	for _, res := range resources {
+		if !slice.ContainsString(res.Flags, lapiconsts.FlagDelete, nil) {
+			log.WithField("resource", res).Debug("not deleting resource definition, found undeleted resource")
+			return nil
+		}
+	}
+
+	log.Debug("checking for undeleted snapshots")
+
+	snapshots, err := s.client.Resources.GetSnapshots(ctx, rdName)
+	if err != nil {
+		// Returns nil if api call returned 404, i.e. someone else already deleted the RD
+		return nil404(err)
+	}
+
+	for _, snap := range snapshots {
+		if !slice.ContainsString(snap.Flags, lapiconsts.FlagDelete, nil) {
+			log.WithField("snapshot", snap).Debug("not deleting resource definition, found undeleted snapshot")
+			return nil
+		}
+	}
+
+	log.Debug("fetching resource definition, then deleting it")
+
+	// Our last chance to get the resource group from the RD
+	rDef, err := s.client.ResourceDefinitions.Get(ctx, rdName)
+	if err != nil {
+		// if no RD was found, returns nil
+		return nil404(err)
+	}
+
+	err = s.client.ResourceDefinitions.Delete(ctx, rdName)
+	if err != nil {
+		// Returns nil if api call returned 404, i.e. someone else already deleted the RD
+		return nil404(err)
+	}
+
+	log.Info("checking RG for removal")
+
+	if rDef.ResourceGroupName == "DfltRscGrp" {
+		// Don't try to delete the default resource group
+		return nil
+	}
+
+	err = s.client.ResourceGroups.Delete(ctx, rDef.ResourceGroupName)
+	if err != nil {
+		apiErr, ok := err.(lapi.ApiCallError)
+		if ok && apiErr.Is(lapiconsts.FailExistsRscDfn) {
+			// Do not delete the RG if other RDs are still present
+			return nil
+		}
+
+		return nil404(err)
+	}
+
+	return nil
 }
