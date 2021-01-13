@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- PVCs can now be deleted independently of Snapshots. LINSTOR ResourceDefinitions for the PVC will exist until
+  both Snapshots and Resources are deleted.
+
 ### Fixed
 - Add `nouuid` to default XFS mount options. This enables mounting restored snapshots on the same node as the original.
 
