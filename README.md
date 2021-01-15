@@ -56,8 +56,25 @@ is the foremost guide on setting up and administering LINSTOR.
 
 After the plugin has been deployed, you're free to create storage classes
 that point to the name of the external provisioner associateed with the CSI plugin
-and have your users start provisioning volumes from them. Please see
-the `class.yaml` file in the `examples/k8s/` dir for a basic example.
+and have your users start provisioning volumes from them. A basic storage class could
+look like this:
+
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: linstor-basic-storage
+provisioner: linstor.csi.linbit.com
+allowVolumeExpansion: true
+parameters:
+  placementCount: "2"
+  storagePool: "my-storage-pool"
+  resourceGroup: "linstor-basic-storage"
+  csi.storage.k8s.io/fstype: xfs
+```
+
+A full list of all parameters usable in a storage class is available
+[here](https://www.linbit.com/drbd-user-guide/linstor-guide-1_0-en/#s-kubernetes-sc-parameters).
 
 Ensure that all kubelets that are expected to use LINSTOR volumes have a running
 LINSTOR satellite that is configured to work with the LINSTOR controller
