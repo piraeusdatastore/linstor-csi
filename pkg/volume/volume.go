@@ -123,8 +123,6 @@ type Parameters struct {
 // assigned diskless volumes to if they're not given a user created DisklessStoragePool.
 const DefaultDisklessStoragePoolName = "DfltDisklessStorPool"
 
-const drbdOptsPrefix = "DrbdOptions/"
-
 // NewParameters parses out the raw parameters we get and sets appropriate
 // zero values
 func NewParameters(params map[string]string) (Parameters, error) {
@@ -140,7 +138,7 @@ func NewParameters(params map[string]string) (Parameters, error) {
 	}
 
 	for k, v := range params {
-		if strings.HasPrefix(k, drbdOptsPrefix) {
+		if strings.HasPrefix(k, lc.NamespcDrbdOptions + "/") {
 			p.DRBDOpts[k] = v
 			continue
 		}
@@ -160,9 +158,9 @@ func NewParameters(params map[string]string) (Parameters, error) {
 			}
 			p.LayerList = l
 		case replicasonsame:
-			p.ReplicasOnSame = strings.Split(v, " ")
+			p.ReplicasOnSame = maybeAddAux(strings.Split(v, " ")...)
 		case replicasondifferent:
-			p.ReplicasOnDifferent = strings.Split(v, " ")
+			p.ReplicasOnDifferent = maybeAddAux(strings.Split(v, " ")...)
 		case storagepool:
 			p.StoragePool = v
 		case disklessstoragepool:
@@ -237,49 +235,83 @@ func NewParameters(params map[string]string) (Parameters, error) {
 }
 
 // Convert parameters into a modify-object that reconciles any differences between parameters and resource group
-func (params *Parameters) ToResourceGroupModify(rg *lapi.ResourceGroup) (lapi.ResourceGroupModify, error) {
+func (params *Parameters) ToResourceGroupModify(rg *lapi.ResourceGroup) (lapi.ResourceGroupModify, bool) {
+	changed := false
 	rgModify := lapi.ResourceGroupModify{
 		OverrideProps: make(map[string]string),
 	}
 
-	if rg.Props == nil {
-		rg.Props = make(map[string]string)
+	if rg.SelectFilter.PlaceCount != params.PlacementCount {
+		changed = true
+		rgModify.SelectFilter.PlaceCount = params.PlacementCount
 	}
 
-	rgModify.SelectFilter.PlaceCount = params.PlacementCount
+	// LINSTOR does not accept "" as a placeholder for an absent storage pool, so we must take care to never try to
+	// set it in such cases.
+	if params.StoragePool != "" {
+		if rg.SelectFilter.StoragePool != params.StoragePool {
+			changed = true
+			rgModify.SelectFilter.StoragePool = params.StoragePool
+		}
 
-	if params.StoragePool != "" { // otherwise we set the storagepool to "", which does not make LINSTOR happy
-		rgModify.SelectFilter.StoragePool = params.StoragePool
-		rgModify.OverrideProps[lc.KeyStorPoolName] = params.StoragePool
+		existingPool, ok := rg.Props[lc.KeyStorPoolName]
+		if !ok || existingPool != params.StoragePool {
+			changed = true
+			rgModify.OverrideProps[lc.KeyStorPoolName] = params.StoragePool
+		}
 	}
 
-	for _, p := range params.ReplicasOnDifferent {
-		rgModify.SelectFilter.ReplicasOnDifferent = append(rgModify.SelectFilter.ReplicasOnDifferent, maybeAddAux(p))
+	if !stringSlicesEqual(rg.SelectFilter.ReplicasOnSame, params.ReplicasOnSame) {
+		changed = true
+		rgModify.SelectFilter.ReplicasOnSame = params.ReplicasOnSame
 	}
 
-	for _, p := range params.ReplicasOnSame {
-		rgModify.SelectFilter.ReplicasOnSame = append(rgModify.SelectFilter.ReplicasOnSame, maybeAddAux(p))
+	if !stringSlicesEqual(rg.SelectFilter.ReplicasOnDifferent, params.ReplicasOnDifferent) {
+		changed = true
+		rgModify.SelectFilter.ReplicasOnDifferent = params.ReplicasOnDifferent
 	}
 
-	for _, p := range params.LayerList {
-		rgModify.SelectFilter.LayerStack = append(rgModify.SelectFilter.LayerStack, string(p))
+	stringLayers := make([]string, len(params.LayerList))
+	for i, layer := range params.LayerList {
+		stringLayers[i] = string(layer)
+	}
+	if !stringSlicesEqual(rg.SelectFilter.LayerStack, stringLayers) {
+		changed = true
+		rgModify.SelectFilter.LayerStack = stringLayers
 	}
 
-	rgModify.SelectFilter.NotPlaceWithRscRegex = params.DoNotPlaceWithRegex
-	rgModify.SelectFilter.DisklessOnRemaining = params.Disklessonremaining
+	if rg.SelectFilter.NotPlaceWithRscRegex != params.DoNotPlaceWithRegex {
+		changed = true
+		rgModify.SelectFilter.NotPlaceWithRscRegex = params.DoNotPlaceWithRegex
+	}
+
+	if rg.SelectFilter.DisklessOnRemaining != params.Disklessonremaining {
+		changed = true
+		rgModify.SelectFilter.DisklessOnRemaining = params.Disklessonremaining
+	}
+
 
 	for k, v := range params.DRBDOpts {
-		rgModify.OverrideProps[k] = v
+		existingV, ok := rg.Props[k]
+		if !ok || existingV != v {
+			changed = true
+			rgModify.OverrideProps[k] = v
+		}
 	}
-	// delete the ones that we had, but do no longer exist
-	// this is mainly for the sake of completeness, one can not edit a SC in k8s
+
 	for k := range rg.Props {
-		if _, ok := rgModify.OverrideProps[k]; !ok {
+		// Currently we only compare DrbdOptions here, as these are the only ones a user can directly set.
+		if !strings.HasPrefix(k, lc.NamespcDrbdOptions) {
+			continue
+		}
+		_, ok := params.DRBDOpts[k]
+		if !ok {
+			changed = true
 			rgModify.DeleteProps = append(rgModify.DeleteProps, k)
 		}
 	}
 
-	return rgModify, nil
+	return rgModify, changed
 }
 
 // DisklessFlag returns the diskless flag passed to resource create calls.
@@ -508,11 +540,31 @@ type Expander interface {
 	ControllerExpand(ctx context.Context, vol *Info) error
 }
 
-func maybeAddAux(prop string) string {
-	auxPrefix := lc.NamespcAuxiliary + "/"
-	if strings.HasPrefix(prop, auxPrefix) {
-		return prop
+func maybeAddAux(props ...string) []string {
+	const auxPrefix = lc.NamespcAuxiliary + "/"
+
+	result := make([]string, len(props))
+	for i, prop := range props {
+		if strings.HasPrefix(prop, auxPrefix) {
+			result[i] = prop
+		} else {
+			result[i] = auxPrefix + prop
+		}
 	}
 
-	return auxPrefix + prop
+	return result
+}
+
+func stringSlicesEqual(a []string, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+
+	return true
 }
