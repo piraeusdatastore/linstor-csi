@@ -27,6 +27,7 @@ import (
 	"math"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 
 	lapiconsts "github.com/LINBIT/golinstor"
@@ -332,6 +333,12 @@ func (s *Linstor) Delete(ctx context.Context, vol *volume.Info) error {
 	if err != nil {
 		return nil404(err)
 	}
+
+	// Need to ensure that diskless resources are always deleted first, otherwise the last diskfull resource won't be
+	// deleted
+	sort.Slice(resources, func(i, j int) bool {
+		return !util.DeployedDiskfully(resources[i]) && util.DeployedDiskfully(resources[j])
+	})
 
 	for _, res := range resources {
 		err := s.client.Resources.Delete(ctx, vol.ID, res.NodeName)
