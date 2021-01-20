@@ -18,6 +18,19 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 package linstor
 
-// AnnotationsKey is the Aux props key in linstor where serialized CSI volumes
-// are stored.
-const AnnotationsKey = "Aux/csi-volume-annotations"
+import lc "github.com/LINBIT/golinstor"
+
+
+const (
+	// AnnotationsKey is the Aux props key in linstor where serialized CSI volumes
+	// are stored.
+	AnnotationsKey = lc.NamespcAuxiliary + "/csi-volume-annotations"
+
+	// PropertyCreatedFor is the Aux props key in linstor used to identify why a specific object (for example, a
+	// resource) exists.
+	PropertyCreatedFor = lc.NamespcAuxiliary + "/csi-created-for"
+
+	// CreatedForTemporaryDisklessAttach marks a resource as temporary, i.e. it should be removed after it is no longer
+	// needed.
+	CreatedForTemporaryDisklessAttach = "temporary-diskless-attach"
+)

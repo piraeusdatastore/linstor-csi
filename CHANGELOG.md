@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Add `nouuid` to default XFS mount options. This enables mounting restored snapshots on the same node as the original.
+- Detach() operations no longer delete existing diskless resources (i.e. TieBreaker resources), only those created by
+  Attach() operations.
 
 ## [0.11.0] - 2020-12-21
 
