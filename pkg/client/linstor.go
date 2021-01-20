@@ -414,35 +414,36 @@ func (s *Linstor) Attach(ctx context.Context, vol *volume.Info, node string) err
 	if err != nil {
 		return err
 	}
+
+	rc.Resource.Props[linstor.PropertyCreatedFor] = linstor.CreatedForTemporaryDisklessAttach
 	return s.client.Resources.Create(ctx, rc)
 }
 
 // Detach removes a volume from the node.
 func (s *Linstor) Detach(ctx context.Context, vol *volume.Info, node string) error {
+	log := s.log.WithFields(logrus.Fields{
+		"volume":     fmt.Sprintf("%+v", vol),
+		"targetNode": node,
+	})
+
 	res, err := s.client.Resources.Get(ctx, vol.ID, node)
-	if err == lapi.NotFoundError {
-		s.log.WithFields(logrus.Fields{
-			"volume":     fmt.Sprintf("%+v", vol),
-			"targetNode": node,
-		}).Info("volume does not even exist")
-		return nil
-	} else if err != nil {
-		return err
+	if err != nil {
+		// if the resource could not be found there is nothing to detach
+		return nil404(err)
 	}
 
-	s.log.WithFields(logrus.Fields{
-		"resource":   fmt.Sprintf("%+v", res),
-		"targetNode": node,
-	}).Info("detaching volume")
+	createdFor, ok := res.Props[linstor.PropertyCreatedFor]
+	if !ok || createdFor != linstor.CreatedForTemporaryDisklessAttach {
+		log.Info("resource not temporary (not created by Attach) not deleting")
+		return nil
+	}
 
 	if util.DeployedDiskfully(res) {
-		s.log.WithFields(logrus.Fields{
-			"resource":   fmt.Sprintf("%+v", res),
-			"targetNode": node,
-		}).Info("volume is diskfull on node, refusing to detach")
+		log.Info("temporary resource created by Attach is now diskfull, not deleting")
 		return nil
 	}
-
+	
+	log.Info("removing temporary resource")
 	return s.client.Resources.Delete(ctx, vol.ID, node)
 }
 
