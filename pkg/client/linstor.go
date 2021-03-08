@@ -401,6 +401,10 @@ func (s *Linstor) Attach(ctx context.Context, vol *volume.Info, node string) err
 		return err
 	}
 
+	if slice.ContainsString(res.Flags, lapiconsts.FlagDelete, nil) {
+		return fmt.Errorf("failed to attach volume %s, to node %s: delete in progress", vol.ID, node)
+	}
+
 	if res.NodeName == node {
 		s.log.WithFields(logrus.Fields{
 			"volume":     fmt.Sprintf("%+v", vol),
@@ -684,10 +688,16 @@ func (s *Linstor) reconcileResourceDefinition(ctx context.Context, info *volume.
 		return nil, err
 	}
 	for _, rd := range allRds {
-		if rd.ExternalName == info.Name {
-			logger.Debugf("resource definition already exists")
-			return &rd, nil
+		if rd.ExternalName != info.Name {
+			continue
 		}
+
+		if slice.ContainsString(rd.Flags, lapiconsts.FlagDelete, nil) {
+			return nil, fmt.Errorf("resource definition %s exists, but deletion is in progress", info.Name)
+		}
+
+		logger.Debugf("resource definition already exists")
+		return &rd, nil
 	}
 
 	logger.Debugf("resource definition does not exist, create now")
