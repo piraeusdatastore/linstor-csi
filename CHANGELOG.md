@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Controller no longer treats LINSTOR resource(-definitions) as ready when the DELETE flag is set. Operations are now
+  aborted early and tried again later when the LINSTOR resource is really gone.
+
 ## [0.12.0] - 2021-01-26
 
 ### Changed
