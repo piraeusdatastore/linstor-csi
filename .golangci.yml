@@ -11,6 +11,8 @@ output:
 # all available settings of specific linters
 linters-settings:
   errcheck: {}
+  exhaustive:
+    default-signifies-exhaustive: true
   gci:
     local-prefixes: github.com/piraeusdatastore/linstor-csi
   gocritic:

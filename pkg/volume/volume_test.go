@@ -5,6 +5,7 @@ import (
 
 	lc "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
+	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
@@ -53,37 +54,37 @@ func TestDisklessFlag(t *testing.T) {
 	}{
 		{
 			name:     "default-layers",
-			params:   volume.Parameters{LayerList: []lapi.LayerType{lapi.DRBD, lapi.STORAGE}},
+			params:   volume.Parameters{LayerList: []devicelayerkind.DeviceLayerKind{devicelayerkind.Drbd, devicelayerkind.Storage}},
 			expected: lc.FlagDrbdDiskless,
 			isError:  false,
 		},
 		{
 			name:     "nvme-layers",
-			params:   volume.Parameters{LayerList: []lapi.LayerType{lapi.NVME}},
+			params:   volume.Parameters{LayerList: []devicelayerkind.DeviceLayerKind{devicelayerkind.Nvme}},
 			expected: lc.FlagNvmeInitiator,
 			isError:  false,
 		},
 		{
 			name:     "both-diskless",
-			params:   volume.Parameters{LayerList: []lapi.LayerType{lapi.DRBD, lapi.NVME}},
+			params:   volume.Parameters{LayerList: []devicelayerkind.DeviceLayerKind{devicelayerkind.Drbd, devicelayerkind.Nvme}},
 			expected: lc.FlagDrbdDiskless,
 			isError:  false,
 		},
 		{
 			name:     "both-reversed",
-			params:   volume.Parameters{LayerList: []lapi.LayerType{lapi.NVME, lapi.DRBD}},
+			params:   volume.Parameters{LayerList: []devicelayerkind.DeviceLayerKind{devicelayerkind.Nvme, devicelayerkind.Drbd}},
 			expected: lc.FlagNvmeInitiator,
 			isError:  false,
 		},
 		{
 			name:     "openflex-like-nvme",
-			params:   volume.Parameters{LayerList: []lapi.LayerType{lapi.OPENFLEX, lapi.STORAGE}},
+			params:   volume.Parameters{LayerList: []devicelayerkind.DeviceLayerKind{devicelayerkind.Openflex, devicelayerkind.Storage}},
 			expected: lc.FlagNvmeInitiator,
 			isError:  false,
 		},
 		{
 			name:     "no-diskless-layer",
-			params:   volume.Parameters{LayerList: []lapi.LayerType{lapi.CACHE, lapi.STORAGE}},
+			params:   volume.Parameters{LayerList: []devicelayerkind.DeviceLayerKind{devicelayerkind.Cache, devicelayerkind.Storage}},
 			expected: "",
 			isError:  true,
 		},
@@ -115,20 +116,20 @@ func TestParameters_ToResourceGroupModify(t *testing.T) {
 	}{
 		{
 			name:           "matching-rg-is-empty-modify",
-			params:         volume.Parameters{Properties: map[string]string{"DrbdOptions/Net/Protocol": "C"}, LayerList: []lapi.LayerType{lapi.DRBD, lapi.STORAGE}, PlacementCount: 2, ResourceGroup: "matching-rg-is-empty-modify"},
-			existing:       lapi.ResourceGroup{Name: "matching-rg-is-empty-modify", Props: map[string]string{lc.KeyStorPoolName: "", "DrbdOptions/Net/Protocol": "C"}, SelectFilter: lapi.AutoSelectFilter{LayerStack: []string{string(lapi.DRBD), string(lapi.STORAGE)}, PlaceCount: 2}},
+			params:         volume.Parameters{Properties: map[string]string{"DrbdOptions/Net/Protocol": "C"}, LayerList: []devicelayerkind.DeviceLayerKind{devicelayerkind.Drbd, devicelayerkind.Storage}, PlacementCount: 2, ResourceGroup: "matching-rg-is-empty-modify"},
+			existing:       lapi.ResourceGroup{Name: "matching-rg-is-empty-modify", Props: map[string]string{lc.KeyStorPoolName: "", "DrbdOptions/Net/Protocol": "C"}, SelectFilter: lapi.AutoSelectFilter{LayerStack: []string{string(devicelayerkind.Drbd), string(devicelayerkind.Storage)}, PlaceCount: 2}},
 			expectedModify: lapi.ResourceGroupModify{OverrideProps: map[string]string{}},
 		},
 		{
 			name:     "wrong-select-filters",
-			params:   volume.Parameters{LayerList: []lapi.LayerType{lapi.WRITECACHE, lapi.DRBD, lapi.STORAGE}, PlacementCount: 3, ResourceGroup: "wrong-select-filters", StoragePool: "pool"},
-			existing: lapi.ResourceGroup{Name: "wrong-select-filters", SelectFilter: lapi.AutoSelectFilter{LayerStack: []string{string(lapi.DRBD)}, PlaceCount: 2}},
+			params:   volume.Parameters{LayerList: []devicelayerkind.DeviceLayerKind{devicelayerkind.Writecache, devicelayerkind.Drbd, devicelayerkind.Storage}, PlacementCount: 3, ResourceGroup: "wrong-select-filters", StoragePool: "pool"},
+			existing: lapi.ResourceGroup{Name: "wrong-select-filters", SelectFilter: lapi.AutoSelectFilter{LayerStack: []string{string(devicelayerkind.Drbd)}, PlaceCount: 2}},
 			expectedModify: lapi.ResourceGroupModify{
 				OverrideProps: map[string]string{
 					lc.KeyStorPoolName: "pool",
 				},
 				SelectFilter: lapi.AutoSelectFilter{
-					LayerStack:  []string{string(lapi.WRITECACHE), string(lapi.DRBD), string(lapi.STORAGE)},
+					LayerStack:  []string{string(devicelayerkind.Writecache), string(devicelayerkind.Drbd), string(devicelayerkind.Storage)},
 					PlaceCount:  3,
 					StoragePool: "pool",
 				},
@@ -137,8 +138,8 @@ func TestParameters_ToResourceGroupModify(t *testing.T) {
 		},
 		{
 			name:          "differing-props-are-errors",
-			params:        volume.Parameters{Properties: map[string]string{"DrbdOptions/Net/Protocol": "C"}, LayerList: []lapi.LayerType{lapi.DRBD, lapi.STORAGE}, PlacementCount: 2, ResourceGroup: "differing-props-are-errors"},
-			existing:      lapi.ResourceGroup{Name: "differing-props-are-errors", Props: map[string]string{lc.KeyStorPoolName: "", "DrbdOptions/Net/Protocol": "A", "DrbdOptions/Foo/Bar": "baz"}, SelectFilter: lapi.AutoSelectFilter{LayerStack: []string{string(lapi.DRBD), string(lapi.STORAGE)}, PlaceCount: 2}},
+			params:        volume.Parameters{Properties: map[string]string{"DrbdOptions/Net/Protocol": "C"}, LayerList: []devicelayerkind.DeviceLayerKind{devicelayerkind.Drbd, devicelayerkind.Storage}, PlacementCount: 2, ResourceGroup: "differing-props-are-errors"},
+			existing:      lapi.ResourceGroup{Name: "differing-props-are-errors", Props: map[string]string{lc.KeyStorPoolName: "", "DrbdOptions/Net/Protocol": "A", "DrbdOptions/Foo/Bar": "baz"}, SelectFilter: lapi.AutoSelectFilter{LayerStack: []string{string(devicelayerkind.Drbd), string(devicelayerkind.Storage)}, PlaceCount: 2}},
 			expectedError: true,
 		},
 	}

@@ -29,6 +29,7 @@ import (
 
 	lc "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
+	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/pborman/uuid"
 
@@ -112,7 +113,7 @@ type Parameters struct {
 	AllowRemoteVolumeAccess bool
 	// LayerList is a list that corresponds to the `linstor resource create`
 	// option of the same name.
-	LayerList []lapi.LayerType
+	LayerList []devicelayerkind.DeviceLayerKind
 	// PlacementPolicy determines where volumes are created.
 	PlacementPolicy topology.PlacementPolicy
 	// PostMountXfsOpts is an optional string of post-mount call
@@ -132,7 +133,7 @@ const DefaultDisklessStoragePoolName = "DfltDisklessStorPool"
 func NewParameters(params map[string]string) (Parameters, error) {
 	// set zero values
 	p := Parameters{
-		LayerList:               []lapi.LayerType{lapi.DRBD, lapi.STORAGE},
+		LayerList:               []devicelayerkind.DeviceLayerKind{devicelayerkind.Drbd, devicelayerkind.Storage},
 		PlacementCount:          1,
 		DisklessStoragePool:     DefaultDisklessStoragePoolName,
 		Encryption:              false,
@@ -335,15 +336,13 @@ func (params *Parameters) ToResourceGroupModify(rg *lapi.ResourceGroup) (lapi.Re
 // It will select the flag matching the top-most layer that supports disk-less resources.
 func (params *Parameters) DisklessFlag() (string, error) {
 	for _, l := range params.LayerList {
-		if l == lapi.DRBD {
+		switch l {
+		case devicelayerkind.Drbd:
 			return lc.FlagDrbdDiskless, nil
-		}
-		if l == lapi.NVME {
+		case devicelayerkind.Nvme, devicelayerkind.Openflex:
 			return lc.FlagNvmeInitiator, nil
-		}
-		if l == lapi.OPENFLEX {
-			// Openflex volumes are connected via NVMe
-			return lc.FlagNvmeInitiator, nil
+		default:
+			continue
 		}
 	}
 
@@ -351,17 +350,18 @@ func (params *Parameters) DisklessFlag() (string, error) {
 }
 
 // ParseLayerList returns a slice of LayerType from a string of space-separated layers.
-func ParseLayerList(s string) ([]lapi.LayerType, error) {
+func ParseLayerList(s string) ([]devicelayerkind.DeviceLayerKind, error) {
 	list := strings.Split(s, " ")
-	layers := make([]lapi.LayerType, 0)
-	knownLayers := []lapi.LayerType{
-		lapi.DRBD,
-		lapi.STORAGE,
-		lapi.LUKS,
-		lapi.NVME,
-		lapi.CACHE,
-		lapi.OPENFLEX,
-		lapi.WRITECACHE,
+	layers := make([]devicelayerkind.DeviceLayerKind, 0)
+	knownLayers := []devicelayerkind.DeviceLayerKind{
+		devicelayerkind.Drbd,
+		devicelayerkind.Storage,
+		devicelayerkind.Luks,
+		devicelayerkind.Nvme,
+		devicelayerkind.Cache,
+		devicelayerkind.Writecache,
+		devicelayerkind.Openflex,
+		devicelayerkind.Exos,
 	}
 
 userLayers:
