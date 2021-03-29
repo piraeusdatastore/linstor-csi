@@ -395,31 +395,81 @@ func (s *Linstor) Attach(ctx context.Context, vol *volume.Info, node string) err
 	}).Info("attaching volume")
 
 	// If the resource is already on the node, don't worry about attaching.
-	res, err := s.client.Resources.Get(ctx, vol.ID, node)
+	ress, err := s.client.Resources.GetResourceView(ctx, &lapi.ListOpts{Resource: []string{vol.ID}})
 	if nil404(err) != nil {
 		return err
 	}
 
-	if slice.ContainsString(res.Flags, lapiconsts.FlagDelete, nil) {
-		return fmt.Errorf("failed to attach volume %s, to node %s: delete in progress", vol.ID, node)
+	var existingRes *lapi.Resource
+
+	existingSharedName := ""
+
+	for i := range ress {
+		if ress[i].NodeName == node {
+			existingRes = &ress[i].Resource
+			existingSharedName = ress[i].SharedName
+
+			break
+		}
 	}
 
-	if res.NodeName == node {
-		s.log.WithFields(logrus.Fields{
-			"volume":     fmt.Sprintf("%+v", vol),
-			"resource":   fmt.Sprintf("%+v", res),
-			"targetNode": node,
-		}).Info("volume already attached")
-		return nil
+	if existingRes == nil {
+		s.log.Infof("volume %s does not exist on node %s, creating new diskless resource", vol.ID, node)
+
+		rc, err := vol.ToDisklessResourceCreate(node)
+		if err != nil {
+			return err
+		}
+
+		rc.Resource.Props[linstor.PropertyCreatedFor] = linstor.CreatedForTemporaryDisklessAttach
+
+		err = s.client.Resources.Create(ctx, rc)
+		if err != nil {
+			return err
+		}
+
+		newRsc, err := s.client.Resources.Get(ctx, vol.ID, node)
+		if err != nil {
+			return err
+		}
+
+		existingRes = &newRsc
 	}
 
-	rc, err := vol.ToDisklessResourceCreate(node)
-	if err != nil {
-		return err
+	if slice.ContainsString(existingRes.Flags, lapiconsts.FlagDelete, nil) {
+		return &DeleteInProgressError{
+			Operation: "attach volume",
+			Kind:      "resource",
+			Name:      vol.ID,
+		}
 	}
 
-	rc.Resource.Props[linstor.PropertyCreatedFor] = linstor.CreatedForTemporaryDisklessAttach
-	return s.client.Resources.Create(ctx, rc)
+	if slice.ContainsString(existingRes.Flags, lapiconsts.FlagRscInactive, nil) {
+		for i := range ress {
+			res := &ress[i]
+
+			if res.SharedName == "" {
+				continue
+			}
+
+			if res.SharedName != existingSharedName {
+				continue
+			}
+
+			if slice.ContainsString(res.Flags, lapiconsts.FlagRscInactive, nil) {
+				continue
+			}
+
+			err := s.client.Resources.Deactivate(ctx, res.Name, res.NodeName)
+			if err != nil {
+				return fmt.Errorf("failed to deactivate node %s in shared storage pool %s for volume %s: %w", res.NodeName, res.SharedName, vol.ID, err)
+			}
+		}
+
+		return s.client.Resources.Activate(ctx, vol.ID, node)
+	}
+
+	return nil
 }
 
 // Detach removes a volume from the node.
@@ -696,7 +746,11 @@ func (s *Linstor) reconcileResourceDefinition(ctx context.Context, info *volume.
 		}
 
 		if slice.ContainsString(rd.Flags, lapiconsts.FlagDelete, nil) {
-			return nil, fmt.Errorf("resource definition %s exists, but deletion is in progress", info.Name)
+			return nil, &DeleteInProgressError{
+				Operation: "reconcile resource definition",
+				Kind:      "resource definition",
+				Name:      info.Name,
+			}
 		}
 
 		logger.Debugf("resource definition already exists")
@@ -943,7 +997,11 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*csi.Snapshot, error) {
 	}
 
 	if slice.ContainsString(lsnap.Flags, lapiconsts.FlagDelete, nil) {
-		return nil, fmt.Errorf("snapshot is being deleted")
+		return nil, &DeleteInProgressError{
+			Operation: "csi snapshot from linstor",
+			Kind:      "snapshot",
+			Name:      lsnap.Name,
+		}
 	}
 
 	snapSizeBytes := lsnap.VolumeDefinitions[0].SizeKib * uint64(data.KiB)
