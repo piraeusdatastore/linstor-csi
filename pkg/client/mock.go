@@ -137,13 +137,13 @@ func (s *MockStorage) ListSnaps(ctx context.Context, start, limit int) ([]*csi.S
 	return s.snapshots[start:end], nil
 }
 
-func (s *MockStorage) FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, error) {
+func (s *MockStorage) FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, bool, error) {
 	for _, snap := range s.snapshots {
 		if snap.GetSnapshotId() == id {
-			return snap, nil
+			return snap, true, nil
 		}
 	}
-	return nil, nil
+	return nil, false, nil
 }
 
 func (s *MockStorage) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info, start, limit int) ([]*csi.Snapshot, error) {

@@ -817,7 +817,7 @@ func (s *Linstor) deleteVolumeMetadata(ctx context.Context, vol *volume.Info) er
 	return nil
 }
 
-func (s *Linstor) FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, error) {
+func (s *Linstor) FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, bool, error) {
 	log := s.log.WithField("id", id)
 
 	log.Debug("getting snapshot view")
@@ -826,25 +826,32 @@ func (s *Linstor) FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, e
 	// for that, which is not available at this stage
 	snaps, err := s.client.Resources.GetSnapshotView(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find snapshots: %w", err)
+		return nil, false, fmt.Errorf("failed to find snapshots: %w", err)
 	}
 
+	var matchingSnap *lapi.Snapshot
 	for _, lsnap := range snaps {
-		log := log.WithField("snap", lsnap)
-
-		log.Debug("converting LINSTOR snapshot to CSI snapshot")
-		csiSnap, err := linstorSnapshotToCSI(&lsnap)
-		if err != nil {
-			log.WithError(err).Warn("failed to convert LINSTOR to CSI snapshot, skipping...")
-			continue
-		}
-
-		if csiSnap.GetSnapshotId() == id {
-			return csiSnap, nil
+		if lsnap.Name == id  {
+			matchingSnap = &lsnap
+			break
 		}
 	}
 
-	return nil, nil
+	if matchingSnap == nil {
+		return nil, true, nil
+	}
+
+	if linstorSnapshotHasError(matchingSnap) {
+		return nil, false, nil
+	}
+
+	log.Debug("converting LINSTOR snapshot to CSI snapshot")
+	csiSnap, err := linstorSnapshotToCSI(matchingSnap)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to convert LINSTOR to CSI snapshot: %w", err)
+	}
+
+	return csiSnap, true, nil
 }
 
 func (s *Linstor) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info, start, limit int) ([]*csi.Snapshot, error) {
@@ -932,6 +939,10 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*csi.Snapshot, error) {
 		return nil, fmt.Errorf("missing snapshots")
 	}
 
+	if slice.ContainsString(lsnap.Flags, lapiconsts.FlagDelete, nil) {
+		return nil, fmt.Errorf("snapshot is being deleted")
+	}
+
 	snapSizeBytes := lsnap.VolumeDefinitions[0].SizeKib * uint64(data.KiB)
 	creationTimeMicroSecs := lsnap.Snapshots[0].CreateTimestamp
 	ready := slice.ContainsString(lsnap.Flags, lapiconsts.FlagSuccessful, nil)
@@ -943,6 +954,10 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*csi.Snapshot, error) {
 		CreationTime:   &timestamp.Timestamp{Seconds: creationTimeMicroSecs / 1000},
 		ReadyToUse:     ready,
 	}, nil
+}
+
+func linstorSnapshotHasError(lsnap *lapi.Snapshot) bool {
+	return slice.ContainsString(lsnap.Flags, lapiconsts.FlagFailedDisconnect, nil) || slice.ContainsString(lsnap.Flags, lapiconsts.FlagFailedDeployment, nil)
 }
 
 // NodeAvailable makes sure that LINSTOR considers that the node is in an ONLINE

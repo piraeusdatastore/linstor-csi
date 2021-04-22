@@ -476,7 +476,12 @@ type SnapshotCreateDeleter interface {
 	CompatibleSnapshotId(name string) string
 	SnapCreate(ctx context.Context, id string, sourceVol *Info) (*csi.Snapshot, error)
 	SnapDelete(ctx context.Context, snap *csi.Snapshot) error
-	FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, error)
+	// FindSnapByID searches the snapshot in the backend
+	// It returns:
+	// * the snapshot, nil if not found
+	// * true, if the snapshot is either in progress or successful
+	// * any error encountered
+	FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, bool, error)
 	FindSnapsBySource(ctx context.Context, sourceVol *Info, start, limit int) ([]*csi.Snapshot, error)
 	// List Snapshots should return a sorted list of snapshots.
 	ListSnaps(ctx context.Context, start, limit int) ([]*csi.Snapshot, error)
