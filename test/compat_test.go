@@ -110,12 +110,14 @@ func TestCompatFindSnapByID(t *testing.T) {
 
 	compatClient := prepareFakeClient(t)
 
-	empty, err := compatClient.FindSnapByID(ctx, "none")
+	empty, ok, err := compatClient.FindSnapByID(ctx, "none")
 	assert.NoError(t, err)
+	assert.True(t, ok)
 	assert.Empty(t, empty)
 
-	actual, err := compatClient.FindSnapByID(ctx, snapshotA.SnapshotId)
+	actual, ok, err := compatClient.FindSnapByID(ctx, snapshotA.SnapshotId)
 	assert.NoError(t, err)
+	assert.True(t, ok)
 	assert.Equal(t, snapshotA, actual)
 }
 

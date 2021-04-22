@@ -509,7 +509,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 		d.log.Debug("check if source snapshot exists")
 
 		snapId := d.Snapshots.CompatibleSnapshotId(snapshotForVolumeName(req.GetName()))
-		leftoverSnap, err := d.Snapshots.FindSnapByID(ctx, snapId)
+		leftoverSnap, _,  err := d.Snapshots.FindSnapByID(ctx, snapId)
 		if err != nil {
 			return &csi.CreateVolumeResponse{}, status.Errorf(codes.Internal, "failed to check on potential left-over source snapshot: %v", err)
 		}
@@ -834,9 +834,20 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 
 	d.log.WithField("snapshot id", id).Debug("using snapshot id")
 
-	existingSnap, err := d.Snapshots.FindSnapByID(ctx, id)
+	existingSnap, ok, err := d.Snapshots.FindSnapByID(ctx, id)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to check for existing snapshot: %v", err)
+	}
+
+	if !ok {
+		d.log.Debug("existing snapshot is in failed state, deleting")
+		err := d.Snapshots.SnapDelete(ctx, &csi.Snapshot{
+			SourceVolumeId: req.GetSourceVolumeId(),
+			SnapshotId: req.GetName(),
+		})
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "tried deleting a leftover unsuccessful snapshot")
+		}
 	}
 
 	if existingSnap != nil {
@@ -877,7 +888,7 @@ func (d Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotReque
 		return nil, missingAttr("DeleteSnapshot", req.GetSnapshotId(), "SnapshotId")
 	}
 
-	snap, err := d.Snapshots.FindSnapByID(ctx, req.GetSnapshotId())
+	snap, _, err := d.Snapshots.FindSnapByID(ctx, req.GetSnapshotId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "unable to find snapshot %s: %v",
 			req.GetSnapshotId(), err)
@@ -908,7 +919,7 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 	switch {
 	// Handle case where a single snapshot is requested.
 	case req.GetSnapshotId() != "":
-		snap, err := d.Snapshots.FindSnapByID(ctx, req.GetSnapshotId())
+		snap, _, err := d.Snapshots.FindSnapByID(ctx, req.GetSnapshotId())
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to list snapshots: %v", err)
 		}
@@ -1149,7 +1160,7 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 			}
 			logger.Debugf("pre-populate volume from snapshot: %+v", snapshotID)
 
-			snap, err := d.Snapshots.FindSnapByID(ctx, snapshotID)
+			snap, _, err := d.Snapshots.FindSnapByID(ctx, snapshotID)
 			if err != nil {
 				return &csi.CreateVolumeResponse{}, status.Errorf(
 					codes.Internal, "CreateVolume failed for %s: %v", req.GetName(), err)
