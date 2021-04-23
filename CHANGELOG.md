@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Failed snapshots are now cleaned up and retried properly. This mitigates an issue whereby the snapshot failed for
+  one reason or other, but the snapshot controller contiously polls it for "completion".
+
 ## [0.12.1] - 2021-03-31
 
 ### Fixed
