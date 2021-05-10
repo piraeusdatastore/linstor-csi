@@ -660,7 +660,11 @@ func (s *Linstor) reconcileResourceGroup(ctx context.Context, params volume.Para
 		}
 	}
 
-	rgModify, changed := params.ToResourceGroupModify(&rg)
+	rgModify, changed, err := params.ToResourceGroupModify(&rg)
+	if err != nil {
+		return nil, err
+	}
+
 	if changed {
 		err := s.client.ResourceGroups.Modify(ctx, rgName, rgModify)
 		if err != nil {

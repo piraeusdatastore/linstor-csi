@@ -20,6 +20,7 @@ package volume
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -29,6 +30,9 @@ import (
 	lc "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/pborman/uuid"
+
+	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 )
 
@@ -115,8 +119,8 @@ type Parameters struct {
 	PostMountXfsOpts string
 	// ResourceGroup is the resource-group name in LINSTOR.
 	ResourceGroup string
-	// DRBDOpts are the options than can be set on DRBD resources
-	DRBDOpts map[string]string
+	// Properties are the properties to be set on the resource group.
+	Properties map[string]string
 }
 
 // DefaultDisklessStoragePoolName is the hidden diskless storage pool that linstor
@@ -134,12 +138,18 @@ func NewParameters(params map[string]string) (Parameters, error) {
 		Encryption:              false,
 		PlacementPolicy:         topology.AutoPlace,
 		AllowRemoteVolumeAccess: true,
-		DRBDOpts:                make(map[string]string),
+		Properties:              make(map[string]string),
 	}
 
 	for k, v := range params {
-		if strings.HasPrefix(k, lc.NamespcDrbdOptions + "/") {
-			p.DRBDOpts[k] = v
+		if strings.HasPrefix(k, linstor.PropertyNamespace+"/") {
+			k = k[len(linstor.PropertyNamespace)+1:]
+			p.Properties[k] = v
+			continue
+		}
+
+		if strings.HasPrefix(k, lc.NamespcDrbdOptions+"/") {
+			p.Properties[k] = v
 			continue
 		}
 
@@ -222,6 +232,21 @@ func NewParameters(params map[string]string) (Parameters, error) {
 		}
 	}
 
+	if p.ResourceGroup == "" {
+		rg, _, err := p.ToResourceGroupModify(&lapi.ResourceGroup{})
+		if err != nil {
+			return p, fmt.Errorf("failed to generate resource group properties from storage class: %w", err)
+		}
+
+		encoded, err := json.Marshal(rg)
+		if err != nil {
+			return p, fmt.Errorf("failed to encode parameters to generate resource group name: %w", err)
+		}
+
+		namespace := uuid.UUID(linstor.ResourceGroupNamespace)
+		p.ResourceGroup = "sc-" + uuid.NewSHA1(namespace, encoded).String()
+	}
+
 	// User has manually configured deployments, ignore autoplacing options.
 	if len(p.NodeList)+len(p.ClientList) != 0 {
 		p.PlacementCount = 0
@@ -235,7 +260,7 @@ func NewParameters(params map[string]string) (Parameters, error) {
 }
 
 // Convert parameters into a modify-object that reconciles any differences between parameters and resource group
-func (params *Parameters) ToResourceGroupModify(rg *lapi.ResourceGroup) (lapi.ResourceGroupModify, bool) {
+func (params *Parameters) ToResourceGroupModify(rg *lapi.ResourceGroup) (lapi.ResourceGroupModify, bool, error) {
 	changed := false
 	rgModify := lapi.ResourceGroupModify{
 		OverrideProps: make(map[string]string),
@@ -290,28 +315,20 @@ func (params *Parameters) ToResourceGroupModify(rg *lapi.ResourceGroup) (lapi.Re
 		rgModify.SelectFilter.DisklessOnRemaining = params.Disklessonremaining
 	}
 
-
-	for k, v := range params.DRBDOpts {
+	for k, v := range params.Properties {
 		existingV, ok := rg.Props[k]
-		if !ok || existingV != v {
-			changed = true
-			rgModify.OverrideProps[k] = v
-		}
-	}
-
-	for k := range rg.Props {
-		// Currently we only compare DrbdOptions here, as these are the only ones a user can directly set.
-		if !strings.HasPrefix(k, lc.NamespcDrbdOptions) {
-			continue
-		}
-		_, ok := params.DRBDOpts[k]
 		if !ok {
 			changed = true
-			rgModify.DeleteProps = append(rgModify.DeleteProps, k)
+			rgModify.OverrideProps[k] = v
+			continue
+		}
+
+		if existingV != v {
+			return lapi.ResourceGroupModify{}, false, fmt.Errorf("cannot change existing property value: existing = %s, expected = %s", existingV, v)
 		}
 	}
 
-	return rgModify, changed
+	return rgModify, changed, nil
 }
 
 // DisklessFlag returns the diskless flag passed to resource create calls.
