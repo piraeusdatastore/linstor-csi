@@ -18,7 +18,9 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 package linstor
 
-import lc "github.com/LINBIT/golinstor"
+import (
+	lc "github.com/LINBIT/golinstor"
+)
 
 
 const (
@@ -33,4 +35,10 @@ const (
 	// CreatedForTemporaryDisklessAttach marks a resource as temporary, i.e. it should be removed after it is no longer
 	// needed.
 	CreatedForTemporaryDisklessAttach = "temporary-diskless-attach"
+
+	// PropertyNamespace is the namespace for LINSTOR properties in kubernetes storage class parameters.
+	PropertyNamespace = "property.linstor.csi.linbit.com"
+
+	// ResourceGroupNamespace is the UUID namespace for generated resource groups
+	ResourceGroupNamespace = "resourcegroup.linstor.csi.linbit.com"
 )

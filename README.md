@@ -71,6 +71,8 @@ parameters:
   storagePool: "my-storage-pool"
   resourceGroup: "linstor-basic-storage"
   csi.storage.k8s.io/fstype: xfs
+  # You can override LINSTOR properties by adding the property.linstor.csi.linbit.com prefix:
+  property.linstor.csi.linbit.com/DrbdOptions/auto-quorum: suspend-io
 ```
 
 A full list of all parameters usable in a storage class is available

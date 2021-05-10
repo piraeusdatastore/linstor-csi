@@ -3,10 +3,44 @@ package volume_test
 import (
 	lc "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
+	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
+
+func TestNewParameters(t *testing.T) {
+	empty, err := volume.NewParameters(nil)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, empty.ResourceGroup)
+
+	fixed, err := volume.NewParameters(map[string]string{
+		"resourcegroup": "rg1",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "rg1", fixed.ResourceGroup)
+
+	expected := map[string]string{
+		"DrbdOptions/auto-quorum": "suspend-io",
+		"DrbdOptions/Net/protocol": "C",
+	}
+	legacy, err := volume.NewParameters(expected)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, legacy.Properties)
+
+	generalProps, err := volume.NewParameters(map[string]string{
+		linstor.PropertyNamespace + "/DrbdOptions/auto-quorum": "suspend-io",
+		linstor.PropertyNamespace + "/DrbdOptions/Net/protocol": "C",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, expected, generalProps.Properties)
+
+	unknownProp, err := volume.NewParameters(map[string]string{
+		"unknown": "something",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, map[string]string{}, unknownProp.Properties)
+}
 
 func TestDisklessFlag(t *testing.T) {
 	testcases := []struct {
@@ -75,10 +109,11 @@ func TestParameters_ToResourceGroupModify(t *testing.T) {
 		existing        lapi.ResourceGroup
 		expectedModify  lapi.ResourceGroupModify
 		expectedChanged bool
+		expectedError   bool
 	}{
 		{
 			name:           "matching-rg-is-empty-modify",
-			params:         volume.Parameters{DRBDOpts: map[string]string{"DrbdOptions/Net/Protocol": "C"}, LayerList: []lapi.LayerType{lapi.DRBD, lapi.STORAGE}, PlacementCount: 2, ResourceGroup: "matching-rg-is-empty-modify"},
+			params:         volume.Parameters{Properties: map[string]string{"DrbdOptions/Net/Protocol": "C"}, LayerList: []lapi.LayerType{lapi.DRBD, lapi.STORAGE}, PlacementCount: 2, ResourceGroup: "matching-rg-is-empty-modify"},
 			existing:       lapi.ResourceGroup{Name: "matching-rg-is-empty-modify", Props: map[string]string{lc.KeyStorPoolName: "", "DrbdOptions/Net/Protocol": "C"}, SelectFilter: lapi.AutoSelectFilter{LayerStack: []string{string(lapi.DRBD), string(lapi.STORAGE)}, PlaceCount: 2}},
 			expectedModify: lapi.ResourceGroupModify{OverrideProps: map[string]string{}},
 		},
@@ -99,14 +134,10 @@ func TestParameters_ToResourceGroupModify(t *testing.T) {
 			expectedChanged: true,
 		},
 		{
-			name:     "override-and-delete-props",
-			params:   volume.Parameters{DRBDOpts: map[string]string{"DrbdOptions/Net/Protocol": "C"}, LayerList: []lapi.LayerType{lapi.DRBD, lapi.STORAGE}, PlacementCount: 2, ResourceGroup: "override-and-delete-props"},
-			existing: lapi.ResourceGroup{Name: "override-and-delete-props", Props: map[string]string{lc.KeyStorPoolName: "", "DrbdOptions/Net/Protocol": "A", "DrbdOptions/Foo/Bar": "baz"}, SelectFilter: lapi.AutoSelectFilter{LayerStack: []string{string(lapi.DRBD), string(lapi.STORAGE)}, PlaceCount: 2}},
-			expectedModify: lapi.ResourceGroupModify{
-				OverrideProps: map[string]string{"DrbdOptions/Net/Protocol": "C"},
-				DeleteProps:   []string{"DrbdOptions/Foo/Bar"},
-			},
-			expectedChanged: true,
+			name:          "differing-props-are-errors",
+			params:        volume.Parameters{Properties: map[string]string{"DrbdOptions/Net/Protocol": "C"}, LayerList: []lapi.LayerType{lapi.DRBD, lapi.STORAGE}, PlacementCount: 2, ResourceGroup: "differing-props-are-errors"},
+			existing:      lapi.ResourceGroup{Name: "differing-props-are-errors", Props: map[string]string{lc.KeyStorPoolName: "", "DrbdOptions/Net/Protocol": "A", "DrbdOptions/Foo/Bar": "baz"}, SelectFilter: lapi.AutoSelectFilter{LayerStack: []string{string(lapi.DRBD), string(lapi.STORAGE)}, PlaceCount: 2}},
+			expectedError: true,
 		},
 	}
 
@@ -114,9 +145,10 @@ func TestParameters_ToResourceGroupModify(t *testing.T) {
 	for i := range testcases {
 		tcase := testcases[i]
 		t.Run(tcase.name, func(t *testing.T) {
-			actualModified, actualChanged := tcase.params.ToResourceGroupModify(&tcase.existing)
+			actualModified, actualChanged, err := tcase.params.ToResourceGroupModify(&tcase.existing)
 			assert.Equal(t, tcase.expectedChanged, actualChanged)
 			assert.Equal(t, tcase.expectedModify, actualModified)
+			assert.Equal(t, tcase.expectedError, err != nil)
 		})
 	}
 }

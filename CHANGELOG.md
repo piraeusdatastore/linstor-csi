@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Allow setting arbitrary properties using a parameter prefixed with the `property.linstor.csi.linbit.com` namespace.
+
+### Changed
+- Generate a resource group name if non was provided. The name is generated based on the provided parameters. Since
+  storage classes are immutable, volumes provisioned using the same storage class will always receive the same
+  resource group name.
+
+### Removed
+- Resource groups no longer update existing properties or remove additional properties if they not set in the storage
+  class. A resource group is immutable from the linstor-csi's point of view.
+
 ### Fixed
 - Failed snapshots are now cleaned up and retried properly. This mitigates an issue whereby the snapshot failed for
   one reason or other, but the snapshot controller contiously polls it for "completion".
