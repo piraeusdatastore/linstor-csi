@@ -1,0 +1,22 @@
+name: golangci-lint
+on:
+  pull_request:
+jobs:
+  golangci:
+    name: lint
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2
+        with:
+          only-new-issues: true
+  pre-commit:
+    runs-on: ubuntu-20.04
+    env:
+      # These hooks will run separately in github actions
+      SKIP: golangci-lint
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+      - uses: pre-commit/action@v2.0.3
