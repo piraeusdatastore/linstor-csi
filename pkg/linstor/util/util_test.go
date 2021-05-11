@@ -26,7 +26,7 @@ import (
 )
 
 func TestContainsAll(t *testing.T) {
-	var tableTests = []struct {
+	tableTests := []struct {
 		data     []string
 		members  []string
 		expected bool
@@ -74,7 +74,7 @@ func TestContainsAll(t *testing.T) {
 }
 
 func TestContainsAny(t *testing.T) {
-	var tableTests = []struct {
+	tableTests := []struct {
 		data     []string
 		members  []string
 		expected bool
@@ -132,7 +132,7 @@ func TestContainsAny(t *testing.T) {
 }
 
 func TestDeployedDiskfully(t *testing.T) {
-	var tableTests = []struct {
+	tableTests := []struct {
 		res      lapi.Resource
 		expected bool
 	}{
@@ -175,7 +175,7 @@ func TestDeployedDiskfully(t *testing.T) {
 }
 
 func TestDeployedDisklessly(t *testing.T) {
-	var tableTests = []struct {
+	tableTests := []struct {
 		res      lapi.Resource
 		expected bool
 	}{

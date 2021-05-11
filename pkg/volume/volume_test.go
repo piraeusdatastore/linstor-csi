@@ -1,12 +1,14 @@
 package volume_test
 
 import (
+	"testing"
+
 	lc "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
-	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestNewParameters(t *testing.T) {
@@ -21,7 +23,7 @@ func TestNewParameters(t *testing.T) {
 	assert.Equal(t, "rg1", fixed.ResourceGroup)
 
 	expected := map[string]string{
-		"DrbdOptions/auto-quorum": "suspend-io",
+		"DrbdOptions/auto-quorum":  "suspend-io",
 		"DrbdOptions/Net/protocol": "C",
 	}
 	legacy, err := volume.NewParameters(expected)
@@ -29,7 +31,7 @@ func TestNewParameters(t *testing.T) {
 	assert.Equal(t, expected, legacy.Properties)
 
 	generalProps, err := volume.NewParameters(map[string]string{
-		linstor.PropertyNamespace + "/DrbdOptions/auto-quorum": "suspend-io",
+		linstor.PropertyNamespace + "/DrbdOptions/auto-quorum":  "suspend-io",
 		linstor.PropertyNamespace + "/DrbdOptions/Net/protocol": "C",
 	})
 	assert.NoError(t, err)

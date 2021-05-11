@@ -22,7 +22,6 @@ import (
 	lc "github.com/LINBIT/golinstor"
 )
 
-
 const (
 	// AnnotationsKey is the Aux props key in linstor where serialized CSI volumes
 	// are stored.

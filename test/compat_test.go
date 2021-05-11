@@ -2,7 +2,6 @@ package test
 
 import (
 	"context"
-	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,9 +10,11 @@ import (
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
 	hlc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
-	"github.com/stretchr/testify/assert"
+	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
 var (
