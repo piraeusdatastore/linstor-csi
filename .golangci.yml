@@ -1,0 +1,74 @@
+# options for analysis running
+run:
+  # timeout for analysis, e.g. 30s, 5m, default is 1m
+  deadline: 15m
+
+# output configuration options
+output:
+  # colored-line-number|line-number|json|tab|checkstyle|code-climate, default is "colored-line-number"
+  format: line-number
+
+# all available settings of specific linters
+linters-settings:
+  errcheck: {}
+  gci:
+    local-prefixes: github.com/piraeusdatastore/linstor-csi
+  gocritic:
+    # Which checks should be enabled; can't be combined with 'disabled-checks';
+    # See https://go-critic.github.io/overview#checks-overview
+    # To check which checks are enabled run `GL_DEBUG=gocritic golangci-lint run`
+    # By default list of stable checks is used.
+    enabled-checks:
+      - rangeValCopy
+      - boolExprSimplify
+      - emptyFallthrough
+      - emptyStringTest
+      - nestingReduce
+      - paramTypeCombine
+      - singleCaseSwitch
+      - stringXbytes
+      - typeAssertChain
+      - typeUnparen
+      - unlabelStmt
+      - unnecessaryBlock
+      - valSwap
+      - yodaStyleExpr
+      - appendCombine
+      - equalFold
+
+linters:
+  enable:
+    - errorlint
+    - gci
+    - exportloopref
+    - exhaustive
+    - gocritic
+    - goerr113
+    - gofumpt
+    - whitespace
+    - wsl
+
+issues:
+  # Excluding configuration per-path, per-linter, per-text and per-source
+  exclude-rules:
+    # Exclude some linters from running on tests files.
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+
+  # Maximum issues count per one linter. Set to 0 to disable. Default is 50.
+  max-issues-per-linter: 0
+
+  # Maximum count of issues with the same text. Set to 0 to disable. Default is 3.
+  max-same-issues: 0
+
+  # Show only new issues: if there are unstaged changes or untracked files,
+  # only those changes are analyzed, else only changes in HEAD~ are analyzed.
+  # It's a super-useful option for integration of golangci-lint into existing
+  # large codebase. It's not practical to fix all existing issues at the moment
+  # of integration: much better don't allow issues in new code.
+  # Default is false.
+  new: true
