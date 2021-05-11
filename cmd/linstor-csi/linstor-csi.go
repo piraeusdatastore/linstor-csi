@@ -26,10 +26,10 @@ import (
 	"net/url"
 	"os"
 
+	lapi "github.com/LINBIT/golinstor/client"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 
-	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
 	"github.com/piraeusdatastore/linstor-csi/pkg/driver"
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"

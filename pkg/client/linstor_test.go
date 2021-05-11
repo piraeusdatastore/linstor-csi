@@ -24,9 +24,8 @@ import (
 )
 
 func TestAllocationSizeKiB(t *testing.T) {
-
 	l := &Linstor{}
-	var tableTests = []struct {
+	tableTests := []struct {
 		req int64
 		lim int64
 		out int64
@@ -83,7 +82,7 @@ func TestValidResourceName(t *testing.T) {
 }
 
 func TestLinstorifyResourceName(t *testing.T) {
-	var unitTests = []struct {
+	unitTests := []struct {
 		in, out string
 		errExp  bool
 	}{
@@ -125,11 +124,10 @@ func TestLinstorifyResourceName(t *testing.T) {
 			t.Fatalf("Expected that input '%s' transforms to '%s', but got '%s'\n", test.in, test.out, resName)
 		}
 	}
-
 }
 
 func TestMkfsArgs(t *testing.T) {
-	var tableTests = []struct {
+	tableTests := []struct {
 		opts, source string
 		expected     []string
 	}{

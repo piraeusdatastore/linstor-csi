@@ -27,6 +27,7 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	ptypes "github.com/golang/protobuf/ptypes"
+
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
@@ -37,7 +38,7 @@ type MockStorage struct {
 }
 
 func (s *MockStorage) ListAll(ctx context.Context) ([]*volume.Info, error) {
-	var vols = make([]*volume.Info, 0)
+	vols := make([]*volume.Info, 0)
 	vols = append(vols, s.createdVolumes...)
 	volume.Sort(vols)
 
@@ -104,7 +105,7 @@ func (s *MockStorage) SnapCreate(ctx context.Context, id string, sourceVol *volu
 		SnapshotId:     id,
 		SourceVolumeId: sourceVol.ID,
 		CreationTime:   ptypes.TimestampNow(),
-		SizeBytes: 		sourceVol.SizeBytes,
+		SizeBytes:      sourceVol.SizeBytes,
 		ReadyToUse:     true,
 	}
 
@@ -129,7 +130,7 @@ func (s *MockStorage) ListSnaps(ctx context.Context, start, limit int) ([]*csi.S
 		limit = len(s.snapshots) - start
 	}
 
-	end := start+limit
+	end := start + limit
 	if end > len(s.snapshots) {
 		end = len(s.snapshots)
 	}
@@ -159,7 +160,7 @@ func (s *MockStorage) FindSnapsBySource(ctx context.Context, sourceVol *volume.I
 		limit = len(s.snapshots) - start
 	}
 
-	end := start+limit
+	end := start + limit
 	if end > len(results) {
 		end = len(results)
 	}

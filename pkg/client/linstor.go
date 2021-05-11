@@ -151,7 +151,7 @@ func LogLevel(s string) func(*Linstor) error {
 // ListAll returns a sorted list of pointers to volume.Info. Only the LINSTOR
 // volumes that can be serialized into a volume.Info are included.
 func (s *Linstor) ListAll(ctx context.Context) ([]*volume.Info, error) {
-	var vols = make([]*volume.Info, 0)
+	vols := make([]*volume.Info, 0)
 
 	resDefs, err := s.client.ResourceDefinitions.GetAll(ctx)
 	if err != nil {
@@ -175,7 +175,6 @@ func (s *Linstor) ListAll(ctx context.Context) ([]*volume.Info, error) {
 // AllocationSizeKiB returns LINSTOR's smallest possible number of KiB that can
 // satisfy the requiredBytes.
 func (s *Linstor) AllocationSizeKiB(requiredBytes, limitBytes int64) (int64, error) {
-
 	requestedSize := data.ByteSize(requiredBytes)
 	minVolumeSize := data.ByteSize(4096)
 	maxVolumeSize := data.ByteSize(limitBytes)
@@ -446,7 +445,7 @@ func (s *Linstor) Detach(ctx context.Context, vol *volume.Info, node string) err
 		log.Info("temporary resource created by Attach is now diskfull, not deleting")
 		return nil
 	}
-	
+
 	log.Info("removing temporary resource")
 	return s.client.Resources.Delete(ctx, vol.ID, node)
 }
@@ -835,7 +834,7 @@ func (s *Linstor) FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, b
 
 	var matchingSnap *lapi.Snapshot
 	for _, lsnap := range snaps {
-		if lsnap.Name == id  {
+		if lsnap.Name == id {
 			matchingSnap = &lsnap
 			break
 		}
@@ -870,7 +869,7 @@ func (s *Linstor) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info,
 
 	opts := &lapi.ListOpts{
 		Offset: start,
-		Limit: limit,
+		Limit:  limit,
 	}
 
 	snaps, err := s.client.Resources.GetSnapshots(ctx, sourceVol.ID, opts)
@@ -908,7 +907,7 @@ func (s *Linstor) ListSnaps(ctx context.Context, start, limit int) ([]*csi.Snaps
 
 	opts := &lapi.ListOpts{
 		Offset: start,
-		Limit: limit,
+		Limit:  limit,
 	}
 
 	snaps, err := s.client.Resources.GetSnapshotView(ctx, opts)

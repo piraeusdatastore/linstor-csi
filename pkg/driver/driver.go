@@ -34,12 +34,13 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/haySwim/data"
-	"github.com/piraeusdatastore/linstor-csi/pkg/client"
-	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/piraeusdatastore/linstor-csi/pkg/client"
+	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
 // Version is set via ldflags configued in the Makefile.
@@ -238,11 +239,13 @@ func (d Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCap
 			{Type: &csi.PluginCapability_Service_{
 				Service: &csi.PluginCapability_Service{
 					Type: csi.PluginCapability_Service_CONTROLLER_SERVICE,
-				}}},
+				},
+			}},
 			{Type: &csi.PluginCapability_Service_{
 				Service: &csi.PluginCapability_Service{
 					Type: csi.PluginCapability_Service_VOLUME_ACCESSIBILITY_CONSTRAINTS,
-				}}},
+				},
+			}},
 		},
 	}, nil
 }
@@ -285,7 +288,7 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		return nil, status.Errorf(codes.InvalidArgument, "NodePublishVolume failed for %s: access mode requires 'persistentVolumeClaim.readOnly' to be true", req.GetVolumeId())
 	}
 
-	var mntOpts = make([]string, 0)
+	mntOpts := make([]string, 0)
 	var fsType string
 
 	if block := req.GetVolumeCapability().GetBlock(); block != nil {
@@ -509,7 +512,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 		d.log.Debug("check if source snapshot exists")
 
 		snapId := d.Snapshots.CompatibleSnapshotId(snapshotForVolumeName(req.GetName()))
-		leftoverSnap, _,  err := d.Snapshots.FindSnapByID(ctx, snapId)
+		leftoverSnap, _, err := d.Snapshots.FindSnapByID(ctx, snapId)
 		if err != nil {
 			return &csi.CreateVolumeResponse{}, status.Errorf(codes.Internal, "failed to check on potential left-over source snapshot: %v", err)
 		}
@@ -536,7 +539,8 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 				CapacityBytes:      existingVolume.SizeBytes,
 				ContentSource:      req.GetVolumeContentSource(),
 				AccessibleTopology: topos,
-			}}, nil
+			},
+		}, nil
 	}
 
 	return d.createNewVolume(ctx, req)
@@ -684,30 +688,46 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 		Confirmed: &csi.ValidateVolumeCapabilitiesResponse_Confirmed{
 			VolumeCapabilities: []*csi.VolumeCapability{
 				// Tell CO we can provision RWO and ROX mount volumes.
-				{AccessType: &csi.VolumeCapability_Mount{
-					Mount: &csi.VolumeCapability_MountVolume{}},
+				{
+					AccessType: &csi.VolumeCapability_Mount{
+						Mount: &csi.VolumeCapability_MountVolume{},
+					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER}},
-				{AccessType: &csi.VolumeCapability_Mount{
-					Mount: &csi.VolumeCapability_MountVolume{}},
+						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+					},
+				},
+				{
+					AccessType: &csi.VolumeCapability_Mount{
+						Mount: &csi.VolumeCapability_MountVolume{},
+					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY}},
+						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY,
+					},
+				},
 				// Tell CO we can provision RWO and ROX block volumes.
-				{AccessType: &csi.VolumeCapability_Block{
-					Block: &csi.VolumeCapability_BlockVolume{}},
+				{
+					AccessType: &csi.VolumeCapability_Block{
+						Block: &csi.VolumeCapability_BlockVolume{},
+					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER}},
-				{AccessType: &csi.VolumeCapability_Block{
-					Block: &csi.VolumeCapability_BlockVolume{}},
+						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+					},
+				},
+				{
+					AccessType: &csi.VolumeCapability_Block{
+						Block: &csi.VolumeCapability_BlockVolume{},
+					},
 					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY}},
+						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY,
+					},
+				},
 			},
-		}}, nil
+		},
+	}, nil
 }
 
 // ListVolumes https://github.com/container-storage-interface/spec/blob/v1.2.0/spec.md#listvolumes
 func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
-
 	volumes, err := d.Storage.ListAll(ctx)
 	if err != nil {
 		return &csi.ListVolumesResponse{}, status.Errorf(codes.Aborted, "ListVolumes failed: %v", err)
@@ -740,7 +760,7 @@ func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*
 	volumes = volumes[start:end]
 
 	// Build up entries list from paginated volume slice.
-	var entries = make([]*csi.ListVolumesResponse_Entry, len(volumes))
+	entries := make([]*csi.ListVolumesResponse_Entry, len(volumes))
 	for i, vol := range volumes {
 		topos, err := d.Storage.AccessibleTopologies(ctx, vol)
 		if err != nil {
@@ -754,7 +774,8 @@ func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*
 				VolumeId:           vol.ID,
 				CapacityBytes:      vol.SizeBytes,
 				AccessibleTopology: topos,
-			}}
+			},
+		}
 	}
 
 	return &csi.ListVolumesResponse{NextToken: nextToken, Entries: entries}, nil
@@ -777,46 +798,55 @@ func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Controll
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
-				}}},
+				},
+			}},
 			// Tell the CO we can make volumes available on remote nodes.
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
-				}}},
+				},
+			}},
 			// Tell the CO we can list volumes.
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
-				}}},
+				},
+			}},
 			// Tell the CO we can create and delete snapshots.
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
-				}}},
+				},
+			}},
 			// Tell the CO we can create clones of volumes.
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
-				}}},
+				},
+			}},
 			// Tell the CO we can list snapshots.
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
-				}}},
+				},
+			}},
 			// Tell the CO we can query our storage space.
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_GET_CAPACITY,
-				}}},
+				},
+			}},
 			// Tell the CO we support readonly volumes.
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_PUBLISH_READONLY,
-				}}},
+				},
+			}},
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
-				}}},
+				},
+			}},
 		},
 	}, nil
 }
@@ -843,7 +873,7 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 		d.log.Debug("existing snapshot is in failed state, deleting")
 		err := d.Snapshots.SnapDelete(ctx, &csi.Snapshot{
 			SourceVolumeId: req.GetSourceVolumeId(),
-			SnapshotId: req.GetName(),
+			SnapshotId:     req.GetName(),
 		})
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "tried deleting a leftover unsuccessful snapshot")
@@ -1053,7 +1083,8 @@ func (d Driver) ControllerExpandVolume(ctx context.Context, req *csi.ControllerE
 	isBlockMode := req.GetVolumeCapability().GetBlock() != nil
 
 	return &csi.ControllerExpandVolumeResponse{
-		CapacityBytes: existingVolume.SizeBytes, NodeExpansionRequired: !isBlockMode}, nil
+		CapacityBytes: existingVolume.SizeBytes, NodeExpansionRequired: !isBlockMode,
+	}, nil
 }
 
 // Run the server.
@@ -1083,7 +1114,7 @@ func (d Driver) Run() error {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
 
-	//type UnaryServerInterceptor func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err error)
+	// type UnaryServerInterceptor func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err error)
 	errHandler := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		resp, err := handler(ctx, req)
 
@@ -1239,7 +1270,8 @@ func (d Driver) createNewVolume(ctx context.Context, req *csi.CreateVolumeReques
 			ContentSource:      req.GetVolumeContentSource(),
 			CapacityBytes:      int64(volumeSize.InclusiveBytes()),
 			AccessibleTopology: topos,
-		}}, nil
+		},
+	}, nil
 }
 
 func missingAttr(methodCall, volumeID, attr string) error {

@@ -131,7 +131,7 @@ const DefaultDisklessStoragePoolName = "DfltDisklessStorPool"
 // zero values
 func NewParameters(params map[string]string) (Parameters, error) {
 	// set zero values
-	var p = Parameters{
+	p := Parameters{
 		LayerList:               []lapi.LayerType{lapi.DRBD, lapi.STORAGE},
 		PlacementCount:          1,
 		DisklessStoragePool:     DefaultDisklessStoragePoolName,
@@ -350,10 +350,10 @@ func (params *Parameters) DisklessFlag() (string, error) {
 	return "", fmt.Errorf("could not determine diskless flag for layers: %v", params.LayerList)
 }
 
-//ParseLayerList returns a slice of LayerType from a string of space-separated layers.
+// ParseLayerList returns a slice of LayerType from a string of space-separated layers.
 func ParseLayerList(s string) ([]lapi.LayerType, error) {
 	list := strings.Split(s, " ")
-	var layers = make([]lapi.LayerType, 0)
+	layers := make([]lapi.LayerType, 0)
 	knownLayers := []lapi.LayerType{
 		lapi.DRBD,
 		lapi.STORAGE,
@@ -393,7 +393,7 @@ func (i *Info) ToResourceCreateList() ([]lapi.ResourceCreate, error) {
 		return nil, err
 	}
 
-	var resCreates = make([]lapi.ResourceCreate, len(params.NodeList)+len(params.ClientList))
+	resCreates := make([]lapi.ResourceCreate, len(params.NodeList)+len(params.ClientList))
 
 	// The parameter parsed fine above, so they can't fail in these method calls.
 	var k int

@@ -21,8 +21,9 @@ package scheduler
 import (
 	"context"
 
-	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+
+	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
 // Interface determines where to place volumes and where they are accessible from.

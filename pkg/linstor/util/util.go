@@ -26,7 +26,7 @@ import (
 // DeployedDiskfullyNodes lists all nodes where a resource has volumes physically
 // present.
 func DeployedDiskfullyNodes(res []lapi.Resource) []string {
-	var nodes = make([]string, 0)
+	nodes := make([]string, 0)
 	for _, r := range res {
 		if DeployedDiskfully(r) {
 			nodes = append(nodes, r.NodeName)

@@ -30,7 +30,6 @@ func equal(sliceA, sliceB []string) bool {
 	}
 
 	return true
-
 }
 
 func createNode(clientSet kubernetes.Interface, labels map[string]string, nodeName string) {
@@ -95,7 +94,6 @@ func TestGetStorageNodes(t *testing.T) {
 			t.Errorf("Node %s is not a storage node", node.Name)
 		}
 	}
-
 }
 
 func createNodesInRack(rack string, nodes *v1.NodeList, nodesInRack []string) {
@@ -135,7 +133,6 @@ func TestGetNodesInRack(t *testing.T) {
 	if !equal(nodesInRack2, nodesRack2) {
 		t.Errorf("Expected: %v\n, got: %v\n", nodesRack1, nodesInRack1)
 	}
-
 }
 
 func TestGetNodesInRackNoNodes(t *testing.T) {
@@ -219,7 +216,6 @@ func (ns *NodesService) GetStoragePools(ctx context.Context, nodeName string, op
 			ProviderKind:    lapi.LVM,
 		},
 	}, nil
-
 }
 
 func TestGetNodesUtil(t *testing.T) {

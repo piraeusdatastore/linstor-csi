@@ -24,6 +24,7 @@ import (
 
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor/util"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
@@ -59,7 +60,7 @@ func (c *HighLevelClient) GenericAccessibleTopologies(ctx context.Context, vol *
 
 	// Volume is definitely accessible on the nodes it's deployed on.
 	nodes := util.DeployedDiskfullyNodes(r)
-	var topos = make([]*csi.Topology, 0)
+	topos := make([]*csi.Topology, 0)
 	for _, node := range nodes {
 		topos = append(topos, &csi.Topology{Segments: map[string]string{topology.LinstorNodeKey: node}})
 	}

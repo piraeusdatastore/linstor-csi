@@ -6,17 +6,17 @@ import (
 
 	golinstor "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
-	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
-	"github.com/piraeusdatastore/linstor-csi/pkg/linstor/util"
-	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
-	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
-
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
+	"github.com/piraeusdatastore/linstor-csi/pkg/linstor/util"
+	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
+	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
 type GetK8sClient func() (kubernetes.Interface, error)
@@ -60,10 +60,8 @@ type NodeLinstorClient interface {
 }
 
 func GetInternalk8sClient() (clientset kubernetes.Interface, err error) {
-
 	// setup k8s client
 	config, err := rest.InClusterConfig()
-
 	if err != nil {
 		return clientset, err
 	}
@@ -71,7 +69,6 @@ func GetInternalk8sClient() (clientset kubernetes.Interface, err error) {
 	clientset, err = kubernetes.NewForConfig(config)
 	if err != nil {
 		return clientset, err
-
 	}
 	return clientset, err
 }
@@ -81,7 +78,6 @@ func retrieveRackId(clientset kubernetes.Interface, nodeName string) (rack strin
 	node, err := clientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 	if err != nil {
 		return "", err
-
 	}
 	rack = node.Labels[RackLabel]
 	if rack == "" {
@@ -243,7 +239,6 @@ func getLessUsedStoragePool(prefNic *PrefNic) (storagePool string, err error) {
 }
 
 func pickStoragePoolFromNodes(ctx context.Context, nClient NodeLinstorClient, nodes []string) (*BalanceDecision, error) {
-
 	util, err := getNodesUtil(ctx, nClient, nodes)
 	if err != nil {
 		return nil, err
@@ -283,7 +278,6 @@ func pickStoragePoolTopo(ctx context.Context, selectedNode string, nClient NodeL
 	}
 
 	return pickStoragePoolFromNodes(ctx, nClient, nodes)
-
 }
 
 // pick from All Storage Nodes
@@ -299,7 +293,6 @@ func pickStoragePool(ctx context.Context, nClient NodeLinstorClient, clientset k
 	}
 
 	return pickStoragePoolFromNodes(ctx, nClient, nodeList)
-
 }
 
 type BalanceScheduler struct {
