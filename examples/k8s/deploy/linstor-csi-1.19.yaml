@@ -72,7 +72,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: linstor-csi-plugin
-          image: quay.io/piraeusdatastore/piraeus-csi:v0.12.1
+          image: quay.io/piraeusdatastore/piraeus-csi:v0.13.0
           args:
             - "--csi-endpoint=$(CSI_ENDPOINT)"
             - "--node=$(KUBE_NODE_NAME)"
@@ -260,7 +260,7 @@ spec:
             - name: registration-dir
               mountPath: /registration/
         - name: linstor-csi-plugin
-          image: quay.io/piraeusdatastore/piraeus-csi:v0.12.1
+          image: quay.io/piraeusdatastore/piraeus-csi:v0.13.0
           args:
             - "--csi-endpoint=$(CSI_ENDPOINT)"
             - "--node=$(KUBE_NODE_NAME)"
