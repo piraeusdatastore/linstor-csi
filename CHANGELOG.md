@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Try to detect cases where a diskless resource would not get quorum and deploy a diskfull replica instead.
+  [#121](https://github.com/piraeusdatastore/linstor-csi/pull/121)
 - Add deactivate/active logic when using resources on shared storage.
 
 ## [0.13.0] - 2021-05-12

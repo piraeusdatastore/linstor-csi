@@ -11,8 +11,8 @@ require (
 	github.com/kubernetes-csi/csi-test/v3 v3.1.1
 	github.com/pborman/uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
-	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/stretchr/testify v1.4.0
+	github.com/vektra/mockery/v2 v2.8.0
 	golang.org/x/sys v0.0.0-20191113165036-4c7a9d0fe056
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	google.golang.org/grpc v1.25.1

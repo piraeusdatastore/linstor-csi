@@ -32,6 +32,7 @@ import (
 
 	lapiconsts "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
+	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/haySwim/data"
@@ -387,16 +388,35 @@ func (s *Linstor) schedulerByPlacementPolicy(vol *volume.Info) (scheduler.Interf
 	}
 }
 
-// Attach idempotently creates a resource on the given node disklessly.
+// Attach idempotently creates a resource on the given node.
 func (s *Linstor) Attach(ctx context.Context, vol *volume.Info, node string) error {
 	s.log.WithFields(logrus.Fields{
 		"volume":     fmt.Sprintf("%+v", vol),
 		"targetNode": node,
 	}).Info("attaching volume")
 
-	// If the resource is already on the node, don't worry about attaching.
 	ress, err := s.client.Resources.GetResourceView(ctx, &lapi.ListOpts{Resource: []string{vol.ID}})
 	if nil404(err) != nil {
+		return err
+	}
+
+	// In certain circumstances it is necessary to create a diskfull resource to make it usable.
+	// The bug report that introduced this variable is a good example:
+	// * Our cluster has 4 identical nodes called A, B, C, D.
+	// * A resource was placed in a typical 2 + 1 Tiebreaker configuration, let's say the diskfull resources are
+	//   on A and B, the Tiebreaker on C.
+	// * A Pod attaches on node A.
+	// * Node A goes down/becomes unreachable/etc. That leaves us with 1 diskfull resource on B + 1 diskless on C.
+	// * The Pod is deleted and a replacement scheduled on node D (i.e. after deletion by the HA Controller).
+	// * Now, this method will be called, since we need to Attach on node D, and there is currently no resource on that
+	//   node.
+	// * Using a diskless resource will not work, as the newly creates resource would not get quorum.
+	// * Using a diskfull resource will work and sync up to the remaining diskfull resource on B.
+	availableDiskfullResources := 0
+	unavailableDiskfullResources := 0
+
+	params, err := volume.NewParameters(vol.Parameters)
+	if err != nil {
 		return err
 	}
 
@@ -405,6 +425,34 @@ func (s *Linstor) Attach(ctx context.Context, vol *volume.Info, node string) err
 	existingSharedName := ""
 
 	for i := range ress {
+		// To determine if a diskfull resource is "available" we inspect the promotion score reported by LINSTOR.
+		// This is only available for DRBD resources, but the whole concept of quorum only makes sense for DRBD
+		// resources anyways.
+		layer := &ress[i].LayerObject
+		for layer != nil {
+			if layer.Type == devicelayerkind.Drbd {
+				if slice.ContainsString(layer.Drbd.Flags, lapiconsts.FlagDiskless, nil) {
+					// diskless resources are of no interest for this calculation
+					break
+				}
+
+				if layer.Drbd.PromotionScore != 0 {
+					availableDiskfullResources++
+				} else {
+					unavailableDiskfullResources++
+				}
+
+				break
+			}
+
+			if len(layer.Children) != 1 {
+				// No idea how to deal with layer depending on children anyways, so we just ignore those
+				break
+			}
+
+			layer = &layer.Children[0]
+		}
+
 		if ress[i].NodeName == node {
 			existingRes = &ress[i].Resource
 			existingSharedName = ress[i].SharedName
@@ -413,14 +461,26 @@ func (s *Linstor) Attach(ctx context.Context, vol *volume.Info, node string) err
 		}
 	}
 
+	// If the resource is already on the node, don't worry about attaching.
 	if existingRes == nil {
-		s.log.Infof("volume %s does not exist on node %s, creating new diskless resource", vol.ID, node)
+		s.log.Infof("volume %s does not exist on node %s, creating new resource", vol.ID, node)
 
-		rc, err := vol.ToDisklessResourceCreate(node)
+		var rc lapi.ResourceCreate
+		// If only half of the expected resources are available, we need a diskfull deployment to have any hope
+		// of achieving quorum on the node. See the comment above availableDiskfullResources.
+		if availableDiskfullResources > 0 && unavailableDiskfullResources >= availableDiskfullResources {
+			s.log.Infof("%d replicas of %d are apparently not reachable, create a new diskfull resource for quorum", unavailableDiskfullResources, params.PlacementCount)
+
+			rc, err = vol.ToDiskfullResourceCreate(node)
+		} else {
+			rc, err = vol.ToDisklessResourceCreate(node)
+		}
+
 		if err != nil {
 			return err
 		}
 
+		// Diskless isn't necessarily true, name kept for backwards compatibility.
 		rc.Resource.Props[linstor.PropertyCreatedFor] = linstor.CreatedForTemporaryDisklessAttach
 
 		err = s.client.Resources.Create(ctx, rc)
