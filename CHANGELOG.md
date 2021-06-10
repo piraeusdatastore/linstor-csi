@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2021-06-10
+
 ### Added
 
 - Try to detect cases where a diskless resource would not get quorum and deploy a diskfull replica instead.
@@ -264,6 +266,7 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - non-debug logging is less verbose in general
 
 [Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.13.0...HEAD
+[0.13.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.11.0...v0.12.0
