@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -217,21 +216,16 @@ func (s *MockStorage) CapacityBytes(ctx context.Context, params map[string]strin
 	return 50000000, nil
 }
 
-func mockMountPath(target string) string {
-	return filepath.Join(os.TempDir(), filepath.Base(target), "_mounted")
-}
-
 func (s *MockStorage) Mount(vol *volume.Info, source, target, fsType string, readonly bool, options []string) error {
-	p := mockMountPath(target)
-	if _, err := os.Stat(p); os.IsNotExist(err) {
-		return os.MkdirAll(p, 0755)
+	if _, err := os.Stat(target); os.IsNotExist(err) {
+		return os.MkdirAll(target, 0755)
 	}
 
 	return nil
 }
 
 func (s *MockStorage) IsNotMountPoint(target string) (bool, error) {
-	_, err := os.Stat(mockMountPath(target))
+	_, err := os.Stat(target)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return true, nil
@@ -250,10 +244,7 @@ func (s *MockStorage) Unmount(target string) error {
 		return nil
 	}
 
-	// currently unused
-	// p := mockMountPath(target)
-	// return os.RemoveAll(p)
-	return nil
+	return os.RemoveAll(target)
 }
 
 func (s *MockStorage) GetVolumeStats(path string) (volume.VolumeStats, error) {
@@ -261,6 +252,11 @@ func (s *MockStorage) GetVolumeStats(path string) (volume.VolumeStats, error) {
 }
 
 func (s *MockStorage) NodeExpand(source, target string) error {
+	_, err := os.Stat(target)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

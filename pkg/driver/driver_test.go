@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	lapi "github.com/LINBIT/golinstor/client"
-	"github.com/kubernetes-csi/csi-test/v3/pkg/sanity"
+	"github.com/kubernetes-csi/csi-test/v4/pkg/sanity"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 
