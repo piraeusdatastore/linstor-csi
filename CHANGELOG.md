@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Option to send a bearer token for authentication. This can be used when the API is secured by a project like
+  `kube-rbac-proxy`.
+
 ## [0.13.1] - 2021-06-10
 
 ### Added
