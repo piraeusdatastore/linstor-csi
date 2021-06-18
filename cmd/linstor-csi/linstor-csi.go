@@ -22,6 +22,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -44,6 +46,7 @@ func main() {
 		logLevel              = flag.String("log-level", "info", "Enable debug log output. Choose from: panic, fatal, error, warn, info, debug")
 		rps                   = flag.Float64("linstor-api-requests-per-second", 0, "Maximum allowed number of LINSTOR API requests per second. Default: Unlimited")
 		burst                 = flag.Int("linstor-api-burst", 1, "Maximum number of API requests allowed before being limited by requests-per-second. Default: 1 (no bursting)")
+		bearerTokenFile       = flag.String("bearer-token", "", "Read the bearer token from the given file and use it for authentication.")
 	)
 	flag.Parse()
 
@@ -81,6 +84,23 @@ func main() {
 			log.Fatal("failed to get a valid certificate from LS_ROOT_CA")
 		}
 		h = &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{Certificates: []tls.Certificate{keyPair}, RootCAs: caPool, InsecureSkipVerify: *lsSkipTLSVerification}}}
+	}
+
+	headers := make(http.Header)
+	headers.Set("User-Agent", "linstor-csi/"+driver.Version)
+
+	if *bearerTokenFile != "" {
+		token, err := ioutil.ReadFile(*bearerTokenFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		headers.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	}
+
+	h.Transport = &additionalHeaderRoundTripper{
+		RoundTripper:      h.Transport,
+		additionalHeaders: headers,
 	}
 
 	logger := log.NewEntry(log.New())
@@ -136,4 +156,18 @@ func main() {
 	if err := drv.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// additionalHeaderRoundTripper adds additional headers to every request.
+type additionalHeaderRoundTripper struct {
+	http.RoundTripper
+	additionalHeaders http.Header
+}
+
+func (a *additionalHeaderRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	for k, v := range a.additionalHeaders {
+		req.Header[k] = v
+	}
+
+	return a.RoundTripper.RoundTrip(req)
 }
