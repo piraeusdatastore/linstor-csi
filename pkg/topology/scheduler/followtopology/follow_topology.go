@@ -21,9 +21,13 @@ package followtopology
 import (
 	"context"
 	"fmt"
+	"reflect"
 
+	"github.com/LINBIT/golinstor/client"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
@@ -41,60 +45,87 @@ func NewScheduler(c *lc.HighLevelClient, l *logrus.Entry) *Scheduler {
 }
 
 func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.CreateVolumeRequest) error {
-	topos := req.GetAccessibilityRequirements()
-	if topos == nil {
-		return fmt.Errorf("no volume topologies, unable to schedule volume %s", vol.ID)
-	}
-
 	params, err := volume.NewParameters(vol.Parameters)
 	if err != nil {
 		return fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
 	}
 
-	remainingAssignments := params.PlacementCount
+	remainingAssignments := int(params.PlacementCount)
 
-	for i, pref := range topos.GetPreferred() {
-		// While there are still preferred nodes and remainingAssignments
-		// attach resources diskfully to those nodes in order of most to least preferred.
-		if p, ok := pref.GetSegments()[topology.LinstorNodeKey]; ok && remainingAssignments > 0 {
-			drc, err := vol.ToDiskfullResourceCreate(p)
-			if err != nil {
-				return err
-			}
-			// If attachment fails move onto next most preferred volume.
-			if err := s.Resources.Create(ctx, drc); err != nil {
-				s.log.WithFields(logrus.Fields{
-					"volumeID":                   vol.ID,
-					"topologyPreference":         i,
-					"topologyNode":               p,
-					"totalVolumeCount":           params.PlacementCount,
-					"remainingVolumeAssignments": remainingAssignments,
-					"reason":                     err,
-				}).Info("unable to satisfy topology preference")
-				continue
-			}
-			// If attachment succeeds, decrement the number of remainingAssignments.
-			remainingAssignments--
-			// If we're out of remaining attachments, we're done.
-			if remainingAssignments == 0 {
-				return nil
-			}
+	// See https://github.com/container-storage-interface/spec/blob/v1.4.0/csi.proto#L523
+	// TLDR:
+	// * If `Requisite` exists, we _have_ to use those up first.
+	// * If `Requisite` and `Preferred` exists, we have `Preferred` ⊆ `Requisite`, and `Preferred` SHOULD be used first.
+	// * If `Requisite` does not exist and `Preferred` exists, we SHOULD use `Preferred`.
+	// * If both `Requisite` and `Preferred` do not exist, we can do what ever.
+
+	topos := req.GetAccessibilityRequirements()
+	remainingRequisites := topos.GetRequisite()
+	remainingPreferred := topos.GetPreferred()
+
+	placed := 0
+	for placed < remainingAssignments {
+		var segment map[string]string
+		if len(remainingPreferred) > 0 {
+			segment = remainingPreferred[0].GetSegments()
+		} else if len(remainingRequisites) > 0 {
+			segment = remainingRequisites[0].GetSegments()
+		} else {
+			break
+		}
+
+		remainingPreferred = deleteSegment(remainingPreferred, segment)
+		remainingRequisites = deleteSegment(remainingRequisites, segment)
+
+		p, ok := segment[topology.LinstorNodeKey]
+		if !ok {
+			continue
+		}
+
+		err = s.Resources.MakeAvailable(ctx, vol.ID, p, client.ResourceMakeAvailable{})
+		if err != nil {
+			s.log.WithFields(logrus.Fields{
+				"volumeID":     vol.ID,
+				"topologyNode": p,
+				"reason":       err,
+			}).Info("unable to satisfy topology preference, skipping...")
+
+			continue
+		}
+
+		placed++
+	}
+
+	if placed == 0 && len(topos.GetRequisite()) > 0 {
+		return status.Error(codes.ResourceExhausted, "None of the requisite topologies could be fulfilled")
+	}
+
+	if placed < remainingAssignments {
+		// If params.placementCount is higher than the number of assigned nodes,
+		// let autoplace the rest.
+		apRequest, err := vol.ToAutoPlace()
+		if err != nil {
+			return err
+		}
+
+		err = s.Resources.Autoplace(ctx, vol.ID, apRequest)
+		if err != nil {
+			return err
 		}
 	}
 
-	// We weren't able to assign any volume according to topology preferences
-	// and local storage is required.
-	if params.PlacementCount == remainingAssignments && !params.AllowRemoteVolumeAccess {
-		return fmt.Errorf("unable to satisfy volume topology requirements for volume %s", vol.ID)
+	return nil
+}
+
+func deleteSegment(topos []*csi.Topology, segment map[string]string) []*csi.Topology {
+	for i := range topos {
+		if reflect.DeepEqual(topos[i].GetSegments(), segment) {
+			topos = append(topos[:i], topos[i+1:]...)
+			break
+		}
 	}
 
-	// If params.placementCount is higher than the number of assigned nodes,
-	// let autoplace the rest.
-	apRequest, err := vol.ToAutoPlace()
-	if err != nil {
-		return err
-	}
-	return s.Resources.Autoplace(ctx, vol.ID, apRequest)
+	return topos
 }
 
 func (s *Scheduler) AccessibleTopologies(ctx context.Context, vol *volume.Info) ([]*csi.Topology, error) {
