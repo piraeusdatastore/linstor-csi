@@ -39,13 +39,13 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
-	"k8s.io/kubernetes/pkg/util/mount"
-	"k8s.io/kubernetes/pkg/util/resizefs"
-	"k8s.io/kubernetes/pkg/util/slice"
+	"k8s.io/mount-utils"
+	utilexec "k8s.io/utils/exec"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor/util"
+	"github.com/piraeusdatastore/linstor-csi/pkg/slice"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler/autoplace"
@@ -92,7 +92,7 @@ func NewLinstor(options ...func(*Linstor) error) (*Linstor, error) {
 
 	l.mounter = &mount.SafeFormatAndMount{
 		Interface: mount.New("/bin/mount"),
-		Exec:      mount.NewOsExec(),
+		Exec:      utilexec.New(),
 	}
 
 	l.log.WithFields(logrus.Fields{
@@ -431,7 +431,7 @@ func (s *Linstor) Attach(ctx context.Context, vol *volume.Info, node string) err
 		layer := &ress[i].LayerObject
 		for layer != nil {
 			if layer.Type == devicelayerkind.Drbd {
-				if slice.ContainsString(layer.Drbd.Flags, lapiconsts.FlagDiskless, nil) {
+				if slice.ContainsString(layer.Drbd.Flags, lapiconsts.FlagDiskless) {
 					// diskless resources are of no interest for this calculation
 					break
 				}
@@ -496,7 +496,7 @@ func (s *Linstor) Attach(ctx context.Context, vol *volume.Info, node string) err
 		existingRes = &newRsc
 	}
 
-	if slice.ContainsString(existingRes.Flags, lapiconsts.FlagDelete, nil) {
+	if slice.ContainsString(existingRes.Flags, lapiconsts.FlagDelete) {
 		return &DeleteInProgressError{
 			Operation: "attach volume",
 			Kind:      "resource",
@@ -504,7 +504,7 @@ func (s *Linstor) Attach(ctx context.Context, vol *volume.Info, node string) err
 		}
 	}
 
-	if slice.ContainsString(existingRes.Flags, lapiconsts.FlagRscInactive, nil) {
+	if slice.ContainsString(existingRes.Flags, lapiconsts.FlagRscInactive) {
 		for i := range ress {
 			res := &ress[i]
 
@@ -516,7 +516,7 @@ func (s *Linstor) Attach(ctx context.Context, vol *volume.Info, node string) err
 				continue
 			}
 
-			if slice.ContainsString(res.Flags, lapiconsts.FlagRscInactive, nil) {
+			if slice.ContainsString(res.Flags, lapiconsts.FlagRscInactive) {
 				continue
 			}
 
@@ -805,7 +805,7 @@ func (s *Linstor) reconcileResourceDefinition(ctx context.Context, info *volume.
 			continue
 		}
 
-		if slice.ContainsString(rd.Flags, lapiconsts.FlagDelete, nil) {
+		if slice.ContainsString(rd.Flags, lapiconsts.FlagDelete) {
 			return nil, &DeleteInProgressError{
 				Operation: "reconcile resource definition",
 				Kind:      "resource definition",
@@ -1056,7 +1056,7 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*csi.Snapshot, error) {
 		return nil, fmt.Errorf("missing snapshots")
 	}
 
-	if slice.ContainsString(lsnap.Flags, lapiconsts.FlagDelete, nil) {
+	if slice.ContainsString(lsnap.Flags, lapiconsts.FlagDelete) {
 		return nil, &DeleteInProgressError{
 			Operation: "csi snapshot from linstor",
 			Kind:      "snapshot",
@@ -1066,7 +1066,7 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*csi.Snapshot, error) {
 
 	snapSizeBytes := lsnap.VolumeDefinitions[0].SizeKib * uint64(data.KiB)
 	creationTimeMicroSecs := lsnap.Snapshots[0].CreateTimestamp
-	ready := slice.ContainsString(lsnap.Flags, lapiconsts.FlagSuccessful, nil)
+	ready := slice.ContainsString(lsnap.Flags, lapiconsts.FlagSuccessful)
 
 	return &csi.Snapshot{
 		SnapshotId:     lsnap.Name,
@@ -1078,7 +1078,7 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*csi.Snapshot, error) {
 }
 
 func linstorSnapshotHasError(lsnap *lapi.Snapshot) bool {
-	return slice.ContainsString(lsnap.Flags, lapiconsts.FlagFailedDisconnect, nil) || slice.ContainsString(lsnap.Flags, lapiconsts.FlagFailedDeployment, nil)
+	return slice.ContainsString(lsnap.Flags, lapiconsts.FlagFailedDisconnect) || slice.ContainsString(lsnap.Flags, lapiconsts.FlagFailedDeployment)
 }
 
 // NodeAvailable makes sure that LINSTOR considers that the node is in an ONLINE
@@ -1124,7 +1124,7 @@ func (s *Linstor) GetAssignmentOnNode(ctx context.Context, vol *volume.Info, nod
 // Mount makes volumes consumable from the source to the target.
 // Filesystems are formatted and block devices are bind mounted.
 // Operates locally on the machines where it is called.
-func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, readonly bool, options []string) error {
+func (s *Linstor) Mount(ctx context.Context, vol *volume.Info, source, target, fsType string, readonly bool, options []string) error {
 	params, err := volume.NewParameters(vol.Parameters)
 	if err != nil {
 		return fmt.Errorf("mounting volume failed: %v", err)
@@ -1148,33 +1148,26 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, readonl
 		"blockAccessMode": block,
 	}).Info("mounting volume")
 
-	// Check if the path is a device
-	isDevice, err := s.mounter.PathIsDevice(source)
+	info, err := os.Stat(source)
 	if err != nil {
-		return fmt.Errorf("checking device path failed: %v", err)
-	}
-	if !isDevice {
-		return fmt.Errorf("%s does not appear to be a block device", source)
+		return fmt.Errorf("failed to stat source device: %w", err)
 	}
 
-	// Determine if we have exclusive access to the device. This is mostly
-	// a way to determine if a disklessly attached device's connection is down.
-	_, err = s.mounter.DeviceOpened(source)
-	if err != nil {
-		return fmt.Errorf("checking for exclusive open failed: %v, check device health", err)
+	if (info.Mode() & os.ModeDevice) != os.ModeDevice {
+		return fmt.Errorf("path %s is not a device", source) //nolint:goerr113
 	}
 
 	if readonly {
 		options = append(options, "ro")
 
 		// This requires DRBD 9.0.26+, older versions ignore this flag
-		err := s.setDevReadOnly(source)
+		err := s.setDevReadOnly(ctx, source)
 		if err != nil {
 			return fmt.Errorf("failed to set source device readonly: %w", err)
 		}
 	} else {
 		// We might be re-using an existing device that was set RO previously
-		err = s.setDevReadWrite(source)
+		err = s.setDevReadWrite(ctx, source)
 		if err != nil {
 			return fmt.Errorf("failed to set source device readwrite: %w", err)
 		}
@@ -1182,21 +1175,26 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, readonl
 
 	// This is a regular filesystem so format the device and create the mountpoint.
 	if !block {
-		if err := s.formatDevice(vol, source, fsType); err != nil {
+		if err := s.formatDevice(ctx, vol, source, fsType); err != nil {
 			return fmt.Errorf("mounting volume failed: %v", err)
 		}
-		if err := s.mounter.MakeDir(target); err != nil {
+
+		if err := os.MkdirAll(target, os.FileMode(0755)); err != nil {
 			return fmt.Errorf("could not create target directory %s, %v", target, err)
 		}
 		// This is a block volume so create a file to bindmount to.
 	} else {
-		err := s.mounter.MakeFile(target)
+		f, err := os.OpenFile(target, os.O_CREATE, os.FileMode(0644))
 		if err != nil {
-			return fmt.Errorf("could not create bind target for block volume %s, %v", target, err)
+			if !os.IsExist(err) {
+				return fmt.Errorf("could not create bind target for block volume %s, %w", target, err)
+			}
+		} else {
+			_ = f.Close()
 		}
 	}
 
-	needsMount, err := s.mounter.IsNotMountPoint(target)
+	needsMount, err := mount.IsNotMountPoint(s.mounter, target)
 	if err != nil {
 		return fmt.Errorf("unable to determine mount status of %s %v", target, err)
 	}
@@ -1212,7 +1210,7 @@ func (s *Linstor) Mount(vol *volume.Info, source, target, fsType string, readonl
 	return s.mounter.FormatAndMount(source, target, fsType, options)
 }
 
-func (s *Linstor) formatDevice(vol *volume.Info, source, fsType string) error {
+func (s *Linstor) formatDevice(ctx context.Context, vol *volume.Info, source, fsType string) error {
 	// Format device with Storage Class's filesystem options.
 	deviceFS, err := s.mounter.GetDiskFormat(source)
 	if err != nil {
@@ -1246,7 +1244,7 @@ func (s *Linstor) formatDevice(vol *volume.Info, source, fsType string) error {
 		"args":    args,
 	}).Debug("creating filesystem")
 
-	out, err := s.mounter.Exec.Run(cmd, args...)
+	out, err := s.mounter.Exec.CommandContext(ctx, cmd, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("couldn't create %s filesystem on %s: %v: %q", fsType, source, err, out)
 	}
@@ -1263,13 +1261,13 @@ func mkfsArgs(opts, source string) []string {
 	return append(strings.Split(opts, " "), source)
 }
 
-func (s *Linstor) setDevReadOnly(srcPath string) error {
-	_, err := s.mounter.Exec.Run("blockdev", "--setro", srcPath)
+func (s *Linstor) setDevReadOnly(ctx context.Context, srcPath string) error {
+	_, err := s.mounter.Exec.CommandContext(ctx, "blockdev", "--setro", srcPath).CombinedOutput()
 	return err
 }
 
-func (s *Linstor) setDevReadWrite(srcPath string) error {
-	_, err := s.mounter.Exec.Run("blockdev", "--setrw", srcPath)
+func (s *Linstor) setDevReadWrite(ctx context.Context, srcPath string) error {
+	_, err := s.mounter.Exec.CommandContext(ctx, "blockdev", "--setrw", srcPath).CombinedOutput()
 	return err
 }
 
@@ -1277,7 +1275,7 @@ func (s *Linstor) setDevReadWrite(srcPath string) error {
 //
 // Non-existent paths return (true, nil).
 func (s *Linstor) IsNotMountPoint(target string) (bool, error) {
-	notMounted, err := s.mounter.IsNotMountPoint(target)
+	notMounted, err := mount.IsNotMountPoint(s.mounter, target)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return true, nil
@@ -1295,23 +1293,9 @@ func (s *Linstor) Unmount(target string) error {
 		"target": target,
 	}).Info("unmounting volume")
 
-	notMounted, err := s.IsNotMountPoint(target)
+	err := mount.CleanupMountPoint(target, s.mounter, true)
 	if err != nil {
-		return fmt.Errorf("unable to determine mount status of %s %v", target, err)
-	}
-
-	if !notMounted {
-		// Still needs to be unmounted
-		err := s.mounter.Unmount(target)
-		if err != nil {
-			return fmt.Errorf("unable to unmount target '%s': %w", target, err)
-		}
-	}
-
-	// Remove the file/directory created in Mount()
-	err = os.Remove(target)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("unable to remove target '%s': %w", target, err)
+		return fmt.Errorf("unable to cleanup mount point: %w", err)
 	}
 
 	return nil
@@ -1393,7 +1377,7 @@ func (s *Linstor) GetVolumeStats(path string) (volume.VolumeStats, error) {
 }
 
 func (s *Linstor) NodeExpand(source, target string) error {
-	resizer := resizefs.NewResizeFs(s.mounter)
+	resizer := mount.NewResizeFs(s.mounter.Exec)
 	_, err := resizer.Resize(source, target)
 	return err
 }
@@ -1466,7 +1450,7 @@ func (s *Linstor) deleteResourceDefinitionAndGroupIfUnused(ctx context.Context, 
 	}
 
 	for _, res := range resources {
-		if !slice.ContainsString(res.Flags, lapiconsts.FlagDelete, nil) {
+		if !slice.ContainsString(res.Flags, lapiconsts.FlagDelete) {
 			log.WithField("resource", res).Debug("not deleting resource definition, found undeleted resource")
 			return nil
 		}
@@ -1481,7 +1465,7 @@ func (s *Linstor) deleteResourceDefinitionAndGroupIfUnused(ctx context.Context, 
 	}
 
 	for _, snap := range snapshots {
-		if !slice.ContainsString(snap.Flags, lapiconsts.FlagDelete, nil) {
+		if !slice.ContainsString(snap.Flags, lapiconsts.FlagDelete) {
 			log.WithField("snapshot", snap).Debug("not deleting resource definition, found undeleted snapshot")
 			return nil
 		}
