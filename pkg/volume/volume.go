@@ -531,7 +531,7 @@ type Querier interface {
 
 // Mounter handles the filesystems located on volumes.
 type Mounter interface {
-	Mount(vol *Info, source, target, fsType string, readonly bool, options []string) error
+	Mount(ctx context.Context, vol *Info, source, target, fsType string, readonly bool, options []string) error
 	Unmount(target string) error
 	IsNotMountPoint(target string) (bool, error)
 }

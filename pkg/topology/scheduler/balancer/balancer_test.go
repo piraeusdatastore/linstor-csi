@@ -34,12 +34,14 @@ func equal(sliceA, sliceB []string) bool {
 
 func createNode(clientSet kubernetes.Interface, labels map[string]string, nodeName string) {
 	clientSet.CoreV1().Nodes().Create(
+		context.Background(),
 		&v1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: labels,
 				Name:   nodeName,
 			},
 		},
+		metav1.CreateOptions{},
 	)
 }
 
@@ -49,7 +51,7 @@ func TestretrieveRackId(t *testing.T) {
 	rackName := "Rack7"
 	labels := map[string]string{RackLabel: rackName}
 	createNode(clientSet, labels, nodeName)
-	rack, err := retrieveRackId(clientSet, nodeName)
+	rack, err := retrieveRackId(context.Background(), clientSet, nodeName)
 	if err != nil {
 		t.Errorf("Something went wrong: %v\n", err)
 	} else if rack != rackName {
@@ -62,7 +64,7 @@ func TestretrieveRackIdNoLabel(t *testing.T) {
 	nodeName := "storage1"
 	labels := map[string]string{}
 	createNode(clientSet, labels, nodeName)
-	_, err := retrieveRackId(clientSet, nodeName)
+	_, err := retrieveRackId(context.Background(), clientSet, nodeName)
 	if err == nil {
 		t.Error("retrieveRackId should fail")
 	}
@@ -71,7 +73,7 @@ func TestretrieveRackIdNoLabel(t *testing.T) {
 func TestretrieveRackIdNoNode(t *testing.T) {
 	clientSet := fake.NewSimpleClientset()
 	nodeName := "storage1"
-	_, err := retrieveRackId(clientSet, nodeName)
+	_, err := retrieveRackId(context.Background(), clientSet, nodeName)
 	if err == nil {
 		t.Error("retrieveRackId should fail")
 	}
@@ -85,7 +87,7 @@ func TestGetStorageNodes(t *testing.T) {
 	createNode(clientSet, storLabels, "storage2")
 	createNode(clientSet, storLabels, "storage3")
 	createNode(clientSet, nonStorLabels, "compute1")
-	nodes, err := getStorageNodes(clientSet)
+	nodes, err := getStorageNodes(context.Background(), clientSet)
 	if err != nil {
 		t.Errorf("someting went wrong: %v", err)
 	}
@@ -159,7 +161,7 @@ func TestGetStorageNodesInRack(t *testing.T) {
 	createNode(clientSet, storLabelsRack2, "storage3")
 	createNode(clientSet, nonStorLabels, "compute1")
 
-	nodes, err := getStorageNodesInRack("rack1", clientSet)
+	nodes, err := getStorageNodesInRack(context.Background(), "rack1", clientSet)
 	if err != nil {
 		t.Errorf("Something went wrong: %v", err)
 	}
@@ -179,7 +181,7 @@ func TestGetStorageNodesInRackFail(t *testing.T) {
 	createNode(clientSet, storLabelsRack2, "storage3")
 	createNode(clientSet, nonStorLabels, "compute1")
 
-	nodes, err := getStorageNodesInRack("rack3", clientSet)
+	nodes, err := getStorageNodesInRack(context.Background(), "rack3", clientSet)
 	if err == nil {
 		t.Error("Something went wrong: expected Error")
 	}

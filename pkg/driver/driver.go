@@ -329,7 +329,7 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
 	}
 
-	err = d.Mounter.Mount(existingVolume, assignment.Path, req.GetTargetPath(), fsType, req.GetReadonly(), mntOpts)
+	err = d.Mounter.Mount(ctx, existingVolume, assignment.Path, req.GetTargetPath(), fsType, req.GetReadonly(), mntOpts)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
 	}

@@ -74,8 +74,8 @@ func GetInternalk8sClient() (clientset kubernetes.Interface, err error) {
 }
 
 // internal function to reuse K7s client
-func retrieveRackId(clientset kubernetes.Interface, nodeName string) (rack string, err error) {
-	node, err := clientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+func retrieveRackId(ctx context.Context, clientset kubernetes.Interface, nodeName string) (rack string, err error) {
+	node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -87,10 +87,11 @@ func retrieveRackId(clientset kubernetes.Interface, nodeName string) (rack strin
 	return rack, nil
 }
 
-func getStorageNodes(clientset kubernetes.Interface) (*v1.NodeList, error) {
+func getStorageNodes(ctx context.Context, clientset kubernetes.Interface) (*v1.NodeList, error) {
 	labelSelector := &metav1.LabelSelector{MatchLabels: map[string]string{StorageLabel: "true"}}
 	label := metav1.FormatLabelSelector(labelSelector)
-	return clientset.CoreV1().Nodes().List(metav1.ListOptions{
+
+	return clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{
 		LabelSelector: label,
 	})
 }
@@ -107,8 +108,8 @@ func getNodesInRack(rack string, nodeList *v1.NodeList) (nodes []string, err err
 	return nodes, nil
 }
 
-func getStorageNodesInRack(rack string, clientset kubernetes.Interface) (nodes []string, err error) {
-	storNodes, err := getStorageNodes(clientset)
+func getStorageNodesInRack(ctx context.Context, rack string, clientset kubernetes.Interface) (nodes []string, err error) {
+	storNodes, err := getStorageNodes(ctx, clientset)
 	if err != nil {
 		return nodes, err
 	}
@@ -267,12 +268,12 @@ func pickStoragePoolFromNodes(ctx context.Context, nClient NodeLinstorClient, no
 
 // pick from Storage Nodes in the same Rack
 func pickStoragePoolTopo(ctx context.Context, selectedNode string, nClient NodeLinstorClient, clientset kubernetes.Interface) (sp *BalanceDecision, err error) {
-	rack, err := retrieveRackId(clientset, selectedNode)
+	rack, err := retrieveRackId(ctx, clientset, selectedNode)
 	if err != nil {
 		return nil, err
 	}
 
-	nodes, err := getStorageNodesInRack(rack, clientset)
+	nodes, err := getStorageNodesInRack(ctx, rack, clientset)
 	if err != nil {
 		return nil, err
 	}
@@ -282,7 +283,7 @@ func pickStoragePoolTopo(ctx context.Context, selectedNode string, nClient NodeL
 
 // pick from All Storage Nodes
 func pickStoragePool(ctx context.Context, nClient NodeLinstorClient, clientset kubernetes.Interface) (sp *BalanceDecision, err error) {
-	nodes, err := getStorageNodes(clientset)
+	nodes, err := getStorageNodes(ctx, clientset)
 	if err != nil {
 		return nil, err
 	}
@@ -395,7 +396,7 @@ func (b BalanceScheduler) AccessibleTopologies(ctx context.Context, vol *volume.
 		return nil, fmt.Errorf("volume %s has no diskfull resource", vol.ID)
 	}
 	// all nodes will be in the same Rack so take only 1 of them
-	rack, err := retrieveRackId(b.clientset, nodes[0])
+	rack, err := retrieveRackId(ctx, b.clientset, nodes[0])
 	if err != nil {
 		return nil, err
 	}
