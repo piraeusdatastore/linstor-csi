@@ -212,7 +212,7 @@ func (s *MockStorage) GetAssignmentOnNode(ctx context.Context, vol *volume.Info,
 	return nil, nil
 }
 
-func (s *MockStorage) CapacityBytes(ctx context.Context, params map[string]string) (int64, error) {
+func (s *MockStorage) CapacityBytes(ctx context.Context, params, segments map[string]string) (int64, error) {
 	return 50000000, nil
 }
 

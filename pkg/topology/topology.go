@@ -48,13 +48,14 @@ const (
 
 	// LinstorStoragePoolKeyPrefix is the prefix used when specifying the available storage
 	// pools on a node via CSI topology keys.
-	LinstorStoragePoolKeyPrefix = "linbit.com"
+	LinstorStoragePoolKeyPrefix = "linbit.com/sp-"
 
-	// The value assigned to the storage pool label, given that the node has access to the storage pool.
+	// LinstorStoragePoolValue is the value assigned to the storage pool label, given that the node has access to the
+	// storage pool.
 	LinstorStoragePoolValue = "true"
 )
 
-// Converts the storage pool name into a CSI Topology compatible label.
+// ToStoragePoolLabel converts the storage pool name into a CSI Topology compatible label.
 //
 // There is an upper limit on the length of these keys (63 chars for prefix + 63 chars for the key) as per CSI Spec.
 // LINSTOR enforces a stricter limit of 48 characters for storage pools, so this should not be an issue.
@@ -62,5 +63,5 @@ func ToStoragePoolLabel(storagePoolName string) string {
 	// No additional checks since
 	// a. storage pool names should always expand to valid label names.
 	// b. invalid names are caught by the node-registrar sidecar in any case.
-	return fmt.Sprintf("%s/sp-%s", LinstorStoragePoolKeyPrefix, storagePoolName)
+	return fmt.Sprintf("%s%s", LinstorStoragePoolKeyPrefix, storagePoolName)
 }

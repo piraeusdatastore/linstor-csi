@@ -560,12 +560,25 @@ func (s *Linstor) Detach(ctx context.Context, vol *volume.Info, node string) err
 	return s.client.Resources.Delete(ctx, vol.ID, node)
 }
 
-// CapacityBytes returns the amount of free space in the storage pool specified
-// the the params.
-func (s *Linstor) CapacityBytes(ctx context.Context, parameters map[string]string) (int64, error) {
+// CapacityBytes returns the amount of free space in the storage pool specified by the params and topology.
+func (s *Linstor) CapacityBytes(ctx context.Context, parameters, segments map[string]string) (int64, error) {
 	params, err := volume.NewParameters(parameters)
 	if err != nil {
 		return 0, fmt.Errorf("unable to get capacity: %v", err)
+	}
+
+	var requestedStoragePools []string
+
+	var requestedNode string
+
+	for k, v := range segments {
+		if k == topology.LinstorNodeKey {
+			requestedNode = v
+		}
+
+		if strings.HasPrefix(k, topology.LinstorStoragePoolKeyPrefix) {
+			requestedStoragePools = append(requestedStoragePools, k[len(topology.LinstorStoragePoolKeyPrefix):])
+		}
 	}
 
 	pools, err := s.client.Nodes.GetStoragePoolView(ctx)
@@ -575,6 +588,16 @@ func (s *Linstor) CapacityBytes(ctx context.Context, parameters map[string]strin
 
 	var total int64
 	for _, sp := range pools {
+		if requestedNode != "" && requestedNode != sp.NodeName {
+			// Not the requested node
+			continue
+		}
+
+		if len(requestedStoragePools) > 0 && !slice.ContainsString(requestedStoragePools, sp.StoragePoolName) {
+			// Not the requested storage pool
+			continue
+		}
+
 		if params.StoragePool == sp.StoragePoolName || params.StoragePool == "" {
 			total += sp.FreeCapacity
 		}

@@ -788,7 +788,7 @@ func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*
 
 // GetCapacity https://github.com/container-storage-interface/spec/blob/v1.4.0/spec.md#getcapacity
 func (d Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
-	bytes, err := d.Storage.CapacityBytes(ctx, req.GetParameters())
+	bytes, err := d.Storage.CapacityBytes(ctx, req.GetParameters(), req.GetAccessibleTopology().GetSegments())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%v", err)
 	}
