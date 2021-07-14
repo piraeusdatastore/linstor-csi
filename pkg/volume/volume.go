@@ -143,23 +143,41 @@ func NewParameters(params map[string]string) (Parameters, error) {
 	}
 
 	for k, v := range params {
-		if strings.HasPrefix(k, linstor.PropertyNamespace+"/") {
+		parts := strings.SplitN(k, "/", 2)
+
+		var namespace, rawkey string
+		if len(parts) < 2 {
+			namespace = ""
+			rawkey = k
+		} else {
+			namespace = parts[0]
+			rawkey = parts[1]
+		}
+
+		var param paramKey
+
+		switch namespace {
+		case lc.NamespcDrbdOptions:
+			// DrbdOptions is not really a namespace in the kubernetes sense, but it fits in nicely in this logic
+			p.Properties[lc.NamespcDrbdOptions+"/"+rawkey] = v
+			continue
+		case linstor.PropertyNamespace:
 			k = k[len(linstor.PropertyNamespace)+1:]
 			p.Properties[k] = v
 			continue
-		}
+		case linstor.ParameterNamespace, "":
+			parsed, err := paramKeyString(strings.ToLower(rawkey))
+			if err != nil {
+				return p, fmt.Errorf("invalid parameter: %w", err)
+			}
 
-		if strings.HasPrefix(k, lc.NamespcDrbdOptions+"/") {
-			p.Properties[k] = v
+			param = parsed
+		default:
+			// Probably some external parameter passed in the storage class, ignore
 			continue
 		}
 
-		key, err := paramKeyString(strings.ToLower(k))
-		if err != nil {
-			return p, fmt.Errorf("invalid parameter: %v", err)
-		}
-
-		switch key {
+		switch param {
 		case nodelist:
 			p.NodeList = strings.Split(v, " ")
 		case layerlist:
@@ -230,6 +248,8 @@ func NewParameters(params map[string]string) (Parameters, error) {
 			p.PostMountXfsOpts = v
 		case resourcegroup:
 			p.ResourceGroup = v
+		case unknown:
+			// unreachable, just here to make the linter happy
 		}
 	}
 
