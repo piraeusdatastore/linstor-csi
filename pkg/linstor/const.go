@@ -35,6 +35,9 @@ const (
 	// needed.
 	CreatedForTemporaryDisklessAttach = "temporary-diskless-attach"
 
+	// ParameterNamespace is the preferred namespace when setting parameters in
+	ParameterNamespace = "linstor.csi.linbit.com"
+
 	// PropertyNamespace is the namespace for LINSTOR properties in kubernetes storage class parameters.
 	PropertyNamespace = "property.linstor.csi.linbit.com"
 

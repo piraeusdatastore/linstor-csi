@@ -23,6 +23,12 @@ func TestNewParameters(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "rg1", fixed.ResourceGroup)
 
+	fixedWithNamespace, err := volume.NewParameters(map[string]string{
+		linstor.ParameterNamespace + "/resourcegroup": "rg1",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "rg1", fixedWithNamespace.ResourceGroup)
+
 	expected := map[string]string{
 		"DrbdOptions/auto-quorum":  "suspend-io",
 		"DrbdOptions/Net/protocol": "C",

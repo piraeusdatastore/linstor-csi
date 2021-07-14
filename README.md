@@ -67,9 +67,9 @@ metadata:
 provisioner: linstor.csi.linbit.com
 allowVolumeExpansion: true
 parameters:
-  placementCount: "2"
-  storagePool: "my-storage-pool"
-  resourceGroup: "linstor-basic-storage"
+  linstor.csi.linbit.com/placementCount: "2"
+  linstor.csi.linbit.com/storagePool: "my-storage-pool"
+  linstor.csi.linbit.com/resourceGroup: "linstor-basic-storage"
   csi.storage.k8s.io/fstype: xfs
   # You can override LINSTOR properties by adding the property.linstor.csi.linbit.com prefix:
   property.linstor.csi.linbit.com/DrbdOptions/auto-quorum: suspend-io

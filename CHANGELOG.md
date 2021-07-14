@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Option to send a bearer token for authentication. This can be used when the API is secured by a project like
   `kube-rbac-proxy`.
+- Add explicit namespace `linstor.csi.linbit.com` to volume parameters in storage class. This makes it easier to track
+  which parameter is handled by which component (for example: `csi.storage.k8s.io/fstype` is handled by the CSI
+  infrastructure, not the plugin itself).
+
+  Un-namespaced parameters are still supported, while explicitly namespaced
+  parameters that with a foreign namespace are now ignored. These would produce "unknown parameter" errors previously.
+
 
 ## [0.13.1] - 2021-06-10
 
