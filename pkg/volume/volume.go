@@ -545,8 +545,8 @@ type Querier interface {
 	FindByID(ctx context.Context, ID string) (*Info, error)
 	// AllocationSizeKiB returns the number of KiB required to provision required bytes.
 	AllocationSizeKiB(requiredBytes, limitBytes int64) (int64, error)
-	// CapacityBytes determines the capacity of the underlying storage in Bytes.
-	CapacityBytes(ctx context.Context, params map[string]string) (int64, error)
+	// CapacityBytes returns the amount of free space, in bytes, in the storage pool specified by the params and topology.
+	CapacityBytes(ctx context.Context, params, segments map[string]string) (int64, error)
 }
 
 // Mounter handles the filesystems located on volumes.

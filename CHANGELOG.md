@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Un-namespaced parameters are still supported, while explicitly namespaced
   parameters that with a foreign namespace are now ignored. These would produce "unknown parameter" errors previously.
 
+### Changed
+
+- Calls to `GetCapacity` now take topology information (if any) into account.
 
 ## [0.13.1] - 2021-06-10
 

@@ -36,6 +36,7 @@ import (
 	"github.com/piraeusdatastore/linstor-csi/pkg/client/mocks"
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
+	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
@@ -275,4 +276,110 @@ func TestLinstor_Attach(t *testing.T) {
 		m.AssertCalled(t, "Deactivate", mock.Anything, ExampleResourceID, "node-0")
 		m.AssertCalled(t, "Activate", mock.Anything, ExampleResourceID, "node-2")
 	})
+}
+
+func TestLinstor_CapacityBytes(t *testing.T) {
+	t.Parallel()
+
+	m := mocks.NodeProvider{}
+	m.On("GetStoragePoolView", mock.Anything).Return([]lapi.StoragePool{
+		{
+			StoragePoolName: "pool-a",
+			NodeName:        "node-1",
+			ProviderKind:    lapi.LVM_THIN,
+			FreeCapacity:    1,
+		},
+		{
+			StoragePoolName: "pool-a",
+			NodeName:        "node-2",
+			ProviderKind:    lapi.LVM_THIN,
+			FreeCapacity:    2,
+		},
+		{
+			StoragePoolName: "pool-b",
+			NodeName:        "node-1",
+			ProviderKind:    lapi.ZFS_THIN,
+			FreeCapacity:    3,
+		},
+		{
+			StoragePoolName: "pool-b",
+			NodeName:        "node-2",
+			ProviderKind:    lapi.ZFS_THIN,
+			FreeCapacity:    4,
+		},
+	}, nil)
+
+	cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Nodes: &m}}, log: logrus.WithField("test", t.Name())}
+
+	testcases := []struct {
+		name             string
+		params           map[string]string
+		topology         map[string]string
+		expectedCapacity int64
+	}{
+		{
+			name:             "all",
+			expectedCapacity: (1 + 2 + 3 + 4) * 1024,
+		},
+		{
+			name: "just node-1",
+			topology: map[string]string{
+				topology.LinstorNodeKey: "node-1",
+			},
+			expectedCapacity: (1 + 3) * 1024,
+		},
+		{
+			name: "just node-2",
+			topology: map[string]string{
+				topology.LinstorNodeKey: "node-2",
+			},
+			expectedCapacity: (2 + 4) * 1024,
+		},
+		{
+			name: "just pool-a from params",
+			params: map[string]string{
+				"StoragePool": "pool-a",
+			},
+			expectedCapacity: (1 + 2) * 1024,
+		},
+		{
+			name: "just pool-b from params",
+			params: map[string]string{
+				"StoragePool": "pool-b",
+			},
+			expectedCapacity: (3 + 4) * 1024,
+		},
+		{
+			name: "just pool-a from topology",
+			topology: map[string]string{
+				topology.LinstorStoragePoolKeyPrefix + "pool-a": topology.LinstorStoragePoolValue,
+			},
+			expectedCapacity: (1 + 2) * 1024,
+		},
+		{
+			name: "just pool-a + node-1 from topology",
+			topology: map[string]string{
+				topology.LinstorStoragePoolKeyPrefix + "pool-a": topology.LinstorStoragePoolValue,
+				topology.LinstorNodeKey:                         "node-1",
+			},
+			expectedCapacity: 1 * 1024,
+		},
+		{
+			name: "unknown node",
+			topology: map[string]string{
+				topology.LinstorNodeKey: "node-unknown",
+			},
+			expectedCapacity: 0,
+		},
+	}
+
+	for i := range testcases {
+		testcase := &testcases[i]
+
+		t.Run(testcase.name, func(t *testing.T) {
+			cap, err := cl.CapacityBytes(context.Background(), testcase.params, testcase.topology)
+			assert.NoError(t, err)
+			assert.Equal(t, testcase.expectedCapacity, cap)
+		})
+	}
 }
