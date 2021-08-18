@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2021-08-18
+
 ### Added
 
 - Option to send a bearer token for authentication. This can be used when the API is secured by a project like
@@ -280,7 +282,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.13.1...v0.14.0
 [0.13.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.12.0...v0.12.1
