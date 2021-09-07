@@ -7,9 +7,9 @@ import (
 	"fmt"
 )
 
-const _PlacementPolicyName = "UnknownManualAutoPlaceFollowTopologyBalanced"
+const _PlacementPolicyName = "UnknownManualAutoPlaceFollowTopologyBalancedAutoPlaceTopology"
 
-var _PlacementPolicyIndex = [...]uint8{0, 7, 13, 22, 36, 44}
+var _PlacementPolicyIndex = [...]uint8{0, 7, 13, 22, 36, 44, 61}
 
 func (i PlacementPolicy) String() string {
 	if i < 0 || i >= PlacementPolicy(len(_PlacementPolicyIndex)-1) {
@@ -18,7 +18,7 @@ func (i PlacementPolicy) String() string {
 	return _PlacementPolicyName[_PlacementPolicyIndex[i]:_PlacementPolicyIndex[i+1]]
 }
 
-var _PlacementPolicyValues = []PlacementPolicy{0, 1, 2, 3, 4}
+var _PlacementPolicyValues = []PlacementPolicy{0, 1, 2, 3, 4, 5}
 
 var _PlacementPolicyNameToValueMap = map[string]PlacementPolicy{
 	_PlacementPolicyName[0:7]:   0,
@@ -26,6 +26,7 @@ var _PlacementPolicyNameToValueMap = map[string]PlacementPolicy{
 	_PlacementPolicyName[13:22]: 2,
 	_PlacementPolicyName[22:36]: 3,
 	_PlacementPolicyName[36:44]: 4,
+	_PlacementPolicyName[44:61]: 5,
 }
 
 // PlacementPolicyString retrieves an enum value from the enum constants string name.

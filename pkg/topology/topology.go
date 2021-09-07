@@ -36,9 +36,12 @@ const (
 	// FollowTopology place volumes local to topology preferences, in order
 	// of those preferences.
 	FollowTopology
-	// BalancedTopology places remote volumes in the same zone(Rack)
+	// Balanced places remote volumes in the same zone(Rack)
 	// and pick Node, StoragePool, PrefNic based on utilization
 	Balanced
+	// AutoPlaceTopology places volumes based on topology parameters and LINSTOR
+	// autoplace selection in the storage class.
+	AutoPlaceTopology
 )
 
 const (

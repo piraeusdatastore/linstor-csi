@@ -49,6 +49,7 @@ import (
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler/autoplace"
+	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler/autoplacetopology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler/balancer"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler/followtopology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler/manual"
@@ -383,6 +384,8 @@ func (s *Linstor) schedulerByPlacementPolicy(vol *volume.Info) (scheduler.Interf
 		return followtopology.NewScheduler(s.client, s.log), nil
 	case topology.Balanced:
 		return balancer.NewScheduler(s.client, s.log)
+	case topology.AutoPlaceTopology:
+		return autoplacetopology.NewScheduler(s.client, s.log), nil
 	default:
 		return nil, fmt.Errorf("unsupported volume scheduler: %s", params.PlacementPolicy)
 	}
@@ -1518,9 +1521,7 @@ func (s *Linstor) deleteResourceDefinitionAndGroupIfUnused(ctx context.Context, 
 
 	err = s.client.ResourceGroups.Delete(ctx, rDef.ResourceGroupName)
 	if err != nil {
-		apiErr, ok := err.(lapi.ApiCallError)
-		if ok && apiErr.Is(lapiconsts.FailExistsRscDfn) {
-			// Do not delete the RG if other RDs are still present
+		if lapi.IsApiCallError(err, lapiconsts.FailExistsRscDfn) {
 			return nil
 		}
 
