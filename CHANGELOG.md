@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- New default volume scheduler `AutoPlaceTopology`. This new scheduler is a topology aware version of the old
+  `AutoPlace` scheduler. Since it is topology aware, it can be used to optimize volume placement when using
+  `WaitForFirstConsumer` volume binding or restricting placement via `allowedTopologies`, while still respecting
+  user-defined placement options such as `replicasOnSame` or `replicasOnDifferent`.
+
 ## [0.14.1] - 2021-09-02
 
 ### Added

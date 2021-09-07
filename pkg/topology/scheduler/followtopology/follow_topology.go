@@ -101,14 +101,7 @@ func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.Creat
 	}
 
 	if placed < remainingAssignments {
-		// If params.placementCount is higher than the number of assigned nodes,
-		// let autoplace the rest.
-		apRequest, err := vol.ToAutoPlace()
-		if err != nil {
-			return err
-		}
-
-		err = s.Resources.Autoplace(ctx, vol.ID, apRequest)
+		err = s.Resources.Autoplace(ctx, vol.ID, client.AutoPlaceRequest{})
 		if err != nil {
 			return err
 		}

@@ -21,6 +21,7 @@ package autoplace
 import (
 	"context"
 
+	"github.com/LINBIT/golinstor/client"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
@@ -37,11 +38,7 @@ func NewScheduler(c *lc.HighLevelClient) *Scheduler {
 }
 
 func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.CreateVolumeRequest) error {
-	apRequest, err := vol.ToAutoPlace()
-	if err != nil {
-		return err
-	}
-	return s.Resources.Autoplace(ctx, vol.ID, apRequest)
+	return s.Resources.Autoplace(ctx, vol.ID, client.AutoPlaceRequest{})
 }
 
 func (s *Scheduler) AccessibleTopologies(ctx context.Context, vol *volume.Info) ([]*csi.Topology, error) {
