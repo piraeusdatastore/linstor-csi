@@ -1459,6 +1459,18 @@ func (s *Linstor) GetNodeTopologies(ctx context.Context, nodename string) (*csi.
 		topo.Segments[label] = "true"
 	}
 
+	node, err := s.client.Nodes.Get(ctx, nodename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get node: %w", err)
+	}
+
+	const auxPrefix = lapiconsts.NamespcAuxiliary + "/"
+	for k, v := range node.Props {
+		if strings.HasPrefix(k, auxPrefix) {
+			topo.Segments[k[len(auxPrefix):]] = v
+		}
+	}
+
 	return topo, nil
 }
 
