@@ -58,23 +58,26 @@ func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.Creat
 	log.WithField("requirements", topos).Trace("got topology requirement")
 
 	for _, preferred := range topos.GetPreferred() {
-		node, ok := preferred.GetSegments()[topology.LinstorNodeKey]
-		if !ok {
-			log.WithField("segment", preferred.GetSegments()).Trace("segment without node name, skipping")
-			continue
+		log := log.WithField("segments", preferred.GetSegments())
+
+		nodes, err := s.nodesFromSegments(ctx, preferred.GetSegments())
+		if err != nil {
+			return fmt.Errorf("failed to get preferred node list from segments: %w", err)
 		}
 
-		log.WithField("preferred", node).Trace("try initial placement on a preferred node")
+		log.WithField("nodes", nodes).Trace("try initial placement on preferred nodes")
 
-		// Just try a single autoplace request on one of the preferred nodes if possible. We use AutoPlace instead
-		// of MakeAvailable to ensure we respect the user-defined constraint from the storage class.
-		err := s.Resources.Autoplace(ctx, vol.ID, lapi.AutoPlaceRequest{
-			SelectFilter: lapi.AutoSelectFilter{PlaceCount: 1, NodeNameList: []string{node}},
-		})
+		apRequest := lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: nodes}}
+
+		if len(nodes) < int(params.PlacementCount) {
+			apRequest.SelectFilter.PlaceCount = int32(len(nodes))
+		}
+
+		err = s.Resources.Autoplace(ctx, vol.ID, apRequest)
 		if err != nil {
-			log.WithError(err).WithField("preferred", node).Trace("failed to autoplace")
+			log.WithError(err).Trace("failed to autoplace")
 		} else {
-			log.WithField("preferred", node).Trace("successfully placed on preferred node")
+			log.Trace("successfully placed on preferred node")
 			break
 		}
 	}
@@ -84,13 +87,12 @@ func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.Creat
 	var requisiteNodes []string
 
 	for _, requisite := range topos.GetRequisite() {
-		node, ok := requisite.GetSegments()[topology.LinstorNodeKey]
-		if !ok {
-			log.WithField("segment", requisite.GetSegments()).Trace("segment without node name, skipping")
-			continue
+		nodes, err := s.nodesFromSegments(ctx, requisite.GetSegments())
+		if err != nil {
+			return fmt.Errorf("failed to get preferred node list from segments: %w", err)
 		}
 
-		requisiteNodes = append(requisiteNodes, node)
+		requisiteNodes = append(requisiteNodes, nodes...)
 	}
 
 	log.WithField("requisite", requisiteNodes).Trace("got requisite nodes")
@@ -143,4 +145,37 @@ func (s *Scheduler) AccessibleTopologies(ctx context.Context, vol *volume.Info) 
 
 func NewScheduler(c *lc.HighLevelClient, l *logrus.Entry) *Scheduler {
 	return &Scheduler{HighLevelClient: c, log: l.WithField("scheduler", "autoplacetopology")}
+}
+
+// nodesFromSegments finds all matching nodes for the given topology segment.
+//
+// In the most common case, this just extracts the node name using the standard topology.LinstorNodeKey.
+// In some cases CSI only gives us an "aggregate" topology, i.e. no node name, just some common property,
+// in which case we query the LINSTOR API for all matching nodes.
+func (s *Scheduler) nodesFromSegments(ctx context.Context, segments map[string]string) ([]string, error) {
+	// First, check if the segment already contains explicit node information. This is the common case,
+	// no reason to make extra http requests for this.
+	node, ok := segments[topology.LinstorNodeKey]
+	if ok {
+		return []string{node}, nil
+	}
+
+	opts := &lapi.ListOpts{}
+
+	for k, v := range segments {
+		opts.Prop = append(opts.Prop, fmt.Sprintf("Aux/%s=%s", k, v))
+	}
+
+	nodes, err := s.Nodes.GetAll(ctx, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get nodes from segements %v: %w", segments, err)
+	}
+
+	result := make([]string, len(nodes))
+
+	for i := range nodes {
+		result[i] = nodes[i].Name
+	}
+
+	return result, nil
 }
