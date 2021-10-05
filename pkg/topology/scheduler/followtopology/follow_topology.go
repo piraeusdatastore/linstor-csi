@@ -82,7 +82,7 @@ func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.Creat
 			continue
 		}
 
-		err = s.Resources.MakeAvailable(ctx, vol.ID, p, client.ResourceMakeAvailable{})
+		err = s.Resources.MakeAvailable(ctx, vol.ID, p, client.ResourceMakeAvailable{Diskful: true})
 		if err != nil {
 			s.log.WithFields(logrus.Fields{
 				"volumeID":     vol.ID,
