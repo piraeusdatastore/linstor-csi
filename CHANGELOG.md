@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A bug introduced in 0.14.0 meant that using the "FollowTopology" policy would not create the requested amount
+  of volume replicas. Instead, only a single replica was created. This bug is now fixed. Existing volumes can be
+  updated by using `linstor rg adjust <resource group>`.
+
 ## [0.15.0] - 2021-09-23
 
 ### Added
