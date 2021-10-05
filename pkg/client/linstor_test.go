@@ -308,6 +308,8 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 			FreeCapacity:    4,
 		},
 	}, nil)
+	m.On("GetAll", mock.Anything, &lapi.ListOpts{Prop: []string{"Aux/topology.kubernetes.io/zone=zone-1"}}).Return([]lapi.Node{{Name: "node-1"}}, nil)
+	m.On("GetAll", mock.Anything, mock.Anything).Return([]lapi.Node{{Name: "node-1"}, {Name: "node-2"}}, nil)
 
 	cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Nodes: &m}}, log: logrus.WithField("test", t.Name())}
 
@@ -370,6 +372,13 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 				topology.LinstorNodeKey: "node-unknown",
 			},
 			expectedCapacity: 0,
+		},
+		{
+			name: "aggregate topology",
+			topology: map[string]string{
+				"topology.kubernetes.io/zone": "zone-1",
+			},
+			expectedCapacity: (1 + 3) * 1024,
 		},
 	}
 

@@ -73,3 +73,36 @@ func (c *HighLevelClient) GenericAccessibleTopologies(ctx context.Context, vol *
 
 	return topos, nil
 }
+
+// NodesForTopology finds all matching nodes for the given topology segment.
+//
+// In the most common case, this just extracts the node name using the standard topology.LinstorNodeKey.
+// In some cases CSI only gives us an "aggregate" topology, i.e. no node name, just some common property,
+// in which case we query the LINSTOR API for all matching nodes.
+func (c *HighLevelClient) NodesForTopology(ctx context.Context, segments map[string]string) ([]string, error) {
+	// First, check if the segment already contains explicit node information. This is the common case,
+	// no reason to make extra http requests for this.
+	node, ok := segments[topology.LinstorNodeKey]
+	if ok {
+		return []string{node}, nil
+	}
+
+	opts := &lapi.ListOpts{}
+
+	for k, v := range segments {
+		opts.Prop = append(opts.Prop, fmt.Sprintf("Aux/%s=%s", k, v))
+	}
+
+	nodes, err := c.Nodes.GetAll(ctx, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get nodes from segements %v: %w", segments, err)
+	}
+
+	result := make([]string, len(nodes))
+
+	for i := range nodes {
+		result[i] = nodes[i].Name
+	}
+
+	return result, nil
+}
