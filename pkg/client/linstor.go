@@ -572,16 +572,15 @@ func (s *Linstor) CapacityBytes(ctx context.Context, parameters, segments map[st
 
 	var requestedStoragePools []string
 
-	var requestedNode string
-
-	for k, v := range segments {
-		if k == topology.LinstorNodeKey {
-			requestedNode = v
-		}
-
+	for k := range segments {
 		if strings.HasPrefix(k, topology.LinstorStoragePoolKeyPrefix) {
 			requestedStoragePools = append(requestedStoragePools, k[len(topology.LinstorStoragePoolKeyPrefix):])
 		}
+	}
+
+	requestedNodes, err := s.client.NodesForTopology(ctx, segments)
+	if err != nil {
+		return 0, fmt.Errorf("unable to get capacity: %w", err)
 	}
 
 	pools, err := s.client.Nodes.GetStoragePoolView(ctx)
@@ -591,13 +590,13 @@ func (s *Linstor) CapacityBytes(ctx context.Context, parameters, segments map[st
 
 	var total int64
 	for _, sp := range pools {
-		if requestedNode != "" && requestedNode != sp.NodeName {
-			// Not the requested node
+		if !slice.ContainsString(requestedNodes, sp.NodeName) {
+			// Not a requested node
 			continue
 		}
 
 		if len(requestedStoragePools) > 0 && !slice.ContainsString(requestedStoragePools, sp.StoragePoolName) {
-			// Not the requested storage pool
+			// Not a requested storage pool
 			continue
 		}
 

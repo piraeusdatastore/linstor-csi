@@ -12,7 +12,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
-	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
@@ -60,7 +59,7 @@ func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.Creat
 	for _, preferred := range topos.GetPreferred() {
 		log := log.WithField("segments", preferred.GetSegments())
 
-		nodes, err := s.nodesFromSegments(ctx, preferred.GetSegments())
+		nodes, err := s.NodesForTopology(ctx, preferred.GetSegments())
 		if err != nil {
 			return fmt.Errorf("failed to get preferred node list from segments: %w", err)
 		}
@@ -87,7 +86,7 @@ func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.Creat
 	var requisiteNodes []string
 
 	for _, requisite := range topos.GetRequisite() {
-		nodes, err := s.nodesFromSegments(ctx, requisite.GetSegments())
+		nodes, err := s.NodesForTopology(ctx, requisite.GetSegments())
 		if err != nil {
 			return fmt.Errorf("failed to get preferred node list from segments: %w", err)
 		}
@@ -145,37 +144,4 @@ func (s *Scheduler) AccessibleTopologies(ctx context.Context, vol *volume.Info) 
 
 func NewScheduler(c *lc.HighLevelClient, l *logrus.Entry) *Scheduler {
 	return &Scheduler{HighLevelClient: c, log: l.WithField("scheduler", "autoplacetopology")}
-}
-
-// nodesFromSegments finds all matching nodes for the given topology segment.
-//
-// In the most common case, this just extracts the node name using the standard topology.LinstorNodeKey.
-// In some cases CSI only gives us an "aggregate" topology, i.e. no node name, just some common property,
-// in which case we query the LINSTOR API for all matching nodes.
-func (s *Scheduler) nodesFromSegments(ctx context.Context, segments map[string]string) ([]string, error) {
-	// First, check if the segment already contains explicit node information. This is the common case,
-	// no reason to make extra http requests for this.
-	node, ok := segments[topology.LinstorNodeKey]
-	if ok {
-		return []string{node}, nil
-	}
-
-	opts := &lapi.ListOpts{}
-
-	for k, v := range segments {
-		opts.Prop = append(opts.Prop, fmt.Sprintf("Aux/%s=%s", k, v))
-	}
-
-	nodes, err := s.Nodes.GetAll(ctx, opts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get nodes from segements %v: %w", segments, err)
-	}
-
-	result := make([]string, len(nodes))
-
-	for i := range nodes {
-		result[i] = nodes[i].Name
-	}
-
-	return result, nil
 }
