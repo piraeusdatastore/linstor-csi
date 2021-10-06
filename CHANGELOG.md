@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1] - 2021-10-06
+
 ### Fixed
 
 - A bug introduced in 0.14.0 meant that using the "FollowTopology" policy would not create the requested amount
@@ -303,7 +305,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.15.1...HEAD
+[0.15.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.13.1...v0.14.0
