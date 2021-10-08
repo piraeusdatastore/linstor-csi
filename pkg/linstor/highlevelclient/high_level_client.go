@@ -46,14 +46,9 @@ func NewHighLevelClient(options ...lapi.Option) (*HighLevelClient, error) {
 
 // GenericAccessibleTopologies returns topologies based on linstor storage pools
 // and whether a resource is allowed to be accessed over the network.
-func (c *HighLevelClient) GenericAccessibleTopologies(ctx context.Context, vol *volume.Info) ([]*csi.Topology, error) {
-	params, err := volume.NewParameters(vol.Parameters)
-	if err != nil {
-		return nil, fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
-	}
-
+func (c *HighLevelClient) GenericAccessibleTopologies(ctx context.Context, volId string, allowDisklessAccess bool) ([]*csi.Topology, error) {
 	// Get all nodes where the resource is physically located.
-	r, err := c.Resources.GetAll(ctx, vol.ID)
+	r, err := c.Resources.GetAll(ctx, volId)
 	if err != nil {
 		return nil, fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
 	}
@@ -66,9 +61,24 @@ func (c *HighLevelClient) GenericAccessibleTopologies(ctx context.Context, vol *
 	}
 
 	// If remote access is allowed, give access to all nodes with diskless storage pool.
-	if params.AllowRemoteVolumeAccess {
-		disklessPoolLabel := topology.ToStoragePoolLabel(params.DisklessStoragePool)
-		topos = append(topos, &csi.Topology{Segments: map[string]string{disklessPoolLabel: topology.LinstorStoragePoolValue}})
+	if allowDisklessAccess {
+		rd, err := c.ResourceDefinitions.Get(ctx, volId)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get resource definition to determine diskless storage pools: %w", err)
+		}
+
+		rg, err := c.ResourceGroups.Get(ctx, rd.ResourceGroupName)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get resource grouos to determine diskless storage pools: %w", err)
+		}
+
+		if len(rg.SelectFilter.StoragePoolDisklessList) == 0 {
+			rg.SelectFilter.StoragePoolDisklessList = []string{volume.DefaultDisklessStoragePoolName}
+		}
+
+		for _, pool := range rg.SelectFilter.StoragePoolDisklessList {
+			topos = append(topos, &csi.Topology{Segments: map[string]string{topology.ToStoragePoolLabel(pool): topology.LinstorStoragePoolValue}})
+		}
 	}
 
 	return topos, nil

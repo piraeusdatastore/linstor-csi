@@ -20,7 +20,6 @@ package followtopology
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 
 	"github.com/LINBIT/golinstor/client"
@@ -44,12 +43,7 @@ func NewScheduler(c *lc.HighLevelClient, l *logrus.Entry) *Scheduler {
 	return &Scheduler{HighLevelClient: c, log: l}
 }
 
-func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.CreateVolumeRequest) error {
-	params, err := volume.NewParameters(vol.Parameters)
-	if err != nil {
-		return fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
-	}
-
+func (s *Scheduler) Create(ctx context.Context, volId string, params *volume.Parameters, topologies *csi.TopologyRequirement) error {
 	remainingAssignments := int(params.PlacementCount)
 
 	// See https://github.com/container-storage-interface/spec/blob/v1.4.0/csi.proto#L523
@@ -58,10 +52,8 @@ func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.Creat
 	// * If `Requisite` and `Preferred` exists, we have `Preferred` ⊆ `Requisite`, and `Preferred` SHOULD be used first.
 	// * If `Requisite` does not exist and `Preferred` exists, we SHOULD use `Preferred`.
 	// * If both `Requisite` and `Preferred` do not exist, we can do what ever.
-
-	topos := req.GetAccessibilityRequirements()
-	remainingRequisites := topos.GetRequisite()
-	remainingPreferred := topos.GetPreferred()
+	remainingRequisites := topologies.GetRequisite()
+	remainingPreferred := topologies.GetPreferred()
 
 	placed := 0
 	for placed < remainingAssignments {
@@ -82,10 +74,10 @@ func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.Creat
 			continue
 		}
 
-		err = s.Resources.MakeAvailable(ctx, vol.ID, p, client.ResourceMakeAvailable{Diskful: true})
+		err := s.Resources.MakeAvailable(ctx, volId, p, client.ResourceMakeAvailable{Diskful: true})
 		if err != nil {
 			s.log.WithFields(logrus.Fields{
-				"volumeID":     vol.ID,
+				"volumeID":     volId,
 				"topologyNode": p,
 				"reason":       err,
 			}).Info("unable to satisfy topology preference, skipping...")
@@ -96,12 +88,12 @@ func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.Creat
 		placed++
 	}
 
-	if placed == 0 && len(topos.GetRequisite()) > 0 {
+	if placed == 0 && len(topologies.GetRequisite()) > 0 {
 		return status.Error(codes.ResourceExhausted, "None of the requisite topologies could be fulfilled")
 	}
 
 	if placed < remainingAssignments {
-		err = s.Resources.Autoplace(ctx, vol.ID, client.AutoPlaceRequest{})
+		err := s.Resources.Autoplace(ctx, volId, client.AutoPlaceRequest{})
 		if err != nil {
 			return err
 		}
@@ -121,6 +113,6 @@ func deleteSegment(topos []*csi.Topology, segment map[string]string) []*csi.Topo
 	return topos
 }
 
-func (s *Scheduler) AccessibleTopologies(ctx context.Context, vol *volume.Info) ([]*csi.Topology, error) {
-	return s.GenericAccessibleTopologies(ctx, vol)
+func (s *Scheduler) AccessibleTopologies(ctx context.Context, volId string, allowDisklessAccess bool) ([]*csi.Topology, error) {
+	return s.GenericAccessibleTopologies(ctx, volId, allowDisklessAccess)
 }

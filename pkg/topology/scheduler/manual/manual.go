@@ -36,8 +36,8 @@ func NewScheduler(c *lc.HighLevelClient) *Scheduler {
 	return &Scheduler{HighLevelClient: c}
 }
 
-func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.CreateVolumeRequest) error {
-	manualPlacements, err := vol.ToResourceCreateList()
+func (s *Scheduler) Create(ctx context.Context, volId string, params *volume.Parameters, _ *csi.TopologyRequirement) error {
+	manualPlacements, err := params.ToResourceCreateList(volId)
 	if err != nil {
 		return err
 	}
@@ -51,6 +51,6 @@ func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.Creat
 	return nil
 }
 
-func (s *Scheduler) AccessibleTopologies(ctx context.Context, vol *volume.Info) ([]*csi.Topology, error) {
-	return s.GenericAccessibleTopologies(ctx, vol)
+func (s *Scheduler) AccessibleTopologies(ctx context.Context, volId string, allowDisklessAccess bool) ([]*csi.Topology, error) {
+	return s.GenericAccessibleTopologies(ctx, volId, allowDisklessAccess)
 }

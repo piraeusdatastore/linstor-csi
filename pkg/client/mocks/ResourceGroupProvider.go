@@ -15,6 +15,34 @@ type ResourceGroupProvider struct {
 	mock.Mock
 }
 
+// Adjust provides a mock function with given fields: ctx, resGrpName, adjust
+func (_m *ResourceGroupProvider) Adjust(ctx context.Context, resGrpName string, adjust client.ResourceGroupAdjust) error {
+	ret := _m.Called(ctx, resGrpName, adjust)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, client.ResourceGroupAdjust) error); ok {
+		r0 = rf(ctx, resGrpName, adjust)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// AdjustAll provides a mock function with given fields: ctx, adjust
+func (_m *ResourceGroupProvider) AdjustAll(ctx context.Context, adjust client.ResourceGroupAdjust) error {
+	ret := _m.Called(ctx, adjust)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, client.ResourceGroupAdjust) error); ok {
+		r0 = rf(ctx, adjust)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // Create provides a mock function with given fields: ctx, resGrp
 func (_m *ResourceGroupProvider) Create(ctx context.Context, resGrp client.ResourceGroup) error {
 	ret := _m.Called(ctx, resGrp)
@@ -130,7 +158,7 @@ func (_m *ResourceGroupProvider) GetAll(ctx context.Context, opts ...*client.Lis
 }
 
 // GetPropsInfos provides a mock function with given fields: ctx, opts
-func (_m *ResourceGroupProvider) GetPropsInfos(ctx context.Context, opts ...*client.ListOpts) error {
+func (_m *ResourceGroupProvider) GetPropsInfos(ctx context.Context, opts ...*client.ListOpts) ([]client.PropsInfo, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -140,14 +168,23 @@ func (_m *ResourceGroupProvider) GetPropsInfos(ctx context.Context, opts ...*cli
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, ...*client.ListOpts) error); ok {
+	var r0 []client.PropsInfo
+	if rf, ok := ret.Get(0).(func(context.Context, ...*client.ListOpts) []client.PropsInfo); ok {
 		r0 = rf(ctx, opts...)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]client.PropsInfo)
+		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, ...*client.ListOpts) error); ok {
+		r1 = rf(ctx, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // GetVolumeGroup provides a mock function with given fields: ctx, resGrpName, volNr, opts
@@ -179,7 +216,7 @@ func (_m *ResourceGroupProvider) GetVolumeGroup(ctx context.Context, resGrpName 
 }
 
 // GetVolumeGroupPropsInfos provides a mock function with given fields: ctx, resGrpName, opts
-func (_m *ResourceGroupProvider) GetVolumeGroupPropsInfos(ctx context.Context, resGrpName string, opts ...*client.ListOpts) error {
+func (_m *ResourceGroupProvider) GetVolumeGroupPropsInfos(ctx context.Context, resGrpName string, opts ...*client.ListOpts) ([]client.PropsInfo, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -189,14 +226,23 @@ func (_m *ResourceGroupProvider) GetVolumeGroupPropsInfos(ctx context.Context, r
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, ...*client.ListOpts) error); ok {
+	var r0 []client.PropsInfo
+	if rf, ok := ret.Get(0).(func(context.Context, string, ...*client.ListOpts) []client.PropsInfo); ok {
 		r0 = rf(ctx, resGrpName, opts...)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]client.PropsInfo)
+		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string, ...*client.ListOpts) error); ok {
+		r1 = rf(ctx, resGrpName, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // GetVolumeGroups provides a mock function with given fields: ctx, resGrpName, opts

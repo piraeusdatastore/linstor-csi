@@ -15,6 +15,62 @@ type ResourceDefinitionProvider struct {
 	mock.Mock
 }
 
+// AttachExternalFile provides a mock function with given fields: ctx, resDefName, filePath
+func (_m *ResourceDefinitionProvider) AttachExternalFile(ctx context.Context, resDefName, filePath string) error {
+	ret := _m.Called(ctx, resDefName, filePath)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, resDefName, filePath)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// Clone provides a mock function with given fields: ctx, srcResDef, request
+func (_m *ResourceDefinitionProvider) Clone(ctx context.Context, srcResDef string, request client.ResourceDefinitionCloneRequest) (client.ResourceDefinitionCloneStarted, error) {
+	ret := _m.Called(ctx, srcResDef, request)
+
+	var r0 client.ResourceDefinitionCloneStarted
+	if rf, ok := ret.Get(0).(func(context.Context, string, client.ResourceDefinitionCloneRequest) client.ResourceDefinitionCloneStarted); ok {
+		r0 = rf(ctx, srcResDef, request)
+	} else {
+		r0 = ret.Get(0).(client.ResourceDefinitionCloneStarted)
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string, client.ResourceDefinitionCloneRequest) error); ok {
+		r1 = rf(ctx, srcResDef, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// CloneStatus provides a mock function with given fields: ctx, srcResDef, targetResDef
+func (_m *ResourceDefinitionProvider) CloneStatus(ctx context.Context, srcResDef, targetResDef string) (client.ResourceDefinitionCloneStatus, error) {
+	ret := _m.Called(ctx, srcResDef, targetResDef)
+
+	var r0 client.ResourceDefinitionCloneStatus
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) client.ResourceDefinitionCloneStatus); ok {
+		r0 = rf(ctx, srcResDef, targetResDef)
+	} else {
+		r0 = ret.Get(0).(client.ResourceDefinitionCloneStatus)
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = rf(ctx, srcResDef, targetResDef)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // Create provides a mock function with given fields: ctx, resDef
 func (_m *ResourceDefinitionProvider) Create(ctx context.Context, resDef client.ResourceDefinitionCreate) error {
 	ret := _m.Called(ctx, resDef)
@@ -71,6 +127,20 @@ func (_m *ResourceDefinitionProvider) DeleteVolumeDefinition(ctx context.Context
 	return r0
 }
 
+// DetachExternalFile provides a mock function with given fields: ctx, resDefName, filePath
+func (_m *ResourceDefinitionProvider) DetachExternalFile(ctx context.Context, resDefName, filePath string) error {
+	ret := _m.Called(ctx, resDefName, filePath)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, resDefName, filePath)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // Get provides a mock function with given fields: ctx, resDefName, opts
 func (_m *ResourceDefinitionProvider) Get(ctx context.Context, resDefName string, opts ...*client.ListOpts) (client.ResourceDefinition, error) {
 	_va := make([]interface{}, len(opts))
@@ -99,8 +169,61 @@ func (_m *ResourceDefinitionProvider) Get(ctx context.Context, resDefName string
 	return r0, r1
 }
 
-// GetAll provides a mock function with given fields: ctx, opts
-func (_m *ResourceDefinitionProvider) GetAll(ctx context.Context, opts ...*client.ListOpts) ([]client.ResourceDefinition, error) {
+// GetAll provides a mock function with given fields: ctx, request
+func (_m *ResourceDefinitionProvider) GetAll(ctx context.Context, request client.RDGetAllRequest) ([]client.ResourceDefinitionWithVolumeDefinition, error) {
+	ret := _m.Called(ctx, request)
+
+	var r0 []client.ResourceDefinitionWithVolumeDefinition
+	if rf, ok := ret.Get(0).(func(context.Context, client.RDGetAllRequest) []client.ResourceDefinitionWithVolumeDefinition); ok {
+		r0 = rf(ctx, request)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]client.ResourceDefinitionWithVolumeDefinition)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, client.RDGetAllRequest) error); ok {
+		r1 = rf(ctx, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetDRBDProxyPropsInfos provides a mock function with given fields: ctx, resDefName, opts
+func (_m *ResourceDefinitionProvider) GetDRBDProxyPropsInfos(ctx context.Context, resDefName string, opts ...*client.ListOpts) ([]client.PropsInfo, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, resDefName)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 []client.PropsInfo
+	if rf, ok := ret.Get(0).(func(context.Context, string, ...*client.ListOpts) []client.PropsInfo); ok {
+		r0 = rf(ctx, resDefName, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]client.PropsInfo)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string, ...*client.ListOpts) error); ok {
+		r1 = rf(ctx, resDefName, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetPropsInfos provides a mock function with given fields: ctx, opts
+func (_m *ResourceDefinitionProvider) GetPropsInfos(ctx context.Context, opts ...*client.ListOpts) ([]client.PropsInfo, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -110,12 +233,12 @@ func (_m *ResourceDefinitionProvider) GetAll(ctx context.Context, opts ...*clien
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
-	var r0 []client.ResourceDefinition
-	if rf, ok := ret.Get(0).(func(context.Context, ...*client.ListOpts) []client.ResourceDefinition); ok {
+	var r0 []client.PropsInfo
+	if rf, ok := ret.Get(0).(func(context.Context, ...*client.ListOpts) []client.PropsInfo); ok {
 		r0 = rf(ctx, opts...)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]client.ResourceDefinition)
+			r0 = ret.Get(0).([]client.PropsInfo)
 		}
 	}
 
@@ -127,48 +250,6 @@ func (_m *ResourceDefinitionProvider) GetAll(ctx context.Context, opts ...*clien
 	}
 
 	return r0, r1
-}
-
-// GetDRBDProxyPropsInfos provides a mock function with given fields: ctx, resDefName, opts
-func (_m *ResourceDefinitionProvider) GetDRBDProxyPropsInfos(ctx context.Context, resDefName string, opts ...*client.ListOpts) error {
-	_va := make([]interface{}, len(opts))
-	for _i := range opts {
-		_va[_i] = opts[_i]
-	}
-	var _ca []interface{}
-	_ca = append(_ca, ctx, resDefName)
-	_ca = append(_ca, _va...)
-	ret := _m.Called(_ca...)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, ...*client.ListOpts) error); ok {
-		r0 = rf(ctx, resDefName, opts...)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// GetPropsInfos provides a mock function with given fields: ctx, opts
-func (_m *ResourceDefinitionProvider) GetPropsInfos(ctx context.Context, opts ...*client.ListOpts) error {
-	_va := make([]interface{}, len(opts))
-	for _i := range opts {
-		_va[_i] = opts[_i]
-	}
-	var _ca []interface{}
-	_ca = append(_ca, ctx)
-	_ca = append(_ca, _va...)
-	ret := _m.Called(_ca...)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, ...*client.ListOpts) error); ok {
-		r0 = rf(ctx, opts...)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
 }
 
 // GetVolumeDefinition provides a mock function with given fields: ctx, resDefName, volNr, opts

@@ -19,7 +19,7 @@ import (
 
 var (
 	volumeId   = "test-volume"
-	vol        = volume.Info{ID: volumeId, Parameters: map[string]string{"AutoPlace": "2"}}
+	params     = &volume.Parameters{PlacementCount: 2}
 	brokenNode = "node2"
 )
 
@@ -43,7 +43,7 @@ func TestScheduler_Create(t *testing.T) {
 		// Asserts that if no requirement is given, normal autoplace is performed
 		m.Calls = nil
 
-		err := sched.Create(ctx, &vol, &csi.CreateVolumeRequest{})
+		err := sched.Create(ctx, volumeId, params, nil)
 		assert.NoError(t, err)
 		m.AssertCalled(t, "Autoplace", mock.Anything, volumeId, mock.Anything)
 		m.AssertNotCalled(t, "MakeAvailable", mock.Anything, mock.Anything, mock.Anything)
@@ -53,13 +53,11 @@ func TestScheduler_Create(t *testing.T) {
 		// Asserts that, if only preferred topologies are given, they are created first
 		m.Calls = nil
 
-		err := sched.Create(ctx, &vol, &csi.CreateVolumeRequest{
-			AccessibilityRequirements: &csi.TopologyRequirement{
-				Preferred: []*csi.Topology{
-					{Segments: map[string]string{topology.LinstorNodeKey: "node1"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node3"}},
-				},
+		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
+			Preferred: []*csi.Topology{
+				{Segments: map[string]string{topology.LinstorNodeKey: "node1"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node3"}},
 			},
 		})
 		assert.NoError(t, err)
@@ -74,18 +72,16 @@ func TestScheduler_Create(t *testing.T) {
 		// the remaining requisites
 		m.Calls = nil
 
-		err := sched.Create(ctx, &vol, &csi.CreateVolumeRequest{
-			AccessibilityRequirements: &csi.TopologyRequirement{
-				Requisite: []*csi.Topology{
-					{Segments: map[string]string{topology.LinstorNodeKey: "node1"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node3"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node4"}},
-				},
-				Preferred: []*csi.Topology{
-					{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node4"}},
-				},
+		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
+			Requisite: []*csi.Topology{
+				{Segments: map[string]string{topology.LinstorNodeKey: "node1"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node3"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node4"}},
+			},
+			Preferred: []*csi.Topology{
+				{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node4"}},
 			},
 		})
 		assert.NoError(t, err)
@@ -100,13 +96,11 @@ func TestScheduler_Create(t *testing.T) {
 		// Asserts that using only requisites will require placement on (one of) these nodes
 		m.Calls = nil
 
-		err := sched.Create(ctx, &vol, &csi.CreateVolumeRequest{
-			AccessibilityRequirements: &csi.TopologyRequirement{
-				Requisite: []*csi.Topology{
-					{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node3"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node4"}},
-				},
+		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
+			Requisite: []*csi.Topology{
+				{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node3"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node4"}},
 			},
 		})
 		assert.NoError(t, err)
@@ -120,11 +114,9 @@ func TestScheduler_Create(t *testing.T) {
 		// Asserts that scheduling reports an error in case non of the requisites could be fulfilled
 		m.Calls = nil
 
-		err := sched.Create(ctx, &vol, &csi.CreateVolumeRequest{
-			AccessibilityRequirements: &csi.TopologyRequirement{
-				Requisite: []*csi.Topology{
-					{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
-				},
+		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
+			Requisite: []*csi.Topology{
+				{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
 			},
 		})
 		assert.Error(t, err)
@@ -136,11 +128,9 @@ func TestScheduler_Create(t *testing.T) {
 		// Asserts that after filling requisites, the remaining replicas are placed using autoplace
 		m.Calls = nil
 
-		err := sched.Create(ctx, &vol, &csi.CreateVolumeRequest{
-			AccessibilityRequirements: &csi.TopologyRequirement{
-				Requisite: []*csi.Topology{
-					{Segments: map[string]string{topology.LinstorNodeKey: "node1"}},
-				},
+		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
+			Requisite: []*csi.Topology{
+				{Segments: map[string]string{topology.LinstorNodeKey: "node1"}},
 			},
 		})
 		assert.NoError(t, err)

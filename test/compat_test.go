@@ -127,12 +127,12 @@ func TestCompatFindSnapBySource(t *testing.T) {
 
 	compatClient := prepareFakeClient(t)
 
-	fakeVol := &volume.Info{Name: "fake", ID: "fake"}
+	fakeVol := &volume.Info{ID: "fake"}
 	empty, err := compatClient.FindSnapsBySource(ctx, fakeVol, 0, 0)
 	assert.NoError(t, err)
 	assert.Empty(t, empty)
 
-	volB := &volume.Info{Name: snapshotB.SourceVolumeId, ID: snapshotB.SourceVolumeId}
+	volB := &volume.Info{ID: snapshotB.SourceVolumeId}
 	actual, err := compatClient.FindSnapsBySource(ctx, volB, 0, 0)
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, []*csi.Snapshot{snapshotB}, actual)

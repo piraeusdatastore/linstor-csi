@@ -23,9 +23,9 @@ import (
 )
 
 const (
-	// AnnotationsKey is the Aux props key in linstor where serialized CSI volumes
+	// LegacyParameterPassKey is the Aux props key in linstor where serialized CSI parameters
 	// are stored.
-	AnnotationsKey = lc.NamespcAuxiliary + "/csi-volume-annotations"
+	LegacyParameterPassKey = lc.NamespcAuxiliary + "/csi-volume-annotations"
 
 	// PropertyCreatedFor is the Aux props key in linstor used to identify why a specific object (for example, a
 	// resource) exists.
@@ -34,6 +34,8 @@ const (
 	// CreatedForTemporaryDisklessAttach marks a resource as temporary, i.e. it should be removed after it is no longer
 	// needed.
 	CreatedForTemporaryDisklessAttach = "temporary-diskless-attach"
+
+	PublishedReadOnlyKey = lc.NamespcAuxiliary + "/csi-publish-readonly"
 
 	// ParameterNamespace is the preferred namespace when setting parameters in
 	ParameterNamespace = "linstor.csi.linbit.com"

@@ -238,13 +238,20 @@ func (_m *ControllerProvider) GetExternalFile(ctx context.Context, name string) 
 	return r0, r1
 }
 
-// GetExternalFiles provides a mock function with given fields: ctx
-func (_m *ControllerProvider) GetExternalFiles(ctx context.Context) ([]client.ExternalFile, error) {
-	ret := _m.Called(ctx)
+// GetExternalFiles provides a mock function with given fields: ctx, opts
+func (_m *ControllerProvider) GetExternalFiles(ctx context.Context, opts ...*client.ListOpts) ([]client.ExternalFile, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
 
 	var r0 []client.ExternalFile
-	if rf, ok := ret.Get(0).(func(context.Context) []client.ExternalFile); ok {
-		r0 = rf(ctx)
+	if rf, ok := ret.Get(0).(func(context.Context, ...*client.ListOpts) []client.ExternalFile); ok {
+		r0 = rf(ctx, opts...)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]client.ExternalFile)
@@ -252,8 +259,8 @@ func (_m *ControllerProvider) GetExternalFiles(ctx context.Context) ([]client.Ex
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
-		r1 = rf(ctx)
+	if rf, ok := ret.Get(1).(func(context.Context, ...*client.ListOpts) error); ok {
+		r1 = rf(ctx, opts...)
 	} else {
 		r1 = ret.Error(1)
 	}

@@ -102,7 +102,7 @@ func (_m *StoragePoolDefinitionProvider) GetAll(ctx context.Context, opts ...*cl
 }
 
 // GetPropsInfos provides a mock function with given fields: ctx, opts
-func (_m *StoragePoolDefinitionProvider) GetPropsInfos(ctx context.Context, opts ...*client.ListOpts) error {
+func (_m *StoragePoolDefinitionProvider) GetPropsInfos(ctx context.Context, opts ...*client.ListOpts) ([]client.PropsInfo, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -112,14 +112,23 @@ func (_m *StoragePoolDefinitionProvider) GetPropsInfos(ctx context.Context, opts
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, ...*client.ListOpts) error); ok {
+	var r0 []client.PropsInfo
+	if rf, ok := ret.Get(0).(func(context.Context, ...*client.ListOpts) []client.PropsInfo); ok {
 		r0 = rf(ctx, opts...)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]client.PropsInfo)
+		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, ...*client.ListOpts) error); ok {
+		r1 = rf(ctx, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // Modify provides a mock function with given fields: ctx, spdName, props
