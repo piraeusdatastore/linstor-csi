@@ -31,13 +31,8 @@ type Scheduler struct {
 // Ensure Scheduler conforms to scheduler.Interface.
 var _ scheduler.Interface = &Scheduler{}
 
-func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.CreateVolumeRequest) error {
-	log := s.log.WithField("volume", vol.ID)
-
-	params, err := volume.NewParameters(vol.Parameters)
-	if err != nil {
-		return fmt.Errorf("unable to determine volume parameters: %w", err)
-	}
+func (s *Scheduler) Create(ctx context.Context, volId string, params *volume.Parameters, topologies *csi.TopologyRequirement) error {
+	log := s.log.WithField("volume", volId)
 
 	// The CSI spec mandates:
 	// * If `Requisite` exists, we _have_ to use those up first.
@@ -53,10 +48,9 @@ func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.Creat
 	// Then, normal autoplace happens, restricted to the requisite nodes. If there are still replicas to schedule, use
 	// autoplace again, this time without extra placement constraints from topology.
 
-	topos := req.GetAccessibilityRequirements()
-	log.WithField("requirements", topos).Trace("got topology requirement")
+	log.WithField("requirements", topologies).Trace("got topology requirement")
 
-	for _, preferred := range topos.GetPreferred() {
+	for _, preferred := range topologies.GetPreferred() {
 		log := log.WithField("segments", preferred.GetSegments())
 
 		nodes, err := s.NodesForTopology(ctx, preferred.GetSegments())
@@ -72,7 +66,7 @@ func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.Creat
 			apRequest.SelectFilter.PlaceCount = int32(len(nodes))
 		}
 
-		err = s.Resources.Autoplace(ctx, vol.ID, apRequest)
+		err = s.Resources.Autoplace(ctx, volId, apRequest)
 		if err != nil {
 			log.WithError(err).Trace("failed to autoplace")
 		} else {
@@ -85,7 +79,7 @@ func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.Creat
 	// we can try autoplacing the rest. Initially, we want to restrict ourselves to just the requisite nodes.
 	var requisiteNodes []string
 
-	for _, requisite := range topos.GetRequisite() {
+	for _, requisite := range topologies.GetRequisite() {
 		nodes, err := s.NodesForTopology(ctx, requisite.GetSegments())
 		if err != nil {
 			return fmt.Errorf("failed to get preferred node list from segments: %w", err)
@@ -111,7 +105,7 @@ func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.Creat
 
 		log.WithField("requisite", requisiteNodes).Trace("try placement on requisite nodes")
 
-		err := s.Resources.Autoplace(ctx, vol.ID, req)
+		err := s.Resources.Autoplace(ctx, volId, req)
 		if err != nil {
 			if lapi.IsApiCallError(err, linstor.FailNotEnoughNodes) {
 				// We need a special return code when the requisite could not be fulfilled
@@ -127,7 +121,7 @@ func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.Creat
 		// independent of topology constraints, so we just run an unconstraint autoplace.
 		log.Trace("try placement without topology constraints")
 
-		err := s.Resources.Autoplace(ctx, vol.ID, lapi.AutoPlaceRequest{})
+		err := s.Resources.Autoplace(ctx, volId, lapi.AutoPlaceRequest{})
 		if err != nil {
 			return fmt.Errorf("failed to autoplace unconstraint replicas: %w", err)
 		}
@@ -138,8 +132,8 @@ func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.Creat
 	return nil
 }
 
-func (s *Scheduler) AccessibleTopologies(ctx context.Context, vol *volume.Info) ([]*csi.Topology, error) {
-	return s.GenericAccessibleTopologies(ctx, vol)
+func (s *Scheduler) AccessibleTopologies(ctx context.Context, volId string, allowDisklessAccess bool) ([]*csi.Topology, error) {
+	return s.GenericAccessibleTopologies(ctx, volId, allowDisklessAccess)
 }
 
 func NewScheduler(c *lc.HighLevelClient, l *logrus.Entry) *Scheduler {

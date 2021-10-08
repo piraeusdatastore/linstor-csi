@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -32,29 +33,31 @@ import (
 
 type MockStorage struct {
 	createdVolumes  []*volume.Info
-	assignedVolumes []*volume.Assignment
+	assignedVolumes map[string][]volume.Assignment
 	snapshots       []*csi.Snapshot
+}
+
+func NewMockStorage() *MockStorage {
+	return &MockStorage{
+		createdVolumes:  nil,
+		assignedVolumes: make(map[string][]volume.Assignment),
+		snapshots:       nil,
+	}
 }
 
 func (s *MockStorage) ListAll(ctx context.Context) ([]*volume.Info, error) {
 	vols := make([]*volume.Info, 0)
 	vols = append(vols, s.createdVolumes...)
-	volume.Sort(vols)
+
+	sort.Slice(vols, func(i, j int) bool {
+		return vols[i].ID < vols[j].ID
+	})
 
 	return vols, nil
 }
 
 func (s *MockStorage) AllocationSizeKiB(requiredBytes, limitBytes int64) (int64, error) {
 	return requiredBytes / 1024, nil
-}
-
-func (s *MockStorage) FindByName(ctx context.Context, name string) (*volume.Info, error) {
-	for _, vol := range s.createdVolumes {
-		if vol.Name == name {
-			return vol, nil
-		}
-	}
-	return nil, nil
 }
 
 func (s *MockStorage) FindByID(ctx context.Context, id string) (*volume.Info, error) {
@@ -66,15 +69,18 @@ func (s *MockStorage) FindByID(ctx context.Context, id string) (*volume.Info, er
 	return nil, nil
 }
 
-func (s *MockStorage) Create(ctx context.Context, vol *volume.Info, req *csi.CreateVolumeRequest) error {
-	vol.ID = vol.Name
+func (s *MockStorage) CompatibleVolumeId(name string) string {
+	return name
+}
+
+func (s *MockStorage) Create(ctx context.Context, vol *volume.Info, params *volume.Parameters, topologies *csi.TopologyRequirement) error {
 	s.createdVolumes = append(s.createdVolumes, vol)
 	return nil
 }
 
-func (s *MockStorage) Delete(ctx context.Context, vol *volume.Info) error {
+func (s *MockStorage) Delete(ctx context.Context, volId string) error {
 	for i, v := range s.createdVolumes {
-		if v != nil && (v.Name == vol.Name) {
+		if v != nil && (v.ID == volId) {
 			// csi-test counts numbers of snapshots, so we have to actually delete it.
 			s.createdVolumes[i] = s.createdVolumes[len(s.createdVolumes)-1]
 			s.createdVolumes[len(s.createdVolumes)-1] = nil
@@ -84,7 +90,11 @@ func (s *MockStorage) Delete(ctx context.Context, vol *volume.Info) error {
 	return nil
 }
 
-func (s *MockStorage) AccessibleTopologies(ctx context.Context, vol *volume.Info) ([]*csi.Topology, error) {
+func (s *MockStorage) AccessibleTopologies(ctx context.Context, volId string, params *volume.Parameters) ([]*csi.Topology, error) {
+	return nil, nil
+}
+
+func (s *MockStorage) GetLegacyVolumeParameters(ctx context.Context, volId string) (*volume.Parameters, error) {
 	return nil, nil
 }
 
@@ -166,28 +176,26 @@ func (s *MockStorage) FindSnapsBySource(ctx context.Context, sourceVol *volume.I
 	return results[start:end], nil
 }
 
-func (s *MockStorage) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volume.Info) error {
-	vol.ID = vol.Name
+func (s *MockStorage) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volume.Info, parameters *volume.Parameters) error {
 	s.createdVolumes = append(s.createdVolumes, vol)
 	return nil
 }
 
 func (s *MockStorage) VolFromVol(ctx context.Context, sourceVol, vol *volume.Info) error {
-	vol.ID = vol.Name
 	s.createdVolumes = append(s.createdVolumes, vol)
 	return nil
 }
 
-func (s *MockStorage) Attach(ctx context.Context, vol *volume.Info, node string) error {
-	s.assignedVolumes = append(s.assignedVolumes, &volume.Assignment{Vol: vol, Node: node, Path: "/dev/null"})
+func (s *MockStorage) Attach(ctx context.Context, volId, node string, readOnly bool) error {
+	s.assignedVolumes[volId] = append(s.assignedVolumes[volId], volume.Assignment{Node: node, Path: "/dev/" + volId, ReadOnly: &readOnly})
 	return nil
 }
 
-func (s *MockStorage) Detach(ctx context.Context, vol *volume.Info, node string) error {
-	for _, a := range s.assignedVolumes {
-		if a.Vol.Name == vol.Name && a.Node == node {
-			// Close enough for testing...
-			a = nil
+func (s *MockStorage) Detach(ctx context.Context, volId, node string) error {
+	for i, a := range s.assignedVolumes[volId] {
+		if a.Node == node {
+			s.assignedVolumes[volId] = append(s.assignedVolumes[volId][:i], s.assignedVolumes[volId][i+1:]...)
+			break
 		}
 	}
 	return nil
@@ -202,21 +210,20 @@ func (s *MockStorage) NodeAvailable(ctx context.Context, node string) error {
 	return nil
 }
 
-func (s *MockStorage) GetAssignmentOnNode(ctx context.Context, vol *volume.Info, node string) (*volume.Assignment, error) {
-	for _, a := range s.assignedVolumes {
-		if a.Vol.ID == vol.ID && a.Node == node {
-			// Close enough for testing...
-			return a, nil
+func (s *MockStorage) FindAssignmentOnNode(ctx context.Context, volId, node string) (*volume.Assignment, error) {
+	for _, a := range s.assignedVolumes[volId] {
+		if a.Node == node {
+			return &a, nil
 		}
 	}
 	return nil, nil
 }
 
-func (s *MockStorage) CapacityBytes(ctx context.Context, params, segments map[string]string) (int64, error) {
+func (s *MockStorage) CapacityBytes(ctx context.Context, sp string, segments map[string]string) (int64, error) {
 	return 50000000, nil
 }
 
-func (s *MockStorage) Mount(ctx context.Context, vol *volume.Info, source, target, fsType string, readonly bool, options []string) error {
+func (s *MockStorage) Mount(ctx context.Context, source, target, fsType string, readonly bool, mntOpts, mkfsOpts []string) error {
 	if _, err := os.Stat(target); os.IsNotExist(err) {
 		return os.MkdirAll(target, 0755)
 	}

@@ -26,9 +26,7 @@ import (
 	"reflect"
 	"testing"
 
-	lapiconsts "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
-	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -37,7 +35,6 @@ import (
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
-	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
 func TestAllocationSizeKiB(t *testing.T) {
@@ -171,6 +168,12 @@ const (
 )
 
 func TestLinstor_Attach(t *testing.T) {
+	var (
+		ResourceModifyReadWrite                    = lapi.GenericPropsModify{OverrideProps: map[string]string{linstor.PublishedReadOnlyKey: "false"}}
+		ResourceModifyReadWriteWithTemporaryAttach = lapi.GenericPropsModify{OverrideProps: map[string]string{linstor.PublishedReadOnlyKey: "false", linstor.PropertyCreatedFor: linstor.CreatedForTemporaryDisklessAttach}}
+		ResourceModifyReadOnly                     = lapi.GenericPropsModify{OverrideProps: map[string]string{linstor.PublishedReadOnlyKey: "true"}}
+	)
+
 	fromJson := func(s string) ([]lapi.ResourceWithVolumes, error) {
 		var result []lapi.ResourceWithVolumes
 
@@ -184,97 +187,85 @@ func TestLinstor_Attach(t *testing.T) {
 
 	t.Run("existing resource", func(t *testing.T) {
 		m := mocks.ResourceProvider{}
-		m.On("GetResourceView", mock.Anything, mock.Anything).Return(fromJson(ResourceViewAllOnline))
+		rv, rvErr := fromJson(ResourceViewAllOnline)
+
+		m.ExpectedCalls = []*mock.Call{
+			{Method: "GetResourceView", Arguments: mock.Arguments{mock.Anything, mock.Anything}, ReturnArguments: mock.Arguments{rv, rvErr}},
+			{Method: "ModifyVolume", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-2", 0, ResourceModifyReadWrite}, ReturnArguments: mock.Arguments{nil}},
+		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		err := cl.Attach(context.Background(), &volume.Info{ID: ExampleResourceID, Parameters: map[string]string{"placementcount": "2"}}, "node-2")
+		err := cl.Attach(context.Background(), ExampleResourceID, "node-2", false)
 		assert.NoError(t, err)
-		m.AssertCalled(t, "GetResourceView", mock.Anything, &lapi.ListOpts{Resource: []string{ExampleResourceID}})
-		m.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
-		m.AssertNotCalled(t, "Get", mock.Anything, mock.Anything, mock.Anything)
-		m.AssertNotCalled(t, "Activate", mock.Anything, mock.Anything, mock.Anything)
-		m.AssertNotCalled(t, "Deactivate", mock.Anything, mock.Anything, mock.Anything)
+		m.AssertExpectations(t)
 	})
 
 	t.Run("no resource with expected diskfull resources", func(t *testing.T) {
-		expectedCreate := lapi.ResourceCreate{
-			Resource:  lapi.Resource{Name: ExampleResourceID, NodeName: "node-3", Props: map[string]string{linstor.PropertyCreatedFor: linstor.CreatedForTemporaryDisklessAttach, lapiconsts.KeyStorPoolName: volume.DefaultDisklessStoragePoolName}, Flags: []string{lapiconsts.FlagDrbdDiskless}},
-			LayerList: []devicelayerkind.DeviceLayerKind{devicelayerkind.Drbd, devicelayerkind.Storage},
-		}
-		expectedGetResult := lapi.Resource{}
-
 		m := mocks.ResourceProvider{}
-		m.On("GetResourceView", mock.Anything, mock.Anything).Return(fromJson(ResourceViewOneOfflineQuorum))
-		m.On("Create", mock.Anything, mock.Anything).Return(nil)
-		m.On("Get", mock.Anything, ExampleResourceID, "node-3").Return(expectedGetResult, nil)
+		rv, rvErr := fromJson(ResourceViewOneOfflineQuorum)
+
+		m.ExpectedCalls = []*mock.Call{
+			{Method: "GetResourceView", Arguments: mock.Arguments{mock.Anything, mock.Anything}, ReturnArguments: mock.Arguments{rv, rvErr}},
+			{Method: "Get", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3"}, ReturnArguments: mock.Arguments{lapi.Resource{}, nil}},
+			{Method: "MakeAvailable", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", lapi.ResourceMakeAvailable{Diskful: false}}, ReturnArguments: mock.Arguments{nil}},
+			{Method: "ModifyVolume", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", 0, ResourceModifyReadWriteWithTemporaryAttach}, ReturnArguments: mock.Arguments{nil}},
+		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		err := cl.Attach(context.Background(), &volume.Info{ID: ExampleResourceID, Parameters: map[string]string{"placementcount": "2"}}, "node-3")
+		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false)
 		assert.NoError(t, err)
-		m.AssertCalled(t, "GetResourceView", mock.Anything, &lapi.ListOpts{Resource: []string{ExampleResourceID}})
-		m.AssertCalled(t, "Create", mock.Anything, expectedCreate)
-		m.AssertCalled(t, "Get", mock.Anything, ExampleResourceID, "node-3")
-		m.AssertNotCalled(t, "Activate", mock.Anything, mock.Anything, mock.Anything)
-		m.AssertNotCalled(t, "Deactivate", mock.Anything, mock.Anything, mock.Anything)
+		m.AssertExpectations(t)
 	})
 
 	t.Run("no resource with reduced diskfull resources", func(t *testing.T) {
-		expectedCreate := lapi.ResourceCreate{
-			Resource:  lapi.Resource{Name: ExampleResourceID, NodeName: "node-3", Props: map[string]string{linstor.PropertyCreatedFor: linstor.CreatedForTemporaryDisklessAttach}, Flags: []string{}},
-			LayerList: []devicelayerkind.DeviceLayerKind{devicelayerkind.Drbd, devicelayerkind.Storage},
-		}
-		expectedGetResult := lapi.Resource{}
-
 		m := mocks.ResourceProvider{}
-		m.On("GetResourceView", mock.Anything, mock.Anything).Return(fromJson(ResourceViewOneOfflineNoQuorum))
-		m.On("Create", mock.Anything, mock.Anything).Return(nil)
-		m.On("Get", mock.Anything, ExampleResourceID, "node-3").Return(expectedGetResult, nil)
+		rv, rvErr := fromJson(ResourceViewOneOfflineNoQuorum)
+
+		m.ExpectedCalls = []*mock.Call{
+			{Method: "GetResourceView", Arguments: mock.Arguments{mock.Anything, mock.Anything}, ReturnArguments: mock.Arguments{rv, rvErr}},
+			{Method: "Get", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3"}, ReturnArguments: mock.Arguments{lapi.Resource{}, nil}},
+			{Method: "MakeAvailable", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", lapi.ResourceMakeAvailable{Diskful: true}}, ReturnArguments: mock.Arguments{nil}},
+			{Method: "ModifyVolume", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", 0, ResourceModifyReadWriteWithTemporaryAttach}, ReturnArguments: mock.Arguments{nil}},
+		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		err := cl.Attach(context.Background(), &volume.Info{ID: ExampleResourceID, Parameters: map[string]string{"placementcount": "2"}}, "node-3")
+		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false)
 		assert.NoError(t, err)
-		m.AssertCalled(t, "GetResourceView", mock.Anything, &lapi.ListOpts{Resource: []string{ExampleResourceID}})
-		m.AssertCalled(t, "Create", mock.Anything, expectedCreate)
-		m.AssertCalled(t, "Get", mock.Anything, ExampleResourceID, "node-3")
-		m.AssertNotCalled(t, "Activate", mock.Anything, mock.Anything, mock.Anything)
-		m.AssertNotCalled(t, "Deactivate", mock.Anything, mock.Anything, mock.Anything)
+		m.AssertExpectations(t)
 	})
 
 	t.Run("no resource with reduced standalone resources", func(t *testing.T) {
-		expectedCreate := lapi.ResourceCreate{
-			Resource:  lapi.Resource{Name: ExampleResourceID, NodeName: "node-3", Props: map[string]string{linstor.PropertyCreatedFor: linstor.CreatedForTemporaryDisklessAttach}, Flags: []string{}},
-			LayerList: []devicelayerkind.DeviceLayerKind{devicelayerkind.Drbd, devicelayerkind.Storage},
-		}
-		expectedGetResult := lapi.Resource{}
-
 		m := mocks.ResourceProvider{}
-		m.On("GetResourceView", mock.Anything, mock.Anything).Return(fromJson(ResourceViewOneDrbdForceDisconnectNoQuorum))
-		m.On("Create", mock.Anything, mock.Anything).Return(nil)
-		m.On("Get", mock.Anything, ExampleResourceID, "node-3").Return(expectedGetResult, nil)
+		rv, rvErr := fromJson(ResourceViewOneDrbdForceDisconnectNoQuorum)
+
+		m.ExpectedCalls = []*mock.Call{
+			{Method: "GetResourceView", Arguments: mock.Arguments{mock.Anything, mock.Anything}, ReturnArguments: mock.Arguments{rv, rvErr}},
+			{Method: "Get", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3"}, ReturnArguments: mock.Arguments{lapi.Resource{}, nil}},
+			{Method: "MakeAvailable", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", lapi.ResourceMakeAvailable{Diskful: true}}, ReturnArguments: mock.Arguments{nil}},
+			{Method: "ModifyVolume", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", 0, ResourceModifyReadWriteWithTemporaryAttach}, ReturnArguments: mock.Arguments{nil}},
+		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		err := cl.Attach(context.Background(), &volume.Info{ID: ExampleResourceID, Parameters: map[string]string{"placementcount": "2"}}, "node-3")
+		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false)
 		assert.NoError(t, err)
-		m.AssertCalled(t, "GetResourceView", mock.Anything, &lapi.ListOpts{Resource: []string{ExampleResourceID}})
-		m.AssertCalled(t, "Create", mock.Anything, expectedCreate)
-		m.AssertCalled(t, "Get", mock.Anything, ExampleResourceID, "node-3")
-		m.AssertNotCalled(t, "Activate", mock.Anything, mock.Anything, mock.Anything)
-		m.AssertNotCalled(t, "Deactivate", mock.Anything, mock.Anything, mock.Anything)
+		m.AssertExpectations(t)
 	})
 
-	t.Run("existing resource shared storage pool", func(t *testing.T) {
+	t.Run("existing resource shared storage pool and read only", func(t *testing.T) {
 		m := mocks.ResourceProvider{}
-		m.On("GetResourceView", mock.Anything, mock.Anything).Return(fromJson(ResourceViewSharedStoragePool))
-		m.On("Deactivate", mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		m.On("Activate", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		rv, rvErr := fromJson(ResourceViewSharedStoragePool)
+
+		m.ExpectedCalls = []*mock.Call{
+			{Method: "GetResourceView", Arguments: mock.Arguments{mock.Anything, mock.Anything}, ReturnArguments: mock.Arguments{rv, rvErr}},
+			{Method: "Deactivate", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-0"}, ReturnArguments: mock.Arguments{nil}},
+			{Method: "Activate", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-2"}, ReturnArguments: mock.Arguments{nil}},
+			{Method: "ModifyVolume", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-2", 0, ResourceModifyReadOnly}, ReturnArguments: mock.Arguments{nil}},
+		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
-		err := cl.Attach(context.Background(), &volume.Info{ID: ExampleResourceID, Parameters: map[string]string{"placementcount": "2"}}, "node-2")
+
+		err := cl.Attach(context.Background(), ExampleResourceID, "node-2", true)
 		assert.NoError(t, err)
-		m.AssertCalled(t, "GetResourceView", mock.Anything, &lapi.ListOpts{Resource: []string{ExampleResourceID}})
-		m.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
-		m.AssertNotCalled(t, "Get", mock.Anything, mock.Anything)
-		m.AssertCalled(t, "Deactivate", mock.Anything, ExampleResourceID, "node-0")
-		m.AssertCalled(t, "Activate", mock.Anything, ExampleResourceID, "node-2")
+		m.AssertExpectations(t)
 	})
 }
 
@@ -315,7 +306,7 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		params           map[string]string
+		storagePool      string
 		topology         map[string]string
 		expectedCapacity int64
 	}{
@@ -338,17 +329,13 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 			expectedCapacity: (2 + 4) * 1024,
 		},
 		{
-			name: "just pool-a from params",
-			params: map[string]string{
-				"StoragePool": "pool-a",
-			},
+			name:             "just pool-a from params",
+			storagePool:      "pool-a",
 			expectedCapacity: (1 + 2) * 1024,
 		},
 		{
-			name: "just pool-b from params",
-			params: map[string]string{
-				"StoragePool": "pool-b",
-			},
+			name:             "just pool-b from params",
+			storagePool:      "pool-b",
 			expectedCapacity: (3 + 4) * 1024,
 		},
 		{
@@ -386,7 +373,7 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 		testcase := &testcases[i]
 
 		t.Run(testcase.name, func(t *testing.T) {
-			cap, err := cl.CapacityBytes(context.Background(), testcase.params, testcase.topology)
+			cap, err := cl.CapacityBytes(context.Background(), testcase.storagePool, testcase.topology)
 			assert.NoError(t, err)
 			assert.Equal(t, testcase.expectedCapacity, cap)
 		})

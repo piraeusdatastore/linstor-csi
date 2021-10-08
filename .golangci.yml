@@ -45,7 +45,6 @@ linters:
     - exportloopref
     - exhaustive
     - gocritic
-    - goerr113
     - gofumpt
     - whitespace
     - wsl
@@ -60,7 +59,6 @@ issues:
         - errcheck
         - dupl
         - gosec
-
   # Maximum issues count per one linter. Set to 0 to disable. Default is 50.
   max-issues-per-linter: 0
 

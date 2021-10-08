@@ -86,7 +86,7 @@ func (_m *NodeProvider) Delete(ctx context.Context, nodeName string) error {
 }
 
 // DeleteNetinterface provides a mock function with given fields: ctx, nodeName, nifName
-func (_m *NodeProvider) DeleteNetinterface(ctx context.Context, nodeName string, nifName string) error {
+func (_m *NodeProvider) DeleteNetinterface(ctx context.Context, nodeName, nifName string) error {
 	ret := _m.Called(ctx, nodeName, nifName)
 
 	var r0 error
@@ -100,12 +100,26 @@ func (_m *NodeProvider) DeleteNetinterface(ctx context.Context, nodeName string,
 }
 
 // DeleteStoragePool provides a mock function with given fields: ctx, nodeName, spName
-func (_m *NodeProvider) DeleteStoragePool(ctx context.Context, nodeName string, spName string) error {
+func (_m *NodeProvider) DeleteStoragePool(ctx context.Context, nodeName, spName string) error {
 	ret := _m.Called(ctx, nodeName, spName)
 
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
 		r0 = rf(ctx, nodeName, spName)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// Evict provides a mock function with given fields: ctx, nodeName
+func (_m *NodeProvider) Evict(ctx context.Context, nodeName string) error {
+	ret := _m.Called(ctx, nodeName)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = rf(ctx, nodeName)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -172,7 +186,7 @@ func (_m *NodeProvider) GetAll(ctx context.Context, opts ...*client.ListOpts) ([
 }
 
 // GetNetInterface provides a mock function with given fields: ctx, nodeName, nifName, opts
-func (_m *NodeProvider) GetNetInterface(ctx context.Context, nodeName string, nifName string, opts ...*client.ListOpts) (client.NetInterface, error) {
+func (_m *NodeProvider) GetNetInterface(ctx context.Context, nodeName, nifName string, opts ...*client.ListOpts) (client.NetInterface, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -260,7 +274,7 @@ func (_m *NodeProvider) GetPhysicalStorage(ctx context.Context, opts ...*client.
 }
 
 // GetPropsInfos provides a mock function with given fields: ctx, opts
-func (_m *NodeProvider) GetPropsInfos(ctx context.Context, opts ...*client.ListOpts) error {
+func (_m *NodeProvider) GetPropsInfos(ctx context.Context, opts ...*client.ListOpts) ([]client.PropsInfo, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -270,18 +284,27 @@ func (_m *NodeProvider) GetPropsInfos(ctx context.Context, opts ...*client.ListO
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, ...*client.ListOpts) error); ok {
+	var r0 []client.PropsInfo
+	if rf, ok := ret.Get(0).(func(context.Context, ...*client.ListOpts) []client.PropsInfo); ok {
 		r0 = rf(ctx, opts...)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]client.PropsInfo)
+		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, ...*client.ListOpts) error); ok {
+		r1 = rf(ctx, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // GetStoragePool provides a mock function with given fields: ctx, nodeName, spName, opts
-func (_m *NodeProvider) GetStoragePool(ctx context.Context, nodeName string, spName string, opts ...*client.ListOpts) (client.StoragePool, error) {
+func (_m *NodeProvider) GetStoragePool(ctx context.Context, nodeName, spName string, opts ...*client.ListOpts) (client.StoragePool, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -309,7 +332,7 @@ func (_m *NodeProvider) GetStoragePool(ctx context.Context, nodeName string, spN
 }
 
 // GetStoragePoolPropsInfos provides a mock function with given fields: ctx, nodeName, opts
-func (_m *NodeProvider) GetStoragePoolPropsInfos(ctx context.Context, nodeName string, opts ...*client.ListOpts) error {
+func (_m *NodeProvider) GetStoragePoolPropsInfos(ctx context.Context, nodeName string, opts ...*client.ListOpts) ([]client.PropsInfo, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -319,14 +342,23 @@ func (_m *NodeProvider) GetStoragePoolPropsInfos(ctx context.Context, nodeName s
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, ...*client.ListOpts) error); ok {
+	var r0 []client.PropsInfo
+	if rf, ok := ret.Get(0).(func(context.Context, string, ...*client.ListOpts) []client.PropsInfo); ok {
 		r0 = rf(ctx, nodeName, opts...)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]client.PropsInfo)
+		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string, ...*client.ListOpts) error); ok {
+		r1 = rf(ctx, nodeName, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // GetStoragePoolView provides a mock function with given fields: ctx, opts
@@ -418,7 +450,7 @@ func (_m *NodeProvider) Modify(ctx context.Context, nodeName string, props clien
 }
 
 // ModifyNetInterface provides a mock function with given fields: ctx, nodeName, nifName, nif
-func (_m *NodeProvider) ModifyNetInterface(ctx context.Context, nodeName string, nifName string, nif client.NetInterface) error {
+func (_m *NodeProvider) ModifyNetInterface(ctx context.Context, nodeName, nifName string, nif client.NetInterface) error {
 	ret := _m.Called(ctx, nodeName, nifName, nif)
 
 	var r0 error
@@ -432,7 +464,7 @@ func (_m *NodeProvider) ModifyNetInterface(ctx context.Context, nodeName string,
 }
 
 // ModifyStoragePool provides a mock function with given fields: ctx, nodeName, spName, sp
-func (_m *NodeProvider) ModifyStoragePool(ctx context.Context, nodeName string, spName string, sp client.StoragePool) error {
+func (_m *NodeProvider) ModifyStoragePool(ctx context.Context, nodeName, spName string, sp client.StoragePool) error {
 	ret := _m.Called(ctx, nodeName, spName, sp)
 
 	var r0 error
@@ -459,13 +491,13 @@ func (_m *NodeProvider) Reconnect(ctx context.Context, nodeName string) error {
 	return r0
 }
 
-// Restore provides a mock function with given fields: ctx, nodeName
-func (_m *NodeProvider) Restore(ctx context.Context, nodeName string) error {
-	ret := _m.Called(ctx, nodeName)
+// Restore provides a mock function with given fields: ctx, nodeName, restore
+func (_m *NodeProvider) Restore(ctx context.Context, nodeName string, restore client.NodeRestore) error {
+	ret := _m.Called(ctx, nodeName, restore)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
-		r0 = rf(ctx, nodeName)
+	if rf, ok := ret.Get(0).(func(context.Context, string, client.NodeRestore) error); ok {
+		r0 = rf(ctx, nodeName, restore)
 	} else {
 		r0 = ret.Error(0)
 	}

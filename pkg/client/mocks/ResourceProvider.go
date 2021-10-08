@@ -16,7 +16,7 @@ type ResourceProvider struct {
 }
 
 // Activate provides a mock function with given fields: ctx, resName, nodeName
-func (_m *ResourceProvider) Activate(ctx context.Context, resName string, nodeName string) error {
+func (_m *ResourceProvider) Activate(ctx context.Context, resName, nodeName string) error {
 	ret := _m.Called(ctx, resName, nodeName)
 
 	var r0 error
@@ -72,7 +72,7 @@ func (_m *ResourceProvider) CreateSnapshot(ctx context.Context, snapshot client.
 }
 
 // Deactivate provides a mock function with given fields: ctx, resName, nodeName
-func (_m *ResourceProvider) Deactivate(ctx context.Context, resName string, nodeName string) error {
+func (_m *ResourceProvider) Deactivate(ctx context.Context, resName, nodeName string) error {
 	ret := _m.Called(ctx, resName, nodeName)
 
 	var r0 error
@@ -86,7 +86,7 @@ func (_m *ResourceProvider) Deactivate(ctx context.Context, resName string, node
 }
 
 // Delete provides a mock function with given fields: ctx, resName, nodeName
-func (_m *ResourceProvider) Delete(ctx context.Context, resName string, nodeName string) error {
+func (_m *ResourceProvider) Delete(ctx context.Context, resName, nodeName string) error {
 	ret := _m.Called(ctx, resName, nodeName)
 
 	var r0 error
@@ -99,13 +99,20 @@ func (_m *ResourceProvider) Delete(ctx context.Context, resName string, nodeName
 	return r0
 }
 
-// DeleteSnapshot provides a mock function with given fields: ctx, resName, snapName
-func (_m *ResourceProvider) DeleteSnapshot(ctx context.Context, resName string, snapName string) error {
-	ret := _m.Called(ctx, resName, snapName)
+// DeleteSnapshot provides a mock function with given fields: ctx, resName, snapName, nodes
+func (_m *ResourceProvider) DeleteSnapshot(ctx context.Context, resName, snapName string, nodes ...string) error {
+	_va := make([]interface{}, len(nodes))
+	for _i := range nodes {
+		_va[_i] = nodes[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, resName, snapName)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
-		r0 = rf(ctx, resName, snapName)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, ...string) error); ok {
+		r0 = rf(ctx, resName, snapName, nodes...)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -114,7 +121,7 @@ func (_m *ResourceProvider) DeleteSnapshot(ctx context.Context, resName string, 
 }
 
 // DisableDRBDProxy provides a mock function with given fields: ctx, resName, nodeAName, nodeBName
-func (_m *ResourceProvider) DisableDRBDProxy(ctx context.Context, resName string, nodeAName string, nodeBName string) error {
+func (_m *ResourceProvider) DisableDRBDProxy(ctx context.Context, resName, nodeAName, nodeBName string) error {
 	ret := _m.Called(ctx, resName, nodeAName, nodeBName)
 
 	var r0 error
@@ -127,13 +134,13 @@ func (_m *ResourceProvider) DisableDRBDProxy(ctx context.Context, resName string
 	return r0
 }
 
-// Diskful provides a mock function with given fields: ctx, resName, nodeName, storagePoolName
-func (_m *ResourceProvider) Diskful(ctx context.Context, resName string, nodeName string, storagePoolName string) error {
-	ret := _m.Called(ctx, resName, nodeName, storagePoolName)
+// Diskful provides a mock function with given fields: ctx, resName, nodeName, storagePoolName, props
+func (_m *ResourceProvider) Diskful(ctx context.Context, resName, nodeName, storagePoolName string, props *client.ToggleDiskDiskfulProps) error {
+	ret := _m.Called(ctx, resName, nodeName, storagePoolName, props)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) error); ok {
-		r0 = rf(ctx, resName, nodeName, storagePoolName)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, *client.ToggleDiskDiskfulProps) error); ok {
+		r0 = rf(ctx, resName, nodeName, storagePoolName, props)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -142,7 +149,7 @@ func (_m *ResourceProvider) Diskful(ctx context.Context, resName string, nodeNam
 }
 
 // Diskless provides a mock function with given fields: ctx, resName, nodeName, disklessPoolName
-func (_m *ResourceProvider) Diskless(ctx context.Context, resName string, nodeName string, disklessPoolName string) error {
+func (_m *ResourceProvider) Diskless(ctx context.Context, resName, nodeName, disklessPoolName string) error {
 	ret := _m.Called(ctx, resName, nodeName, disklessPoolName)
 
 	var r0 error
@@ -156,7 +163,7 @@ func (_m *ResourceProvider) Diskless(ctx context.Context, resName string, nodeNa
 }
 
 // EnableDRBDProxy provides a mock function with given fields: ctx, resName, nodeAName, nodeBName
-func (_m *ResourceProvider) EnableDRBDProxy(ctx context.Context, resName string, nodeAName string, nodeBName string) error {
+func (_m *ResourceProvider) EnableDRBDProxy(ctx context.Context, resName, nodeAName, nodeBName string) error {
 	ret := _m.Called(ctx, resName, nodeAName, nodeBName)
 
 	var r0 error
@@ -184,7 +191,7 @@ func (_m *ResourceProvider) EnableSnapshotShipping(ctx context.Context, resName 
 }
 
 // Get provides a mock function with given fields: ctx, resName, nodeName, opts
-func (_m *ResourceProvider) Get(ctx context.Context, resName string, nodeName string, opts ...*client.ListOpts) (client.Resource, error) {
+func (_m *ResourceProvider) Get(ctx context.Context, resName, nodeName string, opts ...*client.ListOpts) (client.Resource, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -242,7 +249,7 @@ func (_m *ResourceProvider) GetAll(ctx context.Context, resName string, opts ...
 }
 
 // GetConnectionPropsInfos provides a mock function with given fields: ctx, resName, opts
-func (_m *ResourceProvider) GetConnectionPropsInfos(ctx context.Context, resName string, opts ...*client.ListOpts) error {
+func (_m *ResourceProvider) GetConnectionPropsInfos(ctx context.Context, resName string, opts ...*client.ListOpts) ([]client.PropsInfo, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -252,18 +259,27 @@ func (_m *ResourceProvider) GetConnectionPropsInfos(ctx context.Context, resName
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, ...*client.ListOpts) error); ok {
+	var r0 []client.PropsInfo
+	if rf, ok := ret.Get(0).(func(context.Context, string, ...*client.ListOpts) []client.PropsInfo); ok {
 		r0 = rf(ctx, resName, opts...)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]client.PropsInfo)
+		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string, ...*client.ListOpts) error); ok {
+		r1 = rf(ctx, resName, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // GetConnections provides a mock function with given fields: ctx, resName, nodeAName, nodeBName, opts
-func (_m *ResourceProvider) GetConnections(ctx context.Context, resName string, nodeAName string, nodeBName string, opts ...*client.ListOpts) ([]client.ResourceConnection, error) {
+func (_m *ResourceProvider) GetConnections(ctx context.Context, resName, nodeAName, nodeBName string, opts ...*client.ListOpts) ([]client.ResourceConnection, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -293,7 +309,7 @@ func (_m *ResourceProvider) GetConnections(ctx context.Context, resName string, 
 }
 
 // GetPropsInfos provides a mock function with given fields: ctx, resName, opts
-func (_m *ResourceProvider) GetPropsInfos(ctx context.Context, resName string, opts ...*client.ListOpts) error {
+func (_m *ResourceProvider) GetPropsInfos(ctx context.Context, resName string, opts ...*client.ListOpts) ([]client.PropsInfo, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -303,14 +319,23 @@ func (_m *ResourceProvider) GetPropsInfos(ctx context.Context, resName string, o
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, ...*client.ListOpts) error); ok {
+	var r0 []client.PropsInfo
+	if rf, ok := ret.Get(0).(func(context.Context, string, ...*client.ListOpts) []client.PropsInfo); ok {
 		r0 = rf(ctx, resName, opts...)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]client.PropsInfo)
+		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string, ...*client.ListOpts) error); ok {
+		r1 = rf(ctx, resName, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // GetResourceView provides a mock function with given fields: ctx, opts
@@ -344,7 +369,7 @@ func (_m *ResourceProvider) GetResourceView(ctx context.Context, opts ...*client
 }
 
 // GetSnapshot provides a mock function with given fields: ctx, resName, snapName, opts
-func (_m *ResourceProvider) GetSnapshot(ctx context.Context, resName string, snapName string, opts ...*client.ListOpts) (client.Snapshot, error) {
+func (_m *ResourceProvider) GetSnapshot(ctx context.Context, resName, snapName string, opts ...*client.ListOpts) (client.Snapshot, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -462,7 +487,7 @@ func (_m *ResourceProvider) GetSnapshots(ctx context.Context, resName string, op
 }
 
 // GetVolume provides a mock function with given fields: ctx, resName, nodeName, volNr, opts
-func (_m *ResourceProvider) GetVolume(ctx context.Context, resName string, nodeName string, volNr int, opts ...*client.ListOpts) (client.Volume, error) {
+func (_m *ResourceProvider) GetVolume(ctx context.Context, resName, nodeName string, volNr int, opts ...*client.ListOpts) (client.Volume, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -490,7 +515,7 @@ func (_m *ResourceProvider) GetVolume(ctx context.Context, resName string, nodeN
 }
 
 // GetVolumeDefinitionPropsInfos provides a mock function with given fields: ctx, resName, opts
-func (_m *ResourceProvider) GetVolumeDefinitionPropsInfos(ctx context.Context, resName string, opts ...*client.ListOpts) error {
+func (_m *ResourceProvider) GetVolumeDefinitionPropsInfos(ctx context.Context, resName string, opts ...*client.ListOpts) ([]client.PropsInfo, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -500,18 +525,27 @@ func (_m *ResourceProvider) GetVolumeDefinitionPropsInfos(ctx context.Context, r
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, ...*client.ListOpts) error); ok {
+	var r0 []client.PropsInfo
+	if rf, ok := ret.Get(0).(func(context.Context, string, ...*client.ListOpts) []client.PropsInfo); ok {
 		r0 = rf(ctx, resName, opts...)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]client.PropsInfo)
+		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string, ...*client.ListOpts) error); ok {
+		r1 = rf(ctx, resName, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // GetVolumePropsInfos provides a mock function with given fields: ctx, resName, nodeName, opts
-func (_m *ResourceProvider) GetVolumePropsInfos(ctx context.Context, resName string, nodeName string, opts ...*client.ListOpts) error {
+func (_m *ResourceProvider) GetVolumePropsInfos(ctx context.Context, resName, nodeName string, opts ...*client.ListOpts) ([]client.PropsInfo, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -521,18 +555,27 @@ func (_m *ResourceProvider) GetVolumePropsInfos(ctx context.Context, resName str
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, ...*client.ListOpts) error); ok {
+	var r0 []client.PropsInfo
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, ...*client.ListOpts) []client.PropsInfo); ok {
 		r0 = rf(ctx, resName, nodeName, opts...)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]client.PropsInfo)
+		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, ...*client.ListOpts) error); ok {
+		r1 = rf(ctx, resName, nodeName, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // GetVolumes provides a mock function with given fields: ctx, resName, nodeName, opts
-func (_m *ResourceProvider) GetVolumes(ctx context.Context, resName string, nodeName string, opts ...*client.ListOpts) ([]client.Volume, error) {
+func (_m *ResourceProvider) GetVolumes(ctx context.Context, resName, nodeName string, opts ...*client.ListOpts) ([]client.Volume, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -562,7 +605,7 @@ func (_m *ResourceProvider) GetVolumes(ctx context.Context, resName string, node
 }
 
 // MakeAvailable provides a mock function with given fields: ctx, resName, nodeName, makeAvailable
-func (_m *ResourceProvider) MakeAvailable(ctx context.Context, resName string, nodeName string, makeAvailable client.ResourceMakeAvailable) error {
+func (_m *ResourceProvider) MakeAvailable(ctx context.Context, resName, nodeName string, makeAvailable client.ResourceMakeAvailable) error {
 	ret := _m.Called(ctx, resName, nodeName, makeAvailable)
 
 	var r0 error
@@ -576,7 +619,7 @@ func (_m *ResourceProvider) MakeAvailable(ctx context.Context, resName string, n
 }
 
 // Migrate provides a mock function with given fields: ctx, resName, fromNodeName, toNodeName, storagePoolName
-func (_m *ResourceProvider) Migrate(ctx context.Context, resName string, fromNodeName string, toNodeName string, storagePoolName string) error {
+func (_m *ResourceProvider) Migrate(ctx context.Context, resName, fromNodeName, toNodeName, storagePoolName string) error {
 	ret := _m.Called(ctx, resName, fromNodeName, toNodeName, storagePoolName)
 
 	var r0 error
@@ -590,11 +633,11 @@ func (_m *ResourceProvider) Migrate(ctx context.Context, resName string, fromNod
 }
 
 // Modify provides a mock function with given fields: ctx, resName, nodeName, props
-func (_m *ResourceProvider) Modify(ctx context.Context, resName string, nodeName string, props client.ResourceDefinitionModify) error {
+func (_m *ResourceProvider) Modify(ctx context.Context, resName, nodeName string, props client.GenericPropsModify) error {
 	ret := _m.Called(ctx, resName, nodeName, props)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, client.ResourceDefinitionModify) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, client.GenericPropsModify) error); ok {
 		r0 = rf(ctx, resName, nodeName, props)
 	} else {
 		r0 = ret.Error(0)
@@ -604,7 +647,7 @@ func (_m *ResourceProvider) Modify(ctx context.Context, resName string, nodeName
 }
 
 // ModifyConnection provides a mock function with given fields: ctx, resName, nodeAName, nodeBName, props
-func (_m *ResourceProvider) ModifyConnection(ctx context.Context, resName string, nodeAName string, nodeBName string, props client.GenericPropsModify) error {
+func (_m *ResourceProvider) ModifyConnection(ctx context.Context, resName, nodeAName, nodeBName string, props client.GenericPropsModify) error {
 	ret := _m.Called(ctx, resName, nodeAName, nodeBName, props)
 
 	var r0 error
@@ -632,7 +675,7 @@ func (_m *ResourceProvider) ModifyDRBDProxy(ctx context.Context, resName string,
 }
 
 // ModifyVolume provides a mock function with given fields: ctx, resName, nodeName, volNr, props
-func (_m *ResourceProvider) ModifyVolume(ctx context.Context, resName string, nodeName string, volNr int, props client.GenericPropsModify) error {
+func (_m *ResourceProvider) ModifyVolume(ctx context.Context, resName, nodeName string, volNr int, props client.GenericPropsModify) error {
 	ret := _m.Called(ctx, resName, nodeName, volNr, props)
 
 	var r0 error
@@ -667,7 +710,7 @@ func (_m *ResourceProvider) QueryMaxVolumeSize(ctx context.Context, filter clien
 }
 
 // RestoreSnapshot provides a mock function with given fields: ctx, origResName, snapName, snapRestoreConf
-func (_m *ResourceProvider) RestoreSnapshot(ctx context.Context, origResName string, snapName string, snapRestoreConf client.SnapshotRestore) error {
+func (_m *ResourceProvider) RestoreSnapshot(ctx context.Context, origResName, snapName string, snapRestoreConf client.SnapshotRestore) error {
 	ret := _m.Called(ctx, origResName, snapName, snapRestoreConf)
 
 	var r0 error
@@ -681,7 +724,7 @@ func (_m *ResourceProvider) RestoreSnapshot(ctx context.Context, origResName str
 }
 
 // RestoreVolumeDefinitionSnapshot provides a mock function with given fields: ctx, origResName, snapName, snapRestoreConf
-func (_m *ResourceProvider) RestoreVolumeDefinitionSnapshot(ctx context.Context, origResName string, snapName string, snapRestoreConf client.SnapshotRestore) error {
+func (_m *ResourceProvider) RestoreVolumeDefinitionSnapshot(ctx context.Context, origResName, snapName string, snapRestoreConf client.SnapshotRestore) error {
 	ret := _m.Called(ctx, origResName, snapName, snapRestoreConf)
 
 	var r0 error
@@ -695,7 +738,7 @@ func (_m *ResourceProvider) RestoreVolumeDefinitionSnapshot(ctx context.Context,
 }
 
 // RollbackSnapshot provides a mock function with given fields: ctx, resName, snapName
-func (_m *ResourceProvider) RollbackSnapshot(ctx context.Context, resName string, snapName string) error {
+func (_m *ResourceProvider) RollbackSnapshot(ctx context.Context, resName, snapName string) error {
 	ret := _m.Called(ctx, resName, snapName)
 
 	var r0 error

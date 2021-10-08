@@ -28,6 +28,6 @@ import (
 
 // Interface determines where to place volumes and where they are accessible from.
 type Interface interface {
-	Create(ctx context.Context, vol *volume.Info, req *csi.CreateVolumeRequest) error
-	AccessibleTopologies(ctx context.Context, vol *volume.Info) ([]*csi.Topology, error)
+	Create(ctx context.Context, volId string, params *volume.Parameters, topologies *csi.TopologyRequirement) error
+	AccessibleTopologies(ctx context.Context, volId string, allowRemoteAccess bool) ([]*csi.Topology, error)
 }

@@ -37,10 +37,10 @@ func NewScheduler(c *lc.HighLevelClient) *Scheduler {
 	return &Scheduler{HighLevelClient: c}
 }
 
-func (s *Scheduler) Create(ctx context.Context, vol *volume.Info, req *csi.CreateVolumeRequest) error {
-	return s.Resources.Autoplace(ctx, vol.ID, client.AutoPlaceRequest{})
+func (s *Scheduler) Create(ctx context.Context, volId string, _ *volume.Parameters, _ *csi.TopologyRequirement) error {
+	return s.Resources.Autoplace(ctx, volId, client.AutoPlaceRequest{})
 }
 
-func (s *Scheduler) AccessibleTopologies(ctx context.Context, vol *volume.Info) ([]*csi.Topology, error) {
-	return s.GenericAccessibleTopologies(ctx, vol)
+func (s *Scheduler) AccessibleTopologies(ctx context.Context, volId string, allowDisklessAccess bool) ([]*csi.Topology, error) {
+	return s.GenericAccessibleTopologies(ctx, volId, allowDisklessAccess)
 }

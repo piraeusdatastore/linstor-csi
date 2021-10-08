@@ -43,12 +43,6 @@ func TestNewParameters(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, expected, generalProps.Properties)
-
-	unknownProp, err := volume.NewParameters(map[string]string{
-		"unknown": "something",
-	})
-	assert.NoError(t, err)
-	assert.Equal(t, map[string]string{}, unknownProp.Properties)
 }
 
 func TestDisklessFlag(t *testing.T) {

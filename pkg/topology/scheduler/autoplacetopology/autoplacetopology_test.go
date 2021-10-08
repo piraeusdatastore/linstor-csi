@@ -22,7 +22,7 @@ import (
 
 var (
 	volumeId = "test-volume"
-	vol      = volume.Info{ID: volumeId, Parameters: map[string]string{"AutoPlace": "3"}}
+	params   = &volume.Parameters{PlacementCount: 3}
 	// NB: we need this weird casting to make go happy.
 	n              = uint64(linstor.FailNotEnoughNodes)
 	autoplaceError = lapi.ApiCallError{lapi.ApiCallRc{RetCode: int64(n)}}
@@ -41,7 +41,7 @@ func TestScheduler_Create(t *testing.T) {
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{}}, ReturnArguments: mock.Arguments{nil}},
 		}
 
-		err := sched.Create(ctx, &vol, &csi.CreateVolumeRequest{})
+		err := sched.Create(ctx, volumeId, params, nil)
 		assert.NoError(t, err)
 		m.AssertExpectations(t)
 	})
@@ -54,13 +54,11 @@ func TestScheduler_Create(t *testing.T) {
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{}}}, ReturnArguments: mock.Arguments{nil}},
 		}
 
-		err := sched.Create(ctx, &vol, &csi.CreateVolumeRequest{
-			AccessibilityRequirements: &csi.TopologyRequirement{
-				Preferred: []*csi.Topology{
-					{Segments: map[string]string{topology.LinstorNodeKey: "node3"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node1"}},
-				},
+		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
+			Preferred: []*csi.Topology{
+				{Segments: map[string]string{topology.LinstorNodeKey: "node3"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node1"}},
 			},
 		})
 		assert.NoError(t, err)
@@ -76,12 +74,10 @@ func TestScheduler_Create(t *testing.T) {
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{}}}, ReturnArguments: mock.Arguments{nil}},
 		}
 
-		err := sched.Create(ctx, &vol, &csi.CreateVolumeRequest{
-			AccessibilityRequirements: &csi.TopologyRequirement{
-				Preferred: []*csi.Topology{
-					{Segments: map[string]string{topology.LinstorNodeKey: "node3"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node1"}},
-				},
+		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
+			Preferred: []*csi.Topology{
+				{Segments: map[string]string{topology.LinstorNodeKey: "node3"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node1"}},
 			},
 		})
 		assert.NoError(t, err)
@@ -97,18 +93,16 @@ func TestScheduler_Create(t *testing.T) {
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node1", "node2", "node3", "node4"}}}}, ReturnArguments: mock.Arguments{nil}},
 		}
 
-		err := sched.Create(ctx, &vol, &csi.CreateVolumeRequest{
-			AccessibilityRequirements: &csi.TopologyRequirement{
-				Requisite: []*csi.Topology{
-					{Segments: map[string]string{topology.LinstorNodeKey: "node1"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node3"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node4"}},
-				},
-				Preferred: []*csi.Topology{
-					{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node4"}},
-				},
+		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
+			Requisite: []*csi.Topology{
+				{Segments: map[string]string{topology.LinstorNodeKey: "node1"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node3"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node4"}},
+			},
+			Preferred: []*csi.Topology{
+				{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node4"}},
 			},
 		})
 		assert.NoError(t, err)
@@ -122,13 +116,11 @@ func TestScheduler_Create(t *testing.T) {
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node2", "node3", "node4"}}}}, ReturnArguments: mock.Arguments{nil}},
 		}
 
-		err := sched.Create(ctx, &vol, &csi.CreateVolumeRequest{
-			AccessibilityRequirements: &csi.TopologyRequirement{
-				Requisite: []*csi.Topology{
-					{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node3"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node4"}},
-				},
+		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
+			Requisite: []*csi.Topology{
+				{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node3"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node4"}},
 			},
 		})
 		assert.NoError(t, err)
@@ -143,13 +135,11 @@ func TestScheduler_Create(t *testing.T) {
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node2", "node3", "node4"}}}}, ReturnArguments: mock.Arguments{autoplaceError}},
 		}
 
-		err := sched.Create(ctx, &vol, &csi.CreateVolumeRequest{
-			AccessibilityRequirements: &csi.TopologyRequirement{
-				Requisite: []*csi.Topology{
-					{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node3"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node4"}},
-				},
+		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
+			Requisite: []*csi.Topology{
+				{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node3"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node4"}},
 			},
 		})
 		assert.Error(t, err)
@@ -165,12 +155,10 @@ func TestScheduler_Create(t *testing.T) {
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{}}}, ReturnArguments: mock.Arguments{nil}},
 		}
 
-		err := sched.Create(ctx, &vol, &csi.CreateVolumeRequest{
-			AccessibilityRequirements: &csi.TopologyRequirement{
-				Requisite: []*csi.Topology{
-					{Segments: map[string]string{topology.LinstorNodeKey: "node1"}},
-					{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
-				},
+		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
+			Requisite: []*csi.Topology{
+				{Segments: map[string]string{topology.LinstorNodeKey: "node1"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node2"}},
 			},
 		})
 		assert.NoError(t, err)

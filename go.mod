@@ -3,7 +3,7 @@ module github.com/piraeusdatastore/linstor-csi
 go 1.12
 
 require (
-	github.com/LINBIT/golinstor v0.35.1
+	github.com/LINBIT/golinstor v0.37.1
 	github.com/alvaroloes/enumer v1.1.2
 	github.com/container-storage-interface/spec v1.4.0
 	github.com/golang/protobuf v1.4.3

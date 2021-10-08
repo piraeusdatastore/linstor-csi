@@ -315,21 +315,11 @@ func NewScheduler(c *lc.HighLevelClient, log *logrus.Entry) (b BalanceScheduler,
 	}, nil
 }
 
-func (b BalanceScheduler) deploy(ctx context.Context, vol *volume.Info, params volume.Parameters, node string, storagePool string) error {
-	return b.Resources.Create(ctx, volToDiskfullResourceCreate(vol, params, node, storagePool))
+func (b BalanceScheduler) deploy(ctx context.Context, volId string, params *volume.Parameters, node, storagePool string) error {
+	return b.Resources.Create(ctx, volToDiskfullResourceCreate(volId, params, node, storagePool))
 }
 
-func (b BalanceScheduler) Create(ctx context.Context, vol *volume.Info, req *csi.CreateVolumeRequest) error {
-	topos := req.GetAccessibilityRequirements()
-	if topos == nil {
-		return fmt.Errorf("no volume topologies, unable to schedule volume %s", vol.ID)
-	}
-
-	params, err := volume.NewParameters(vol.Parameters)
-	if err != nil {
-		return fmt.Errorf("unable to create volume due to bad parameters %+v: %v", vol.Parameters, err)
-	}
-
+func (b BalanceScheduler) Create(ctx context.Context, volId string, params *volume.Parameters, topologies *csi.TopologyRequirement) error {
 	if params.StoragePool != "" {
 		return fmt.Errorf("placementPolicyBalance does not support choosing StoragePool, it should be picked automatically")
 	}
@@ -341,7 +331,7 @@ func (b BalanceScheduler) Create(ctx context.Context, vol *volume.Info, req *csi
 	// For now we do not support more than one Diskfull Resources so set remainingAssignments to 1
 	remainingAssignments := 1
 
-	for i, pref := range topos.GetPreferred() {
+	for i, pref := range topologies.GetPreferred() {
 		// While there are still preferred nodes and remainingAssignments
 		// attach resources diskfully to those nodes in order of most to least preferred.
 		if p, ok := pref.GetSegments()[topology.LinstorNodeKey]; ok && remainingAssignments > 0 {
@@ -349,7 +339,7 @@ func (b BalanceScheduler) Create(ctx context.Context, vol *volume.Info, req *csi
 			decision, err := pickStoragePoolTopo(ctx, p, b.Nodes, b.clientset)
 			if err != nil {
 				b.log.WithFields(logrus.Fields{
-					"volumeID":                   vol.ID,
+					"volumeID":                   volId,
 					"topologyPreference":         i,
 					"topologyNode":               p,
 					"remainingVolumeAssignments": remainingAssignments,
@@ -357,9 +347,10 @@ func (b BalanceScheduler) Create(ctx context.Context, vol *volume.Info, req *csi
 				}).Info("unable to pick StoragePool")
 				continue
 			}
-			if err := b.deploy(ctx, vol, params, decision.NodeName, decision.StoragePoolName); err != nil {
+
+			if err := b.deploy(ctx, volId, params, decision.NodeName, decision.StoragePoolName); err != nil {
 				b.log.WithFields(logrus.Fields{
-					"volumeID":                   vol.ID,
+					"volumeID":                   volId,
 					"topologyPreference":         i,
 					"topologyNode":               p,
 					"remainingVolumeAssignments": remainingAssignments,
@@ -380,20 +371,20 @@ func (b BalanceScheduler) Create(ctx context.Context, vol *volume.Info, req *csi
 
 	// We weren't able to assign any volume according to topology preferences
 	if remainingAssignments > 0 {
-		return fmt.Errorf("unable to satisfy volume topology requirements for volume %s", vol.ID)
+		return fmt.Errorf("unable to satisfy volume topology requirements for volume %s", volId)
 	}
 
 	return nil
 }
 
-func (b BalanceScheduler) AccessibleTopologies(ctx context.Context, vol *volume.Info) ([]*csi.Topology, error) {
-	r, err := b.Resources.GetAll(ctx, vol.ID)
+func (b BalanceScheduler) AccessibleTopologies(ctx context.Context, volId string, allowDisklessAccess bool) ([]*csi.Topology, error) {
+	r, err := b.Resources.GetAll(ctx, volId)
 	if err != nil {
 		return nil, fmt.Errorf("unable to determine AccessibleTopologies: %v", err)
 	}
 	nodes := util.DeployedDiskfullyNodes(r)
 	if len(nodes) == 0 {
-		return nil, fmt.Errorf("volume %s has no diskfull resource", vol.ID)
+		return nil, fmt.Errorf("volume %s has no diskfull resource", volId)
 	}
 	// all nodes will be in the same Rack so take only 1 of them
 	rack, err := retrieveRackId(ctx, b.clientset, nodes[0])
@@ -405,10 +396,10 @@ func (b BalanceScheduler) AccessibleTopologies(ctx context.Context, vol *volume.
 	}, nil
 }
 
-func volToDiskfullResourceCreate(vol *volume.Info, params volume.Parameters, node string, storagePool string) lapi.ResourceCreate {
+func volToDiskfullResourceCreate(volId string, params *volume.Parameters, node, storagePool string) lapi.ResourceCreate {
 	return lapi.ResourceCreate{
 		Resource: lapi.Resource{
-			Name:     vol.ID,
+			Name:     volId,
 			NodeName: node,
 			Props: map[string]string{
 				golinstor.KeyStorPoolName: storagePool,
