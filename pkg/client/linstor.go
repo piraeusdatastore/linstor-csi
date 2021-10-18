@@ -705,6 +705,13 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volu
 		return err
 	}
 
+	logger.Debug("reconcile volume definition from request (may expand volume)")
+
+	_, err = s.reconcileVolumeDefinition(ctx, vol)
+	if err != nil {
+		return err
+	}
+
 	logger.Debug("success")
 	return nil
 }
@@ -859,13 +866,15 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 	})
 	logger.Info("reconcile volume definition for volume")
 
+	expectedSizeKiB := uint64(data.NewKibiByte(data.ByteSize(info.SizeBytes)).Value())
+
 	logger.Debug("check if volume definition already exists")
 	vDef, err := s.client.Client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ID, 0)
 	if err == lapi.NotFoundError {
 		vdCreate := lapi.VolumeDefinitionCreate{
 			VolumeDefinition: lapi.VolumeDefinition{
 				VolumeNumber: 0,
-				SizeKib:      uint64(data.NewKibiByte(data.ByteSize(info.SizeBytes)).Value()),
+				SizeKib:      expectedSizeKiB,
 			},
 		}
 
@@ -879,6 +888,15 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 
 	if err != nil {
 		return nil, err
+	}
+
+	if vDef.SizeKib != expectedSizeKiB {
+		err := s.client.Client.ResourceDefinitions.ModifyVolumeDefinition(ctx, info.ID, 0, lapi.VolumeDefinitionModify{
+			SizeKib: expectedSizeKiB,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &vDef, nil
@@ -1178,7 +1196,31 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 		return s.mounter.Mount(source, target, fsType, mntOpts)
 	}
 
-	return s.mounter.FormatAndMount(source, target, fsType, mntOpts)
+	err = s.mounter.FormatAndMount(source, target, fsType, mntOpts)
+	if err != nil {
+		return err
+	}
+
+	resizerFs := mount.NewResizeFs(s.mounter.Exec)
+
+	resize, err := resizerFs.NeedResize(source, target)
+	if err != nil {
+		return fmt.Errorf("unable to determine if resize required: %w", err)
+	}
+
+	if resize {
+		_, err := resizerFs.Resize(source, target)
+		if err != nil {
+			unmountErr := s.Unmount(target)
+			if unmountErr != nil {
+				return fmt.Errorf("unable to unmount volume after failed resize (%s): %w", unmountErr, err)
+			}
+
+			return fmt.Errorf("unable to resize volume: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (s *Linstor) formatDevice(ctx context.Context, source, fsType string, mkfsArgs []string) error {
