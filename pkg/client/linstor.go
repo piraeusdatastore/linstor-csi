@@ -1056,6 +1056,11 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*csi.Snapshot, error) {
 	creationTimeMicroSecs := lsnap.Snapshots[0].CreateTimestamp
 	ready := slice.ContainsString(lsnap.Flags, lapiconsts.FlagSuccessful)
 
+	if creationTimeMicroSecs == nil {
+		// Some failed snapshots do not show any time values, set a default value.
+		creationTimeMicroSecs = &lapi.TimeStampMs{}
+	}
+
 	return &csi.Snapshot{
 		SnapshotId:     lsnap.Name,
 		SourceVolumeId: lsnap.ResourceName,
