@@ -30,6 +30,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/haySwim/data"
@@ -503,7 +504,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 		return nil, status.Errorf(codes.InvalidArgument, "failed to parse parameters: %v", err)
 	}
 
-	if existingVolume != nil {
+	if existingVolume != nil && strings.HasPrefix(existingVolume.Properties[linstor.PropertyProvisioningCompletedBy], "linstor-csi") {
 		log.WithField("existingVolume", existingVolume).Info("volume already present")
 
 		if existingVolume.SizeBytes != int64(volumeSize.InclusiveBytes()) {
@@ -557,7 +558,17 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 		}, nil
 	}
 
-	return d.createNewVolume(ctx, &volume.Info{ID: volId, SizeBytes: int64(volumeSize.InclusiveBytes()), ResourceGroup: params.ResourceGroup}, &params, req)
+	return d.createNewVolume(
+		ctx,
+		&volume.Info{
+			ID:            volId,
+			SizeBytes:     int64(volumeSize.InclusiveBytes()),
+			ResourceGroup: params.ResourceGroup,
+			Properties:    map[string]string{linstor.PropertyProvisioningCompletedBy: "linstor-csi/" + Version},
+		},
+		&params,
+		req,
+	)
 }
 
 // DeleteVolume https://github.com/container-storage-interface/spec/blob/v1.4.0/spec.md#deletevolume

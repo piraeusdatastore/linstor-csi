@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - When using a volume source (snapshot or other volume), LINSTOR CSI now correctly resizes the volume to the new
   requested size.
+- Switch back to `resource definition(rd) -> volume definition(vd) -> autoplace(ap)` provisioning instead of
+  `rd -> ap-> vd` as introduced in 0.16.0. This caused issues on non-thin storage pools and sometimes provisioning
+  failed even on thin storage pools.
 
 ## [0.16.0] - 2021-10-15
 
