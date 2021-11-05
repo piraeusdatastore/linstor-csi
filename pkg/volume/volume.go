@@ -31,6 +31,7 @@ type Info struct {
 	ID            string
 	SizeBytes     int64
 	ResourceGroup string
+	Properties    map[string]string
 }
 
 // Assignment represents a volume situated on a particular node.

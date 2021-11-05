@@ -211,10 +211,19 @@ func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinitionWithV
 		return nil
 	}
 
+	props := make(map[string]string)
+
+	for k, v := range resDef.Props {
+		if strings.HasPrefix(k, lapiconsts.NamespcAuxiliary+"/") {
+			props[k] = v
+		}
+	}
+
 	return &volume.Info{
 		ID:            resDef.Name,
 		SizeBytes:     int64(resDef.VolumeDefinitions[0].SizeKib << 10),
 		ResourceGroup: resDef.ResourceGroupName,
+		Properties:    props,
 	}
 }
 
@@ -276,8 +285,14 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, params *volume.P
 		return err
 	}
 
-	// NB: We explicitly place the volume before we create the volume definition. The volume definition is our
-	// marker that the volume is ready to be used, so it has to be the last thing to be created.
+	logger.Debug("reconcile volume definition for volume")
+
+	_, err = s.reconcileVolumeDefinition(ctx, vol)
+	if err != nil {
+		logger.Debugf("reconcile volume definition failed: %v", err)
+		return err
+	}
+
 	logger.Debug("reconcile volume placement")
 
 	err = s.reconcileResourcePlacement(ctx, vol, params, topologies)
@@ -286,11 +301,11 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, params *volume.P
 		return err
 	}
 
-	logger.Debug("reconcile volume definition for volume")
+	logger.Debug("reconcile extra properties")
 
-	_, err = s.reconcileVolumeDefinition(ctx, vol)
+	err = s.client.ResourceDefinitions.Modify(ctx, vol.ID, lapi.GenericPropsModify{OverrideProps: vol.Properties})
 	if err != nil {
-		logger.Debugf("reconcile volume definition failed: %v", err)
+		logger.Debugf("reconcile extra properties failed: %v", err)
 		return err
 	}
 
@@ -709,6 +724,14 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volu
 
 	_, err = s.reconcileVolumeDefinition(ctx, vol)
 	if err != nil {
+		return err
+	}
+
+	logger.Debug("reconcile extra properties")
+
+	err = s.client.ResourceDefinitions.Modify(ctx, vol.ID, lapi.GenericPropsModify{OverrideProps: vol.Properties})
+	if err != nil {
+		logger.Debugf("reconcile extra properties failed: %v", err)
 		return err
 	}
 

@@ -27,6 +27,10 @@ const (
 	// are stored.
 	LegacyParameterPassKey = lc.NamespcAuxiliary + "/csi-volume-annotations"
 
+	// PropertyProvisioningCompletedBy is the Aux props key in LINSTOR intentifying this resource as
+	// fully provisioned by this plugin.
+	PropertyProvisioningCompletedBy = lc.NamespcAuxiliary + "/csi-provisioning-completed-by"
+
 	// PropertyCreatedFor is the Aux props key in linstor used to identify why a specific object (for example, a
 	// resource) exists.
 	PropertyCreatedFor = lc.NamespcAuxiliary + "/csi-created-for"
