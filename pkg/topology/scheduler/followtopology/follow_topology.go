@@ -113,6 +113,6 @@ func deleteSegment(topos []*csi.Topology, segment map[string]string) []*csi.Topo
 	return topos
 }
 
-func (s *Scheduler) AccessibleTopologies(ctx context.Context, volId string, allowDisklessAccess bool) ([]*csi.Topology, error) {
-	return s.GenericAccessibleTopologies(ctx, volId, allowDisklessAccess)
+func (s *Scheduler) AccessibleTopologies(ctx context.Context, volId string, remoteAccessPolicy volume.RemoteAccessPolicy) ([]*csi.Topology, error) {
+	return s.GenericAccessibleTopologies(ctx, volId, remoteAccessPolicy)
 }

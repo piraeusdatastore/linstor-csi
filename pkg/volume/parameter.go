@@ -76,7 +76,7 @@ type Parameters struct {
 	// Encrypt volumes if true.
 	Encryption bool
 	// AllowRemoteVolumeAccess if true, volumes may be accessed over the network.
-	AllowRemoteVolumeAccess bool
+	AllowRemoteVolumeAccess RemoteAccessPolicy
 	// LayerList is a list that corresponds to the `linstor resource create`
 	// option of the same name.
 	LayerList []devicelayerkind.DeviceLayerKind
@@ -92,6 +92,9 @@ type Parameters struct {
 
 const DefaultDisklessStoragePoolName = "DfltDisklessStorPool"
 
+// DefaultRemoteAccessPolicy is the access policy used by default when none is specified.
+var DefaultRemoteAccessPolicy = RemoteAccessPolicyAnywhere
+
 // NewParameters parses out the raw parameters we get and sets appropriate
 // zero values
 func NewParameters(params map[string]string) (Parameters, error) {
@@ -102,7 +105,7 @@ func NewParameters(params map[string]string) (Parameters, error) {
 		DisklessStoragePool:     DefaultDisklessStoragePoolName,
 		Encryption:              false,
 		PlacementPolicy:         topology.AutoPlaceTopology,
-		AllowRemoteVolumeAccess: true,
+		AllowRemoteVolumeAccess: DefaultRemoteAccessPolicy,
 		Properties:              make(map[string]string),
 	}
 
@@ -188,12 +191,13 @@ func NewParameters(params map[string]string) (Parameters, error) {
 
 			p.Disklessonremaining = d
 		case allowremotevolumeaccess:
-			a, err := strconv.ParseBool(v)
+			var policy RemoteAccessPolicy
+			err := policy.UnmarshalText([]byte(v))
 			if err != nil {
 				return p, err
 			}
 
-			p.AllowRemoteVolumeAccess = a
+			p.AllowRemoteVolumeAccess = policy
 		case clientlist:
 			p.ClientList = strings.Split(v, " ")
 		case placementpolicy:

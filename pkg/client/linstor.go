@@ -598,6 +598,8 @@ func (s *Linstor) Detach(ctx context.Context, volId, node string) error {
 
 // CapacityBytes returns the amount of free space in the storage pool specified by the params and topology.
 func (s *Linstor) CapacityBytes(ctx context.Context, storagePool string, segments map[string]string) (int64, error) {
+	log := s.log.WithField("storage-pool", storagePool).WithField("segments", segments)
+
 	var requestedStoragePools []string
 
 	for k := range segments {
@@ -606,10 +608,15 @@ func (s *Linstor) CapacityBytes(ctx context.Context, storagePool string, segment
 		}
 	}
 
+	log.Trace("request nodes for segments")
+
 	requestedNodes, err := s.client.NodesForTopology(ctx, segments)
 	if err != nil {
 		return 0, fmt.Errorf("unable to get capacity: %w", err)
 	}
+
+	log.WithField("nodes", requestedNodes).Trace("got nodes")
+	log.Trace("get storage pools")
 
 	pools, err := s.client.Nodes.GetStoragePoolView(ctx)
 	if err != nil {
@@ -618,17 +625,20 @@ func (s *Linstor) CapacityBytes(ctx context.Context, storagePool string, segment
 
 	var total int64
 	for _, sp := range pools {
+		log := log.WithField("pool-to-check", sp.StoragePoolName).WithField("node", sp.NodeName)
+
 		if !slice.ContainsString(requestedNodes, sp.NodeName) {
-			// Not a requested node
+			log.Trace("not an allowed node")
 			continue
 		}
 
 		if len(requestedStoragePools) > 0 && !slice.ContainsString(requestedStoragePools, sp.StoragePoolName) {
-			// Not a requested storage pool
+			log.Trace("not an allowed storage pool")
 			continue
 		}
 
 		if storagePool == "" || storagePool == sp.StoragePoolName {
+			log.Trace("adding storage pool capacity")
 			total += sp.FreeCapacity
 		}
 	}

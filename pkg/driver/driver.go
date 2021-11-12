@@ -782,11 +782,32 @@ func (d Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*
 		return nil, status.Errorf(codes.InvalidArgument, "invalid parameters: %v", err)
 	}
 
-	bytes, err := d.Storage.CapacityBytes(ctx, params.StoragePool, req.GetAccessibleTopology().GetSegments())
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "%v", err)
+	d.log.WithFields(logrus.Fields{
+		"parameters": params,
+		"topology":   req.GetAccessibleTopology(),
+	}).Debug("got capacity request")
+
+	// Get the labels for nodes we are allowed to "share" per remote access policy.
+	accessibleSegments := params.AllowRemoteVolumeAccess.AccessibleSegments(req.GetAccessibleTopology().GetSegments())
+
+	d.log.WithField("accessible", accessibleSegments).Trace("got accessible segments for parameters")
+
+	maxCap := int64(0)
+
+	for _, segment := range accessibleSegments {
+		d.log.WithField("segment", segment).Debug("Checking capacity of segment")
+
+		bytes, err := d.Storage.CapacityBytes(ctx, params.StoragePool, segment)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "%v", err)
+		}
+
+		if bytes > maxCap {
+			maxCap = bytes
+		}
 	}
-	return &csi.GetCapacityResponse{AvailableCapacity: bytes}, nil
+
+	return &csi.GetCapacityResponse{AvailableCapacity: maxCap}, nil
 }
 
 // ControllerGetCapabilities https://github.com/container-storage-interface/spec/blob/v1.4.0/spec.md#controllergetcapabilities

@@ -22,7 +22,7 @@ import (
 
 var (
 	volumeId = "test-volume"
-	params   = &volume.Parameters{PlacementCount: 3}
+	params   = &volume.Parameters{PlacementCount: 3, AllowRemoteVolumeAccess: volume.RemoteAccessPolicyLocalOnly}
 	// NB: we need this weird casting to make go happy.
 	n              = uint64(linstor.FailNotEnoughNodes)
 	autoplaceError = lapi.ApiCallError{lapi.ApiCallRc{RetCode: int64(n)}}
@@ -31,12 +31,11 @@ var (
 func TestScheduler_Create(t *testing.T) {
 	ctx := context.Background()
 
-	m := mocks.ResourceProvider{}
-	sched := autoplacetopology.NewScheduler(&lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, logrus.WithField("test", t.Name()))
-
 	t.Run("no requirements", func(t *testing.T) {
 		// Asserts that if no requirement is given, normal autoplace is performed
-		m.Calls = nil
+		m := mocks.ResourceProvider{}
+		sched := autoplacetopology.NewScheduler(&lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, logrus.WithField("test", t.Name()))
+
 		m.ExpectedCalls = []*mock.Call{
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{}}, ReturnArguments: mock.Arguments{nil}},
 		}
@@ -48,7 +47,9 @@ func TestScheduler_Create(t *testing.T) {
 
 	t.Run("preferred", func(t *testing.T) {
 		// Asserts that, if only preferred topologies are given, one is created first
-		m.Calls = nil
+		m := mocks.ResourceProvider{}
+		sched := autoplacetopology.NewScheduler(&lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, logrus.WithField("test", t.Name()))
+
 		m.ExpectedCalls = []*mock.Call{
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{PlaceCount: 1, NodeNameList: []string{"node3"}}}}, ReturnArguments: mock.Arguments{nil}},
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{}}}, ReturnArguments: mock.Arguments{nil}},
@@ -67,7 +68,9 @@ func TestScheduler_Create(t *testing.T) {
 
 	t.Run("preferred with failure", func(t *testing.T) {
 		// Asserts that, if only preferred topologies are given, one is created first
-		m.Calls = nil
+		m := mocks.ResourceProvider{}
+		sched := autoplacetopology.NewScheduler(&lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, logrus.WithField("test", t.Name()))
+
 		m.ExpectedCalls = []*mock.Call{
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{PlaceCount: 1, NodeNameList: []string{"node3"}}}}, ReturnArguments: mock.Arguments{autoplaceError}},
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{PlaceCount: 1, NodeNameList: []string{"node1"}}}}, ReturnArguments: mock.Arguments{nil}},
@@ -87,7 +90,9 @@ func TestScheduler_Create(t *testing.T) {
 	t.Run("requisite + preferred", func(t *testing.T) {
 		// Asserts that, if both requisite and preferred are given, first we try to place the preferred, then pick from
 		// the remaining requisites
-		m.Calls = nil
+		m := mocks.ResourceProvider{}
+		sched := autoplacetopology.NewScheduler(&lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, logrus.WithField("test", t.Name()))
+
 		m.ExpectedCalls = []*mock.Call{
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{PlaceCount: 1, NodeNameList: []string{"node2"}}}}, ReturnArguments: mock.Arguments{nil}},
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node1", "node2", "node3", "node4"}}}}, ReturnArguments: mock.Arguments{nil}},
@@ -111,7 +116,9 @@ func TestScheduler_Create(t *testing.T) {
 
 	t.Run("requisite", func(t *testing.T) {
 		// Asserts that using only requisites will require placement on (one of) these nodes
-		m.Calls = nil
+		m := mocks.ResourceProvider{}
+		sched := autoplacetopology.NewScheduler(&lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, logrus.WithField("test", t.Name()))
+
 		m.ExpectedCalls = []*mock.Call{
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node2", "node3", "node4"}}}}, ReturnArguments: mock.Arguments{nil}},
 		}
@@ -129,7 +136,8 @@ func TestScheduler_Create(t *testing.T) {
 
 	t.Run("requisite impossible", func(t *testing.T) {
 		// Asserts that scheduling reports an error in case non of the requisites could be fulfilled
-		m.Calls = nil
+		m := mocks.ResourceProvider{}
+		sched := autoplacetopology.NewScheduler(&lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, logrus.WithField("test", t.Name()))
 
 		m.ExpectedCalls = []*mock.Call{
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node2", "node3", "node4"}}}}, ReturnArguments: mock.Arguments{autoplaceError}},
@@ -149,7 +157,9 @@ func TestScheduler_Create(t *testing.T) {
 
 	t.Run("requisite + autoplace", func(t *testing.T) {
 		// Asserts that after filling requisites, the remaining replicas are placed using autoplace.
-		m.Calls = nil
+		m := mocks.ResourceProvider{}
+		sched := autoplacetopology.NewScheduler(&lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, logrus.WithField("test", t.Name()))
+
 		m.ExpectedCalls = []*mock.Call{
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{PlaceCount: 2, NodeNameList: []string{"node1", "node2"}}}}, ReturnArguments: mock.Arguments{nil}},
 			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{}}}, ReturnArguments: mock.Arguments{nil}},
