@@ -324,9 +324,8 @@ func (b BalanceScheduler) Create(ctx context.Context, volId string, params *volu
 		return fmt.Errorf("placementPolicyBalance does not support choosing StoragePool, it should be picked automatically")
 	}
 
-	if !params.AllowRemoteVolumeAccess {
-		return fmt.Errorf("placementPolicyBalance cannot work on on local storage")
-	}
+	// TODO: There was a check once for remote volume access. Should be reintroduces, or preferrably, this whole
+	// scheduler should be nuked from orbit.
 
 	// For now we do not support more than one Diskfull Resources so set remainingAssignments to 1
 	remainingAssignments := 1
@@ -377,7 +376,7 @@ func (b BalanceScheduler) Create(ctx context.Context, volId string, params *volu
 	return nil
 }
 
-func (b BalanceScheduler) AccessibleTopologies(ctx context.Context, volId string, allowDisklessAccess bool) ([]*csi.Topology, error) {
+func (b BalanceScheduler) AccessibleTopologies(ctx context.Context, volId string, remoteAccessPolicy volume.RemoteAccessPolicy) ([]*csi.Topology, error) {
 	r, err := b.Resources.GetAll(ctx, volId)
 	if err != nil {
 		return nil, fmt.Errorf("unable to determine AccessibleTopologies: %v", err)

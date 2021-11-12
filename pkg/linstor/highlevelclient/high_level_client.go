@@ -21,7 +21,9 @@ package highlevelclient
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	linstor "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 
@@ -46,7 +48,7 @@ func NewHighLevelClient(options ...lapi.Option) (*HighLevelClient, error) {
 
 // GenericAccessibleTopologies returns topologies based on linstor storage pools
 // and whether a resource is allowed to be accessed over the network.
-func (c *HighLevelClient) GenericAccessibleTopologies(ctx context.Context, volId string, allowDisklessAccess bool) ([]*csi.Topology, error) {
+func (c *HighLevelClient) GenericAccessibleTopologies(ctx context.Context, volId string, remoteAcecssPolicy volume.RemoteAccessPolicy) ([]*csi.Topology, error) {
 	// Get all nodes where the resource is physically located.
 	r, err := c.Resources.GetAll(ctx, volId)
 	if err != nil {
@@ -54,30 +56,32 @@ func (c *HighLevelClient) GenericAccessibleTopologies(ctx context.Context, volId
 	}
 
 	// Volume is definitely accessible on the nodes it's deployed on.
-	nodes := util.DeployedDiskfullyNodes(r)
-	topos := make([]*csi.Topology, 0)
-	for _, node := range nodes {
-		topos = append(topos, &csi.Topology{Segments: map[string]string{topology.LinstorNodeKey: node}})
+	nodeNames := util.DeployedDiskfullyNodes(r)
+
+	nodes, err := c.Nodes.GetAll(ctx, &lapi.ListOpts{Node: nodeNames})
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch diskful nodes: %w", err)
 	}
 
-	// If remote access is allowed, give access to all nodes with diskless storage pool.
-	if allowDisklessAccess {
-		rd, err := c.ResourceDefinitions.Get(ctx, volId)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get resource definition to determine diskless storage pools: %w", err)
+	var topos []*csi.Topology
+
+	for i := range nodes {
+		segs := make(map[string]string)
+
+		for k, v := range nodes[i].Props {
+			if strings.HasPrefix(k, linstor.NamespcAuxiliary+"/") {
+				segs[k[len(linstor.NamespcAuxiliary+"/"):]] = v
+			}
 		}
 
-		rg, err := c.ResourceGroups.Get(ctx, rd.ResourceGroupName)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get resource grouos to determine diskless storage pools: %w", err)
-		}
+		for _, m := range remoteAcecssPolicy.AccessibleSegments(segs) {
+			if len(m) == 0 {
+				// Empty segment -> access allowed from everywhere.
+				// This is special cased, otherwise CSI chokes on an empty segment map.
+				return nil, nil
+			}
 
-		if len(rg.SelectFilter.StoragePoolDisklessList) == 0 {
-			rg.SelectFilter.StoragePoolDisklessList = []string{volume.DefaultDisklessStoragePoolName}
-		}
-
-		for _, pool := range rg.SelectFilter.StoragePoolDisklessList {
-			topos = append(topos, &csi.Topology{Segments: map[string]string{topology.ToStoragePoolLabel(pool): topology.LinstorStoragePoolValue}})
+			topos = append(topos, &csi.Topology{Segments: m})
 		}
 	}
 

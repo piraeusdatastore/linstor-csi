@@ -1,3 +1,4 @@
+# Volumes with 2 replicas.
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
@@ -6,6 +7,48 @@ provisioner: linstor.csi.linbit.com
 allowVolumeExpansion: true
 parameters:
   linstor.csi.linbit.com/placementCount: "2"
-  linstor.csi.linbit.com/storagePool: "my-storage-pool"
-  linstor.csi.linbit.com/resourceGroup: "linstor-basic-storage"
-  csi.storage.k8s.io/fstype: xfs
+  linstor.csi.linbit.com/storagePool: my-storage-pool
+  linstor.csi.linbit.com/resourceGroup: linstor-basic-storage
+---
+# Volumes with 2 replicas, spread over cluster zones
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: linstor-spread-zone
+provisioner: linstor.csi.linbit.com
+allowVolumeExpansion: true
+parameters:
+  linstor.csi.linbit.com/placementCount: "2"
+  linstor.csi.linbit.com/storagePool: my-storage-pool
+  linstor.csi.linbit.com/resourceGroup: linstor-spread-zone
+  linstor.csi.linbit.com/replicasOnDifferent: topology.kubernetes.io/zone
+---
+# Volumes with 2 replicas, spread over zones, but confined to same region.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: linstor-spread-zone-same-region
+provisioner: linstor.csi.linbit.com
+allowVolumeExpansion: true
+parameters:
+  linstor.csi.linbit.com/placementCount: "2"
+  linstor.csi.linbit.com/storagePool: my-storage-pool
+  linstor.csi.linbit.com/resourceGroup: linstor-spread-zone-same-region
+  linstor.csi.linbit.com/replicasOnSame: topology.kubernetes.io/region
+  linstor.csi.linbit.com/replicasOnDifferent: topology.kubernetes.io/zone
+---
+# Volumes with 2 replicas, spread over zones, allowing access from any node in a zone with replicas
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: linstor-spread-zone-access-any-node
+provisioner: linstor.csi.linbit.com
+allowVolumeExpansion: true
+parameters:
+  linstor.csi.linbit.com/placementCount: "2"
+  linstor.csi.linbit.com/storagePool: my-storage-pool
+  linstor.csi.linbit.com/resourceGroup: linstor-spread-zone-access-any-node
+  linstor.csi.linbit.com/replicasOnDifferent: topology.kubernetes.io/zone
+  linstor.csi.linbit.com/allowRemoteVolumeAccess: |
+    - fromSame:
+      - topology.kubernetes.io/zone

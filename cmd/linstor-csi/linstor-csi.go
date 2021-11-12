@@ -35,6 +35,7 @@ import (
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
 	"github.com/piraeusdatastore/linstor-csi/pkg/driver"
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
+	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
 func main() {
@@ -48,6 +49,9 @@ func main() {
 		burst                 = flag.Int("linstor-api-burst", 1, "Maximum number of API requests allowed before being limited by requests-per-second. Default: 1 (no bursting)")
 		bearerTokenFile       = flag.String("bearer-token", "", "Read the bearer token from the given file and use it for authentication.")
 	)
+
+	flag.Var(&volume.DefaultRemoteAccessPolicy, "default-remote-access-policy", "")
+
 	flag.Parse()
 
 	// TODO: Take log outputs and options from the command line.
