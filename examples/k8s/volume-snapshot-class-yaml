@@ -1,6 +1,0 @@
-kind: VolumeSnapshotClass
-apiVersion: snapshot.storage.k8s.io/v1alpha1
-metadata:
-  name: linstor-csi-snapshot-class
-  namespace: kube-system
-snapshotter: io.drbd.linstor-csi

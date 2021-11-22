@@ -44,6 +44,9 @@ const (
 	// ParameterNamespace is the preferred namespace when setting parameters in
 	ParameterNamespace = "linstor.csi.linbit.com"
 
+	// SnapshotParameterNamespace is the namespace when setting snapshot parameters in storage and snapshot classes.
+	SnapshotParameterNamespace = "snap.linstor.csi.linbit.com"
+
 	// PropertyNamespace is the namespace for LINSTOR properties in kubernetes storage class parameters.
 	PropertyNamespace = "property.linstor.csi.linbit.com"
 

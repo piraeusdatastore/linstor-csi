@@ -30,6 +30,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	lapiconsts "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
@@ -701,12 +702,33 @@ func (s *Linstor) CompatibleSnapshotId(name string) string {
 	return fmt.Sprintf("snapshot-%s", uuidv5.String())
 }
 
-// SnapCreate calls linstor to create a new snapshot on the volume indicated by
-// the SourceVolumeId contained in the CSI Snapshot.
-func (s *Linstor) SnapCreate(ctx context.Context, id string, sourceVol *volume.Info) (*csi.Snapshot, error) {
+// SnapCreate calls LINSTOR to create a new snapshot name "id" or backup of the volume "sourceVolId".
+func (s *Linstor) SnapCreate(ctx context.Context, id, sourceVolId string, params *volume.SnapshotParameters) (*csi.Snapshot, error) {
+	var lsnap *lapi.Snapshot
+
+	var err error
+
+	if params.Type == volume.SnapshotTypeInCluster {
+		lsnap, err = s.createInClusterSnapshot(ctx, id, sourceVolId)
+	} else {
+		lsnap, err = s.reconcileBackup(ctx, id, sourceVolId, params)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return linstorSnapshotToCSI(lsnap)
+}
+
+func (s *Linstor) createInClusterSnapshot(ctx context.Context, id, sourceVolId string) (*lapi.Snapshot, error) {
+	log := s.log.WithField("resource", sourceVolId).WithField("id", id)
+
+	log.Debug("Creating in-cluster snapshot")
+
 	snapConfig := lapi.Snapshot{
 		Name:         id,
-		ResourceName: sourceVol.ID,
+		ResourceName: sourceVolId,
 	}
 
 	err := s.client.Resources.CreateSnapshot(ctx, snapConfig)
@@ -714,12 +736,101 @@ func (s *Linstor) SnapCreate(ctx context.Context, id string, sourceVol *volume.I
 		return nil, fmt.Errorf("failed to create snapshot: %v", err)
 	}
 
-	lsnap, err := s.client.Resources.GetSnapshot(ctx, sourceVol.ID, id)
+	log.Debug("Fetch newly created snapshot")
+
+	lsnap, err := s.client.Resources.GetSnapshot(ctx, sourceVolId, id)
 	if err != nil {
 		return nil, err
 	}
 
-	return linstorSnapshotToCSI(&lsnap)
+	return &lsnap, nil
+}
+
+// reconcileBackup ensure a backup exists at the given remote
+func (s *Linstor) reconcileBackup(ctx context.Context, id, sourceVolId string, params *volume.SnapshotParameters) (*lapi.Snapshot, error) {
+	log := s.log.WithField("resource", sourceVolId).WithField("id", id)
+
+	log.Debug("reconcile remote")
+
+	err := s.reconcileRemote(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	switch params.Type {
+	case volume.SnapshotTypeS3:
+		info, err := s.client.Backup.Info(ctx, params.RemoteName, lapi.BackupInfoRequest{
+			SrcRscName:  sourceVolId,
+			SrcSnapName: id,
+		})
+		if nil404(err) != nil {
+			return nil, fmt.Errorf("error checking for existing S3 backup: %w", err)
+		}
+
+		if info == nil {
+			_, err := s.client.Backup.Create(ctx, params.RemoteName, lapi.BackupCreate{
+				RscName:     sourceVolId,
+				SnapName:    id,
+				Incremental: params.AllowIncremental,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("error creating S3 backup: %w", err)
+			}
+		}
+
+		snap, err := s.client.Resources.GetSnapshot(ctx, sourceVolId, id)
+		if err != nil {
+			return nil, fmt.Errorf("error fetching snapshot for backup: %w", err)
+		}
+
+		return &snap, nil
+	case volume.SnapshotTypeLinstor:
+		return nil, fmt.Errorf("linstor-to-linstor snapshots not implemented")
+	default:
+		return nil, fmt.Errorf("unsupported snapshot type '%s', don't know how to create a backup", params.Type)
+	}
+}
+
+func (s *Linstor) reconcileRemote(ctx context.Context, params *volume.SnapshotParameters) error {
+	log := s.log.WithField("remote-name", params.RemoteName)
+
+	switch params.Type {
+	case volume.SnapshotTypeS3:
+		log.Debug("search for S3 remote with matching name")
+
+		remotes, err := s.client.Remote.GetAllS3(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list existing remotes: %w", err)
+		}
+
+		for _, r := range remotes {
+			if r.RemoteName == params.RemoteName {
+				log.WithField("remote", r).Debug("found existing S3 remote with matching name")
+				return nil
+			}
+		}
+
+		log.Debug("No existing remote found, creating a new one")
+
+		err = s.client.Remote.CreateS3(ctx, lapi.S3Remote{
+			RemoteName:   params.RemoteName,
+			Bucket:       params.S3Bucket,
+			Region:       params.S3SigningRegion,
+			Endpoint:     params.S3Endpoint,
+			AccessKey:    params.S3AccessKey,
+			SecretKey:    params.S3SecretKey,
+			UsePathStyle: params.S3UsePathStyle,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create new S3 remote: %w", err)
+		}
+
+		return nil
+	case volume.SnapshotTypeLinstor:
+		return fmt.Errorf("Linstor-to-Linstor snapshots not implemented")
+	default:
+		return fmt.Errorf("unsupported snapshot type '%s', don't know how to configure remote", params.Type)
+	}
 }
 
 // SnapDelete calls LINSTOR to delete the snapshot based on the CSI Snapshot ID.
@@ -766,6 +877,13 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volu
 		return err
 	}
 
+	logger.Debug("reconcile snapshot")
+
+	err = s.reconcileSnapshot(ctx, snap.SourceVolumeId, snap.SnapshotId, nodes, params.StoragePool)
+	if err != nil {
+		return err
+	}
+
 	logger.Debug("reconcile volume definition from snapshot")
 
 	err = s.reconcileSnapshotVolumeDefinitions(ctx, snap, rDef.Name)
@@ -804,6 +922,130 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volu
 
 	logger.Debug("success")
 	return nil
+}
+
+// reconcileSnapshot ensures that the snapshot exists on a node in the cluster.
+func (s *Linstor) reconcileSnapshot(ctx context.Context, sourceVolId, snapId string, nodes []string, targetPool string) error {
+	logger := s.log.WithField("snapshot", snapId).WithField("source", sourceVolId)
+
+	logger.Debug("checking for existing local snapshot")
+
+	snap, err := s.client.Resources.GetSnapshot(ctx, sourceVolId, snapId)
+	if nil404(err) != nil {
+		return fmt.Errorf("failed to check for presence of local snapshot '%s': %w", snapId, err)
+	}
+
+	if err == nil {
+		return s.waitLocalSnapshotSuccessful(ctx, &snap)
+	}
+
+	logger.Debug("no local snapshot present, search backups")
+
+	remote, info, err := s.findBackupInfo(ctx, sourceVolId, snapId)
+	if err != nil {
+		return fmt.Errorf("failed to check for presence of remote snapshot '%s': %w", snapId, err)
+	}
+
+	if info == nil {
+		return fmt.Errorf("snapshot '%s' not found", snapId)
+	}
+
+	sourcePool := info.Storpools[0].TargetName
+
+	for _, node := range nodes {
+		var rename map[string]string
+		if targetPool != "" && sourcePool != targetPool {
+			rename = map[string]string{sourcePool: targetPool}
+		}
+
+		err = s.client.Backup.Restore(ctx, remote, lapi.BackupRestoreRequest{
+			LastBackup:    info.Latest,
+			SrcRscName:    info.Rsc,
+			SrcSnapName:   info.Snap,
+			NodeName:      node,
+			DownloadOnly:  true,
+			StorPoolMap:   rename,
+			TargetRscName: info.Rsc,
+		})
+		if err == nil {
+			break
+		}
+
+		logger.WithError(err).WithField("node", node).Info("failed to restore backup to node")
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to restore backup to any node (%v), last error: %w", nodes, err)
+	}
+
+	snap, err = s.client.Resources.GetSnapshot(ctx, sourceVolId, snapId)
+	if nil404(err) != nil {
+		return fmt.Errorf("failed to check for presence of restored snapshot: %w", err)
+	}
+
+	return s.waitLocalSnapshotSuccessful(ctx, &snap)
+}
+
+func (s *Linstor) waitLocalSnapshotSuccessful(ctx context.Context, snap *lapi.Snapshot) error {
+	logger := s.log.WithField("snap", snap.Name)
+
+	snapshotReady := func(snap *lapi.Snapshot) bool {
+		if !slice.ContainsString(snap.Flags, lapiconsts.FlagSuccessful) {
+			return false
+		}
+
+		if !slice.ContainsString(snap.Flags, lapiconsts.FlagBackup) {
+			// not a backup -> successful == everything ready
+			return true
+		}
+
+		// Shipped is also used to imply "shipped back"
+		return slice.ContainsString(snap.Flags, lapiconsts.FlagShipped)
+	}
+
+	for {
+		if snapshotReady(snap) {
+			logger.Debug("local snapshot present and ready, nothing to do")
+			return nil
+		}
+
+		logger.Debug("local snapshot present but not ready, wait 5 seconds")
+
+		time.Sleep(5 * time.Second)
+
+		updatedSnap, err := s.client.Resources.GetSnapshot(ctx, snap.ResourceName, snap.Name)
+		if err != nil {
+			return fmt.Errorf("failed to wait for snapshot success: %w", err)
+		}
+
+		snap = &updatedSnap
+	}
+}
+
+func (s *Linstor) findBackupInfo(ctx context.Context, sourceVolId, snapId string) (string, *lapi.BackupInfo, error) {
+	s3remotes, err := s.client.Remote.GetAllS3(ctx)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to fetch all s3 remotes")
+	}
+
+	for i := range s3remotes {
+		remote := s3remotes[i].RemoteName
+
+		info, err := s.client.Backup.Info(ctx, remote, lapi.BackupInfoRequest{SrcRscName: sourceVolId, SrcSnapName: snapId})
+		if nil404(err) != nil {
+			return "", nil, fmt.Errorf("failed to check remote '%s' for presence of snapshot '%s'", remote, snapId)
+		}
+
+		if len(info.Storpools) < 1 {
+			return "", nil, fmt.Errorf("backup has no associated storage pool information")
+		}
+
+		if info != nil {
+			return remote, info, nil
+		}
+	}
+
+	return "", nil, nil
 }
 
 func (s *Linstor) reconcileSnapshotVolumeDefinitions(ctx context.Context, snapshot *csi.Snapshot, targetRD string) error {
@@ -1038,7 +1280,42 @@ func (s *Linstor) reconcileResourcePlacement(ctx context.Context, vol *volume.In
 	return nil
 }
 
+// FindSnapByID searches the snapshot in the backend
+// It returns:
+// * the snapshot, nil if not found
+// * true, if the snapshot is either in progress or successful
+// * any error encountered
 func (s *Linstor) FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, bool, error) {
+	matchingSnap, matchingBackup, err := s.snapOrBackupById(ctx, id)
+	if err != nil {
+		return nil, false, err
+	}
+
+	switch {
+	case matchingSnap != nil:
+		if linstorSnapshotHasError(matchingSnap) {
+			return nil, false, nil
+		}
+
+		csiSnap, err := linstorSnapshotToCSI(matchingSnap)
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to convert LINSTOR to CSI snapshot: %w", err)
+		}
+
+		return csiSnap, true, nil
+	case matchingBackup != nil:
+		return &csi.Snapshot{
+			SnapshotId:     matchingBackup.OriginSnap,
+			SourceVolumeId: matchingBackup.OriginRsc,
+			CreationTime:   timestamppb.New(matchingBackup.StartTimestamp.Time),
+			ReadyToUse:     matchingBackup.Restorable,
+		}, true, nil
+	default:
+		return nil, true, nil
+	}
+}
+
+func (s *Linstor) snapOrBackupById(ctx context.Context, id string) (*lapi.Snapshot, *lapi.Backup, error) {
 	log := s.log.WithField("id", id)
 
 	log.Debug("getting snapshot view")
@@ -1047,32 +1324,54 @@ func (s *Linstor) FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, b
 	// for that, which is not available at this stage
 	snaps, err := s.client.Resources.GetSnapshotView(ctx)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to find snapshots: %w", err)
+		return nil, nil, fmt.Errorf("failed to find snapshots: %w", err)
 	}
 
-	var matchingSnap *lapi.Snapshot
-	for _, lsnap := range snaps {
-		if lsnap.Name == id {
-			matchingSnap = &lsnap
-			break
+	for i := range snaps {
+		if snaps[i].Name == id {
+			log.WithField("snapshot", snaps[i]).Debug("found snapshot with matching id")
+
+			return &snaps[i], nil, nil
 		}
 	}
 
-	if matchingSnap == nil {
-		return nil, true, nil
-	}
+	log.Debug("no snapshot matching id found, trying backups")
 
-	if linstorSnapshotHasError(matchingSnap) {
-		return nil, false, nil
-	}
-
-	log.Debug("converting LINSTOR snapshot to CSI snapshot")
-	csiSnap, err := linstorSnapshotToCSI(matchingSnap)
+	s3remotes, err := s.client.Remote.GetAllS3(ctx)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to convert LINSTOR to CSI snapshot: %w", err)
+		return nil, nil, fmt.Errorf("failed to list remotes: %w", err)
 	}
 
-	return csiSnap, true, nil
+	for i := range s3remotes {
+		remote := s3remotes[i].RemoteName
+		log := log.WithField("remote", remote)
+		log.Debug("listing backups in remote")
+
+		info, err := s.client.Backup.GetAll(ctx, remote, "", id)
+		if nil404(err) != nil {
+			return nil, nil, fmt.Errorf("failed to check remote '%s' for backups of id '%s': %w", remote, id, err)
+		}
+
+		bMap := info.Linstor
+
+		for k := range bMap {
+			if len(bMap[k].Vlms) != 1 {
+				log.WithField("backup", bMap[k].Id).Trace("skipping backup with wrong number of volumes")
+				continue
+			}
+
+			if bMap[k].StartTimestamp == nil {
+				log.WithField("backup", bMap[k].Id).Trace("skipping backup without start time")
+				continue
+			}
+
+			bCopy := bMap[k]
+
+			return nil, &bCopy, nil
+		}
+	}
+
+	return nil, nil, nil
 }
 
 func (s *Linstor) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info, start, limit int) ([]*csi.Snapshot, error) {
@@ -1111,8 +1410,7 @@ func (s *Linstor) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info,
 	return result, nil
 }
 
-// ListSnaps returns list of pointers to volume.SnapInfo based off of the
-// serialized snapshot info stored in resource definitions.
+// ListSnaps returns list of snapshots available in the cluster, including those available in remote (S3) locations
 func (s *Linstor) ListSnaps(ctx context.Context, start, limit int) ([]*csi.Snapshot, error) {
 	log := s.log.WithFields(logrus.Fields{"start": start, "limit": limit})
 
@@ -1136,6 +1434,9 @@ func (s *Linstor) ListSnaps(ctx context.Context, start, limit int) ([]*csi.Snaps
 	log.WithField("snaps", snaps).Trace("got snapshots")
 
 	var result []*csi.Snapshot
+
+	foundIds := make(map[string]struct{})
+
 	for _, lsnap := range snaps {
 		log := log.WithField("snap", lsnap)
 
@@ -1145,7 +1446,54 @@ func (s *Linstor) ListSnaps(ctx context.Context, start, limit int) ([]*csi.Snaps
 			log.WithError(err).Warn("failed to convert LINSTOR to CSI snapshot, skipping...")
 			continue
 		}
+
+		foundIds[csiSnap.SnapshotId] = struct{}{}
 		result = append(result, csiSnap)
+	}
+
+	log.Debug("getting snapshots from remotes")
+
+	s3remotes, err := s.client.Remote.GetAllS3(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list available s3 remotes: %w", err)
+	}
+
+	for i := range s3remotes {
+		log := log.WithField("remote", s3remotes[i].RemoteName)
+		log.Debug("listing backups from remote")
+
+		list, err := s.client.Backup.GetAll(ctx, s3remotes[i].RemoteName, "", "")
+		if err != nil {
+			return nil, fmt.Errorf("failed to list backups in remote '%s': %w", s3remotes[i].RemoteName, err)
+		}
+
+		bMap := list.Linstor
+
+		for k := range bMap {
+			if _, ok := foundIds[bMap[k].OriginSnap]; ok {
+				log.WithField("backup", bMap[k].Id).Trace("skipping backup already in cluster")
+				continue
+			}
+
+			if len(bMap[k].Vlms) != 1 {
+				log.WithField("backup", bMap[k].Id).Trace("skipping backup with wrong number of volumes")
+				continue
+			}
+
+			if bMap[k].StartTimestamp == nil {
+				log.WithField("backup", bMap[k].Id).Trace("skipping backup without start time")
+				continue
+			}
+
+			result = append(result, &csi.Snapshot{
+				SnapshotId:     bMap[k].OriginSnap,
+				SourceVolumeId: bMap[k].OriginRsc,
+				CreationTime:   timestamppb.New(bMap[k].StartTimestamp.Time),
+				// At this point, we don't know the size of the snapshot, that would require a separate REST call,
+				// which we skip for performance reasons. This field is optional.
+				SizeBytes: 0,
+			})
+		}
 	}
 
 	return result, nil
@@ -1170,7 +1518,11 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*csi.Snapshot, error) {
 
 	snapSizeBytes := lsnap.VolumeDefinitions[0].SizeKib * uint64(data.KiB)
 	creationTimeMicroSecs := lsnap.Snapshots[0].CreateTimestamp
+
 	ready := slice.ContainsString(lsnap.Flags, lapiconsts.FlagSuccessful)
+	if slice.ContainsString(lsnap.Flags, lapiconsts.FlagBackup) {
+		ready = slice.ContainsString(lsnap.Flags, lapiconsts.FlagShipped)
+	}
 
 	if creationTimeMicroSecs == nil {
 		// Some failed snapshots do not show any time values, set a default value.

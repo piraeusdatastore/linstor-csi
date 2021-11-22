@@ -63,7 +63,7 @@ type CreateDeleter interface {
 type SnapshotCreateDeleter interface {
 	// CompatibleSnapshotId returns an ID unique to the suggested name
 	CompatibleSnapshotId(name string) string
-	SnapCreate(ctx context.Context, id string, sourceVol *Info) (*csi.Snapshot, error)
+	SnapCreate(ctx context.Context, id string, sourceVolId string, params *SnapshotParameters) (*csi.Snapshot, error)
 	SnapDelete(ctx context.Context, snap *csi.Snapshot) error
 	// FindSnapByID searches the snapshot in the backend
 	// It returns:
