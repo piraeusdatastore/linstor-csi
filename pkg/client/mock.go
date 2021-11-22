@@ -102,19 +102,27 @@ func (s *MockStorage) CompatibleSnapshotId(name string) string {
 	return name
 }
 
-func (s *MockStorage) SnapCreate(ctx context.Context, id string, sourceVol *volume.Info) (*csi.Snapshot, error) {
+func (s *MockStorage) SnapCreate(ctx context.Context, id, sourceVolId string, params *volume.SnapshotParameters) (*csi.Snapshot, error) {
 	for _, snap := range s.snapshots {
 		if snap.SnapshotId == id {
 			return nil, fmt.Errorf("snapshot '%s' already exists", id)
 		}
 	}
 
+	var size int64
+
+	for i := range s.createdVolumes {
+		if s.createdVolumes[i].ID == id {
+			size = s.createdVolumes[i].SizeBytes
+		}
+	}
+
 	// Fill in missing snapshot fields on creation, keep original SourceVolumeId.
 	snap := &csi.Snapshot{
 		SnapshotId:     id,
-		SourceVolumeId: sourceVol.ID,
+		SourceVolumeId: sourceVolId,
 		CreationTime:   timestamppb.Now(),
-		SizeBytes:      sourceVol.SizeBytes,
+		SizeBytes:      size,
 		ReadyToUse:     true,
 	}
 

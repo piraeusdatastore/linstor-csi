@@ -1,0 +1,36 @@
+kind: VolumeSnapshotClass
+apiVersion: snapshot.storage.k8s.io/v1
+metadata:
+  name: linstor-csi-snapshot-class-in-cluster
+driver: linstor.csi.linbit.com
+---
+kind: VolumeSnapshotClass
+apiVersion: snapshot.storage.k8s.io/v1
+metadata:
+  name: linstor-csi-snapshot-class-s3
+driver: linstor.csi.linbit.com
+deletionPolicy: Retain
+parameters:
+  snap.linstor.csi.linbit.com/type: S3
+  # See https://linbit.com/drbd-user-guide/linstor-guide-1_0-en/#s-shipping_snapshots-linstor for details
+  # on each parameter.
+  snap.linstor.csi.linbit.com/remote-name: snapshot-bucket
+  snap.linstor.csi.linbit.com/allow-incremental: "false"
+  snap.linstor.csi.linbit.com/s3-bucket: snapshot-bucket
+  snap.linstor.csi.linbit.com/s3-endpoint: s3.us-west-1.amazonaws.com
+  snap.linstor.csi.linbit.com/s3-signing-region: us-west-1
+  snap.linstor.csi.linbit.com/s3-use-path-style: "false"
+  # Refer here to the secret that holds access and secret key for the S3 endpoint. See below for an example.
+  csi.storage.k8s.io/snapshotter-secret-name: linstor-csi-s3-access
+  csi.storage.k8s.io/snapshotter-secret-namespace: storage
+---
+kind: Secret
+apiVersion: v1
+metadata:
+  name: linstor-csi-s3-access
+  namespace: storage
+immutable: true
+type: linstor.csi.linbit.com/s3-credentials.v1
+stringData:
+  access-key: access-key
+  secret-key: secret-key

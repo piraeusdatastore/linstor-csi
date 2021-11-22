@@ -1,0 +1,29 @@
+# Example of how to use a snapshot/backup from S3
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: example-backup-from-s3
+  namespace: linstor
+spec:
+  source:
+  # Set the source to a snapcontent object that was manually provisioned, see below
+    volumeSnapshotContentName: restored-snap-content-from-s3
+  volumeSnapshotClassName: linstor-csi-snapshot-class
+---
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotContent
+metadata:
+  name: restored-snap-content-from-s3
+spec:
+  deletionPolicy: Delete
+  driver: linstor.csi.linbit.com
+  source:
+    # Name of the snapshot in S3. For example back_20220105_153717, the original snapshot name in LINSTOR.
+    # For backups created using the CSI driver, this is the part after the "^" in the backup ID.
+    snapshotHandle: snapshot-413ba967-0fa3-4d4d-9b8d-beb0ba9ef8a6
+  volumeSnapshotClassName: linstor-csi-snapshot-class
+  volumeSnapshotRef:
+    apiVersion: snapshot.storage.k8s.io/v1
+    kind: VolumeSnapshot
+    name: example-backup-from-s3
+    namespace: linstor

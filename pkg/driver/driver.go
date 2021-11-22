@@ -886,6 +886,15 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 		return nil, missingAttr("CreateSnapshot", req.GetName(), "Name")
 	}
 
+	d.log.WithField("req.parameters", req.GetParameters()).Debug("parsing request")
+
+	params, err := volume.NewSnapshotParameters(req.GetParameters(), req.GetSecrets())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid snapshot parameters: %v", err)
+	}
+
+	d.log.WithField("params", params).Debug("got snapshot parameters")
+
 	id := d.Snapshots.CompatibleSnapshotId(req.GetName())
 
 	d.log.WithField("snapshot id", id).Debug("using snapshot id")
@@ -921,16 +930,7 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 			req.GetName(), req.GetSourceVolumeId(), existingSnap.GetSourceVolumeId())
 	}
 
-	info, err := d.Storage.FindByID(ctx, req.GetSourceVolumeId())
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "could not find source for snapshot: %v", err)
-	}
-
-	if info == nil {
-		return nil, status.Errorf(codes.NotFound, "source '%s' for snapshot does not exist", req.GetSourceVolumeId())
-	}
-
-	snap, err := d.Snapshots.SnapCreate(ctx, id, info)
+	snap, err := d.Snapshots.SnapCreate(ctx, id, req.GetSourceVolumeId(), params)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create snapshot: %v", err)
 	}
