@@ -424,58 +424,14 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, readOnly bool)
 		return err
 	}
 
-	// In certain circumstances it is necessary to create a diskfull resource to make it usable.
-	// The bug report that introduced this variable is a good example:
-	// * Our cluster has 4 identical nodes called A, B, C, D.
-	// * A resource was placed in a typical 2 + 1 Tiebreaker configuration, let's say the diskfull resources are
-	//   on A and B, the Tiebreaker on C.
-	// * A Pod attaches on node A.
-	// * Node A goes down/becomes unreachable/etc. That leaves us with 1 diskfull resource on B + 1 diskless on C.
-	// * The Pod is deleted and a replacement scheduled on node D (i.e. after deletion by the HA Controller).
-	// * Now, this method will be called, since we need to Attach on node D, and there is currently no resource on that
-	//   node.
-	// * Using a diskless resource will not work, as the newly creates resource would not get quorum.
-	// * Using a diskfull resource will work and sync up to the remaining diskfull resource on B.
-	availableDiskfullResources := 0
-	unavailableDiskfullResources := 0
-
 	var existingRes *lapi.Resource
 
 	existingSharedName := ""
 
 	for i := range ress {
-		// To determine if a diskfull resource is "available" we inspect the promotion score reported by LINSTOR.
-		// This is only available for DRBD resources, but the whole concept of quorum only makes sense for DRBD
-		// resources anyways.
-		layer := &ress[i].LayerObject
-		for layer != nil {
-			if layer.Type == devicelayerkind.Drbd {
-				if slice.ContainsString(layer.Drbd.Flags, lapiconsts.FlagDiskless) {
-					// diskless resources are of no interest for this calculation
-					break
-				}
-
-				if layer.Drbd.PromotionScore != 0 {
-					availableDiskfullResources++
-				} else {
-					unavailableDiskfullResources++
-				}
-
-				break
-			}
-
-			if len(layer.Children) != 1 {
-				// No idea how to deal with layer depending on children anyways, so we just ignore those
-				break
-			}
-
-			layer = &layer.Children[0]
-		}
-
 		if ress[i].NodeName == node {
 			existingRes = &ress[i].Resource
 			existingSharedName = ress[i].SharedName
-
 			break
 		}
 	}
@@ -486,16 +442,67 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, readOnly bool)
 
 	// If the resource is already on the node, don't worry about attaching.
 	if existingRes == nil {
+		// In certain circumstances it is necessary to create a diskfull resource to make it usable.
+		// The bug report that introduced this variable is a good example:
+		// * Our cluster has 4 identical nodes called A, B, C, D.
+		// * A resource was placed in a typical 2 + 1 Tiebreaker configuration, let's say the diskfull resources are
+		//   on A and B, the Tiebreaker on C.
+		// * A Pod attaches on node A.
+		// * Node A goes down/becomes unreachable/etc. That leaves us with 1 diskfull resource on B + 1 diskless on C.
+		// * The Pod is deleted and a replacement scheduled on node D (i.e. after deletion by the HA Controller).
+		// * Now, this method will be called, since we need to Attach on node D, and there is currently no resource on that
+		//   node.
+		// * Using a diskless resource will not work, as the newly created resource would not get quorum.
+		// * Using a diskfull resource will work and sync up to the remaining diskfull resource on B.
+		availableDiskfullResources := 0
+		unavailableDiskfullResources := 0
+		disklessCreateFlag := ""
+
+		for i := range ress {
+			drbdDiskfull, flag := inspectExistingResource(&ress[i].Resource)
+
+			if disklessCreateFlag == "" {
+				disklessCreateFlag = flag
+			}
+
+			if drbdDiskfull != nil {
+				if *drbdDiskfull {
+					availableDiskfullResources++
+				} else {
+					unavailableDiskfullResources++
+				}
+			}
+		}
+
 		s.log.Infof("volume %s does not exist on node %s, creating new resource", volId, node)
 
 		// If only half of the expected resources are available, we need a diskfull deployment to have any hope
 		// of achieving quorum on the node. See the comment above availableDiskfullResources.
-		if availableDiskfullResources > 0 && unavailableDiskfullResources >= availableDiskfullResources {
+		shouldDeployDiskful := availableDiskfullResources > 0 && unavailableDiskfullResources >= availableDiskfullResources
+
+		if shouldDeployDiskful {
 			s.log.Infof("%d replicas of %d are apparently not reachable, create a new diskfull resource for quorum", unavailableDiskfullResources, unavailableDiskfullResources+availableDiskfullResources)
 
 			err = s.client.Resources.MakeAvailable(ctx, volId, node, lapi.ResourceMakeAvailable{Diskful: true})
 		} else {
 			err = s.client.Resources.MakeAvailable(ctx, volId, node, lapi.ResourceMakeAvailable{Diskful: false})
+		}
+
+		if errors.Is(err, lapi.NotFoundError) {
+			// Make-available honors replica-on-same and replicas-on-different. We do not, as the import parts of that
+			// are already covered in the allowed topology bits.
+			s.log.WithError(err).Info("fall back to manual diskless creation after make-available refused")
+
+			rCreate := lapi.ResourceCreate{Resource: lapi.Resource{
+				Name:     volId,
+				NodeName: node,
+			}}
+
+			if !shouldDeployDiskful {
+				rCreate.Resource.Flags = append(rCreate.Resource.Flags, disklessCreateFlag)
+			}
+
+			err = s.client.Resources.Create(ctx, rCreate)
 		}
 
 		propsModify.OverrideProps[linstor.PropertyCreatedFor] = linstor.CreatedForTemporaryDisklessAttach
@@ -551,6 +558,41 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, readOnly bool)
 	}
 
 	return nil
+}
+
+// inspectExistingResource inspects a resource to determine the right diskless
+func inspectExistingResource(resource *lapi.Resource) (*bool, string) {
+	layer := &resource.LayerObject
+
+	isAvailableDiskful := true
+	isUnavailableDiskful := false
+
+	for layer != nil {
+		if layer.Type == devicelayerkind.Drbd {
+			if slice.ContainsString(layer.Drbd.Flags, lapiconsts.FlagDiskless) {
+				return nil, lapiconsts.FlagDrbdDiskless
+			}
+
+			if layer.Drbd.PromotionScore != 0 {
+				return &isAvailableDiskful, lapiconsts.FlagDrbdDiskless
+			} else {
+				return &isUnavailableDiskful, lapiconsts.FlagDrbdDiskless
+			}
+		}
+
+		if layer.Type == devicelayerkind.Nvme {
+			return nil, lapiconsts.FlagNvmeInitiator
+		}
+
+		if len(layer.Children) != 1 {
+			// No idea how to deal with layer depending on children anyways, so we just ignore those
+			break
+		}
+
+		layer = &layer.Children[0]
+	}
+
+	return nil, ""
 }
 
 // Detach removes a volume from the node.

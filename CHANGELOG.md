@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `allowRemoteVolumeAccess` supports new values, allowing a more fine-grained controlled on diskless access.
 
+### Fixed
+
+- ControllerPublishVolume will attach a new volume on the selected node, even if it violates the replicasOn...
+  parameters. This prevented `allowRemoteVolumeAccess` from working as expected.
+
 ## [0.16.1] - 2021-11-08
 
 ### Changed
