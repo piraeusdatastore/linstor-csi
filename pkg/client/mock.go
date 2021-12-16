@@ -26,7 +26,7 @@ import (
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	ptypes "github.com/golang/protobuf/ptypes"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
@@ -113,7 +113,7 @@ func (s *MockStorage) SnapCreate(ctx context.Context, id string, sourceVol *volu
 	snap := &csi.Snapshot{
 		SnapshotId:     id,
 		SourceVolumeId: sourceVol.ID,
-		CreationTime:   ptypes.TimestampNow(),
+		CreationTime:   timestamppb.Now(),
 		SizeBytes:      sourceVol.SizeBytes,
 		ReadyToUse:     true,
 	}
