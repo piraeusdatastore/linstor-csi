@@ -35,11 +35,11 @@ import (
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/haySwim/data"
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/mount-utils"
 	utilexec "k8s.io/utils/exec"
 
@@ -1140,7 +1140,7 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*csi.Snapshot, error) {
 		SnapshotId:     lsnap.Name,
 		SourceVolumeId: lsnap.ResourceName,
 		SizeBytes:      int64(snapSizeBytes),
-		CreationTime:   &timestamp.Timestamp{Seconds: creationTimeMicroSecs.Unix()},
+		CreationTime:   timestamppb.New(creationTimeMicroSecs.Time),
 		ReadyToUse:     ready,
 	}, nil
 }
