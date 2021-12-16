@@ -16,7 +16,7 @@ import (
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 )
 
-//go:generate enumer -type=paramKey
+//go:generate go run github.com/alvaroloes/enumer@v1.1.2 -type=paramKey
 type paramKey int
 
 const (
