@@ -18,7 +18,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 package client
 
-//go:generate go run github.com/vektra/mockery/v2 --srcpkg github.com/LINBIT/golinstor/client --all
+//go:generate go run github.com/vektra/mockery/v2@v2.9.4 --srcpkg github.com/LINBIT/golinstor/client --all
 
 import (
 	"context"

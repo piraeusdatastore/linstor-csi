@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Require golang 1.17 for `go generate`, removing the binary dependencies from go.mod.
+
 ## [0.17.0] - 2021-12-09
 
 ### Added
