@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Require golang 1.17 for `go generate`, removing the binary dependencies from go.mod.
+- Update CSI Spec to 1.5.0
 
 ## [0.17.0] - 2021-12-09
 
