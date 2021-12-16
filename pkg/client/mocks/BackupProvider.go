@@ -30,17 +30,24 @@ func (_m *BackupProvider) Abort(ctx context.Context, remoteName string, request 
 }
 
 // Create provides a mock function with given fields: ctx, remoteName, request
-func (_m *BackupProvider) Create(ctx context.Context, remoteName string, request client.BackupCreate) error {
+func (_m *BackupProvider) Create(ctx context.Context, remoteName string, request client.BackupCreate) (string, error) {
 	ret := _m.Called(ctx, remoteName, request)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, client.BackupCreate) error); ok {
+	var r0 string
+	if rf, ok := ret.Get(0).(func(context.Context, string, client.BackupCreate) string); ok {
 		r0 = rf(ctx, remoteName, request)
 	} else {
-		r0 = ret.Error(0)
+		r0 = ret.Get(0).(string)
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string, client.BackupCreate) error); ok {
+		r1 = rf(ctx, remoteName, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // DeleteAll provides a mock function with given fields: ctx, remoteName, filter
