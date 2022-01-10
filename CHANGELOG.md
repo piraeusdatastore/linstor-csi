@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A new parameter `usePvcName` was added. When "true", the driver will (try to) use the PVC name + namespace instead
+  of the generated PV name as ID. Because this might generate name conflicts in certain scenarios, it remains disabled
+  by default.
+
 ### Changed
 
 - Require golang 1.17 for `go generate`, removing the binary dependencies from go.mod.

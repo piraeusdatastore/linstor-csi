@@ -39,6 +39,7 @@ const (
 	storagepool
 	postmountxfsopts
 	resourcegroup
+	usepvcname
 )
 
 // Parameters configuration for linstor volumes.
@@ -88,6 +89,8 @@ type Parameters struct {
 	ResourceGroup string
 	// Properties are the properties to be set on the resource group.
 	Properties map[string]string
+	// UsePvcName derives the volume name from the PVC name+namespace, if that information is available.
+	UsePvcName bool
 }
 
 const DefaultDisklessStoragePoolName = "DfltDisklessStorPool"
@@ -215,6 +218,13 @@ func NewParameters(params map[string]string) (Parameters, error) {
 			p.PostMountXfsOpts = v
 		case resourcegroup:
 			p.ResourceGroup = v
+		case usepvcname:
+			u, err := strconv.ParseBool(v)
+			if err != nil {
+				return p, err
+			}
+
+			p.UsePvcName = u
 		case sizekib:
 			// This parameter was unused. It is just parsed to not break any old storage classes that might be using
 			// it. Storage sizes are handled via CSI requests directly.

@@ -69,7 +69,7 @@ func (s *MockStorage) FindByID(ctx context.Context, id string) (*volume.Info, er
 	return nil, nil
 }
 
-func (s *MockStorage) CompatibleVolumeId(name string) string {
+func (s *MockStorage) CompatibleVolumeId(name, pvcNamespace, pvcName string) string {
 	return name
 }
 

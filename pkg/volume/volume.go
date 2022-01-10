@@ -47,7 +47,7 @@ type Assignment struct {
 // CreateDeleter handles the creation and deletion of volumes.
 type CreateDeleter interface {
 	Querier
-	CompatibleVolumeId(name string) string
+	CompatibleVolumeId(name, pvcNamespace, pvcName string) string
 	Create(ctx context.Context, vol *Info, params *Parameters, topologies *csi.TopologyRequirement) error
 	Delete(ctx context.Context, volId string) error
 

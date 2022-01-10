@@ -487,7 +487,18 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 	}
 	volumeSize := data.NewKibiByte(data.KiB * data.ByteSize(requiredKiB))
 
-	volId := d.Storage.CompatibleVolumeId(req.GetName())
+	params, err := volume.NewParameters(req.GetParameters())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to parse parameters: %v", err)
+	}
+
+	var pvcNamespace, pvcName string
+	if params.UsePvcName {
+		pvcName = req.GetParameters()[ParameterCsiPvcName]
+		pvcNamespace = req.GetParameters()[ParameterCsiPvcNamespace]
+	}
+
+	volId := d.Storage.CompatibleVolumeId(req.GetName(), pvcNamespace, pvcName)
 
 	log := d.log.WithField("volume", volId)
 	log.Infof("determined volume id for volume named '%s'", req.GetName())
@@ -497,11 +508,6 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 	if err != nil {
 		return nil, status.Errorf(
 			codes.Internal, "CreateVolume failed for %s: %v", req.Name, err)
-	}
-
-	params, err := volume.NewParameters(req.GetParameters())
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "failed to parse parameters: %v", err)
 	}
 
 	if existingVolume != nil && strings.HasPrefix(existingVolume.Properties[linstor.PropertyProvisioningCompletedBy], "linstor-csi") {
@@ -1311,3 +1317,8 @@ func (d Driver) failpathDelete(ctx context.Context, volId string) {
 		}).WithError(err).Error("failed to clean up volume")
 	}
 }
+
+const (
+	ParameterCsiPvcName      = "csi.storage.k8s.io/pvc/name"
+	ParameterCsiPvcNamespace = "csi.storage.k8s.io/pvc/namespace"
+)
