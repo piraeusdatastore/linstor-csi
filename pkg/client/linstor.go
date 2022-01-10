@@ -250,7 +250,17 @@ func (s *Linstor) FindByID(ctx context.Context, id string) (*volume.Info, error)
 	}), nil
 }
 
-func (s *Linstor) CompatibleVolumeId(name string) string {
+func (s *Linstor) CompatibleVolumeId(name, pvcNamespace, pvcName string) string {
+	if pvcNamespace != "" && pvcName != "" {
+		s.log.Debug("try creating valid volume name based on PVC")
+
+		generatedName := fmt.Sprintf("%s-%s", pvcNamespace, pvcName)
+
+		if validResourceName(generatedName) == nil {
+			return generatedName
+		}
+	}
+
 	invalid := validResourceName(name)
 	if invalid == nil {
 		return name
