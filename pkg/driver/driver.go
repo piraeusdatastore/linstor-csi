@@ -654,7 +654,7 @@ func (d Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Controll
 
 	if err := d.Assignments.Detach(ctx, req.GetVolumeId(), req.GetNodeId()); err != nil {
 		return nil, status.Errorf(codes.Internal,
-			"ControllerpublishVolume failed for %s: %v", req.GetVolumeId(), err)
+			"ControllerUnpublishVolume failed for %s: %v", req.GetVolumeId(), err)
 	}
 
 	return &csi.ControllerUnpublishVolumeResponse{}, nil
