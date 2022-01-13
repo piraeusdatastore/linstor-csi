@@ -75,7 +75,7 @@ type SnapshotCreateDeleter interface {
 	// List Snapshots should return a sorted list of snapshots.
 	ListSnaps(ctx context.Context, start, limit int) ([]*csi.Snapshot, error)
 	// VolFromSnap creates a new volume based on the provided snapshot.
-	VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *Info, params *Parameters) error
+	VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *Info, params *Parameters, topologies *csi.TopologyRequirement) error
 }
 
 // AttacherDettacher handles operations relating to volume accessiblity on nodes.

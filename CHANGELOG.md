@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Snapshots are only restored on one node, then replicas are distributed using the usual scheduler logic. Previously
+  a volume restored from a snapshot would be deployed on exactly the same nodes as the original.
 - Require golang 1.17 for `go generate`, removing the binary dependencies from go.mod.
 - Update CSI Spec to 1.5.0
 

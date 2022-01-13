@@ -1206,7 +1206,7 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 					"CreateVolume failed for %s: snapshot not found in storage backend", req.GetName())
 			}
 
-			if err := d.Snapshots.VolFromSnap(ctx, snap, info, params); err != nil {
+			if err := d.Snapshots.VolFromSnap(ctx, snap, info, params, req.GetAccessibilityRequirements()); err != nil {
 				d.failpathDelete(ctx, info.ID)
 				return nil, status.Errorf(codes.Internal,
 					"CreateVolume failed for %s: %v", req.GetName(), err)
@@ -1241,7 +1241,7 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 
 			defer d.Snapshots.SnapDelete(ctx, snap.Snapshot)
 
-			err = d.Snapshots.VolFromSnap(ctx, snap.Snapshot, info, params)
+			err = d.Snapshots.VolFromSnap(ctx, snap.Snapshot, info, params, req.GetAccessibilityRequirements())
 			if err != nil {
 				d.failpathDelete(ctx, info.ID)
 

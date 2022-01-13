@@ -738,16 +738,23 @@ func (s *Linstor) SnapDelete(ctx context.Context, snap *csi.Snapshot) error {
 }
 
 // VolFromSnap creates the volume using the data contained within the snapshot.
-func (s *Linstor) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volume.Info, params *volume.Parameters) error {
+func (s *Linstor) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volume.Info, params *volume.Parameters, topologies *csi.TopologyRequirement) error {
 	logger := s.log.WithFields(logrus.Fields{
 		"volume":   fmt.Sprintf("%+v", vol),
 		"snapshot": fmt.Sprintf("%+v", snap),
 	})
 
+	logger.Debug("find requisite nodes")
+
+	nodes, err := s.client.GetAllTopologyNodes(ctx, params.AllowRemoteVolumeAccess, topologies.GetRequisite())
+	if err != nil {
+		return err
+	}
+
 	logger.Debug("reconcile resource group from storage class")
+
 	rGroup, err := s.reconcileResourceGroup(ctx, params)
 	if err != nil {
-		logger.Debugf("reconcile resource group failed: %v", err)
 		return err
 	}
 
@@ -755,18 +762,26 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volu
 
 	rDef, err := s.reconcileResourceDefinition(ctx, vol.ID, rGroup.Name)
 	if err != nil {
-		logger.Debugf("reconcile resource definition failed: %v", err)
 		return err
 	}
 
 	logger.Debug("reconcile volume definition from snapshot")
+
 	err = s.reconcileSnapshotVolumeDefinitions(ctx, snap, rDef.Name)
 	if err != nil {
 		return err
 	}
 
 	logger.Debug("reconcile resources from snapshot")
-	err = s.reconcileSnapshotResources(ctx, snap, rDef.Name)
+
+	err = s.reconcileSnapshotResources(ctx, snap, rDef.Name, nodes)
+	if err != nil {
+		return err
+	}
+
+	logger.Debug("reconcile resource placement after restore")
+
+	err = s.reconcileResourcePlacement(ctx, vol, params, topologies)
 	if err != nil {
 		return err
 	}
@@ -812,7 +827,7 @@ func (s *Linstor) reconcileSnapshotVolumeDefinitions(ctx context.Context, snapsh
 	return nil
 }
 
-func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *csi.Snapshot, targetRD string) error {
+func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *csi.Snapshot, targetRD string, preferredNodes []string) error {
 	logger := s.log.WithFields(logrus.Fields{"snapshot": snapshot, "target": targetRD})
 
 	logger.Debug("checking for existing resources")
@@ -821,14 +836,40 @@ func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *csi.
 		return fmt.Errorf("could not fetch resources: %w", err)
 	}
 
-	if len(resources) == 0 {
-		logger.Debug("restoring resources from snapshot")
+	if len(resources) != 0 {
+		logger.Debug("resource already exists, skipping restore")
+		return nil
+	}
 
-		restoreConf := lapi.SnapshotRestore{ToResource: targetRD}
-		err := s.client.Resources.RestoreSnapshot(ctx, snapshot.GetSourceVolumeId(), snapshot.GetSnapshotId(), restoreConf)
-		if err != nil {
-			return fmt.Errorf("could not restore resources: %w", err)
+	logger.Debug("checking where the snapshot is deployed")
+
+	snap, err := s.client.Resources.GetSnapshot(ctx, snapshot.GetSourceVolumeId(), snapshot.GetSnapshotId())
+	if err != nil {
+		return fmt.Errorf("could not check existing snapshots: %w", err)
+	}
+
+	if len(snap.Nodes) == 0 {
+		return fmt.Errorf("snapshot '%s' not deployed on any node", snap.Name)
+	}
+
+	// Optimize the node we use to restore. It should be one of the preferred nodes, or just the first with a snapshot
+	// if no preferred nodes match.
+	selectedNode := snap.Nodes[0]
+
+	for _, snapNode := range snap.Nodes {
+		if slice.ContainsString(preferredNodes, snapNode) {
+			selectedNode = snapNode
+			break
 		}
+	}
+
+	logger.WithField("selected node", selectedNode).Debug("restoring snapshot on one node")
+
+	restoreConf := lapi.SnapshotRestore{ToResource: targetRD, Nodes: []string{selectedNode}}
+
+	err = s.client.Resources.RestoreSnapshot(ctx, snapshot.GetSourceVolumeId(), snapshot.GetSnapshotId(), restoreConf)
+	if err != nil {
+		return fmt.Errorf("could not restore resources: %w", err)
 	}
 
 	return nil

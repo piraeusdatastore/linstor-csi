@@ -28,6 +28,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor/util"
+	"github.com/piraeusdatastore/linstor-csi/pkg/slice"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
@@ -86,6 +87,34 @@ func (c *HighLevelClient) GenericAccessibleTopologies(ctx context.Context, volId
 	}
 
 	return topos, nil
+}
+
+// GetAllTopologyNodes returns the list of nodes that satisfy the given topology requirements
+func (c *HighLevelClient) GetAllTopologyNodes(ctx context.Context, remoteAccessPolicy volume.RemoteAccessPolicy, requisites []*csi.Topology) ([]string, error) {
+	var accessibleSegments []map[string]string
+	for _, req := range requisites {
+		accessibleSegments = append(accessibleSegments, remoteAccessPolicy.AccessibleSegments(req.GetSegments())...)
+	}
+
+	accessibleSegments = volume.PrunePattern(accessibleSegments...)
+
+	if len(accessibleSegments) == 0 {
+		// No requisites means no restrictions, so just use the segment that will return all nodes
+		accessibleSegments = []map[string]string{{}}
+	}
+
+	var allNodes []string
+
+	for _, segment := range accessibleSegments {
+		nodes, err := c.NodesForTopology(ctx, segment)
+		if err != nil {
+			return nil, err
+		}
+
+		allNodes = slice.AppendUnique(allNodes, nodes...)
+	}
+
+	return allNodes, nil
 }
 
 // NodesForTopology finds all matching nodes for the given topology segment.
