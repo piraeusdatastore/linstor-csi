@@ -64,27 +64,22 @@ func (_m *BackupProvider) DeleteAll(ctx context.Context, remoteName string, filt
 	return r0
 }
 
-// GetAll provides a mock function with given fields: ctx, remoteName, rscNames
-func (_m *BackupProvider) GetAll(ctx context.Context, remoteName string, rscNames ...string) (client.BackupList, error) {
-	_va := make([]interface{}, len(rscNames))
-	for _i := range rscNames {
-		_va[_i] = rscNames[_i]
-	}
-	var _ca []interface{}
-	_ca = append(_ca, ctx, remoteName)
-	_ca = append(_ca, _va...)
-	ret := _m.Called(_ca...)
+// GetAll provides a mock function with given fields: ctx, remoteName, rscName, snapName
+func (_m *BackupProvider) GetAll(ctx context.Context, remoteName string, rscName string, snapName string) (*client.BackupList, error) {
+	ret := _m.Called(ctx, remoteName, rscName, snapName)
 
-	var r0 client.BackupList
-	if rf, ok := ret.Get(0).(func(context.Context, string, ...string) client.BackupList); ok {
-		r0 = rf(ctx, remoteName, rscNames...)
+	var r0 *client.BackupList
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) *client.BackupList); ok {
+		r0 = rf(ctx, remoteName, rscName, snapName)
 	} else {
-		r0 = ret.Get(0).(client.BackupList)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*client.BackupList)
+		}
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, string, ...string) error); ok {
-		r1 = rf(ctx, remoteName, rscNames...)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, string) error); ok {
+		r1 = rf(ctx, remoteName, rscName, snapName)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -93,14 +88,16 @@ func (_m *BackupProvider) GetAll(ctx context.Context, remoteName string, rscName
 }
 
 // Info provides a mock function with given fields: ctx, remoteName, request
-func (_m *BackupProvider) Info(ctx context.Context, remoteName string, request client.BackupInfoRequest) (client.BackupInfo, error) {
+func (_m *BackupProvider) Info(ctx context.Context, remoteName string, request client.BackupInfoRequest) (*client.BackupInfo, error) {
 	ret := _m.Called(ctx, remoteName, request)
 
-	var r0 client.BackupInfo
-	if rf, ok := ret.Get(0).(func(context.Context, string, client.BackupInfoRequest) client.BackupInfo); ok {
+	var r0 *client.BackupInfo
+	if rf, ok := ret.Get(0).(func(context.Context, string, client.BackupInfoRequest) *client.BackupInfo); ok {
 		r0 = rf(ctx, remoteName, request)
 	} else {
-		r0 = ret.Get(0).(client.BackupInfo)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*client.BackupInfo)
+		}
 	}
 
 	var r1 error

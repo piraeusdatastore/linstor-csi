@@ -113,6 +113,20 @@ func (_m *NodeProvider) DeleteStoragePool(ctx context.Context, nodeName string, 
 	return r0
 }
 
+// Evacuate provides a mock function with given fields: ctx, nodeName
+func (_m *NodeProvider) Evacuate(ctx context.Context, nodeName string) error {
+	ret := _m.Called(ctx, nodeName)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = rf(ctx, nodeName)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // Evict provides a mock function with given fields: ctx, nodeName
 func (_m *NodeProvider) Evict(ctx context.Context, nodeName string) error {
 	ret := _m.Called(ctx, nodeName)

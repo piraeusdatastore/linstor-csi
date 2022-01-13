@@ -310,7 +310,10 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 	t.Parallel()
 
 	m := mocks.NodeProvider{}
-	m.On("GetStoragePoolView", mock.Anything).Return([]lapi.StoragePool{
+
+	yes := true
+	opts := &lapi.ListOpts{Cached: &yes}
+	m.On("GetStoragePoolView", mock.Anything, opts).Return([]lapi.StoragePool{
 		{
 			StoragePoolName: "pool-a",
 			NodeName:        "node-1",
@@ -336,6 +339,7 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 			FreeCapacity:    4,
 		},
 	}, nil)
+
 	m.On("GetAll", mock.Anything, &lapi.ListOpts{Prop: []string{"Aux/topology.kubernetes.io/zone=zone-1"}}).Return([]lapi.Node{{Name: "node-1"}}, nil)
 	m.On("GetAll", mock.Anything, mock.Anything).Return([]lapi.Node{{Name: "node-1"}, {Name: "node-2"}}, nil)
 

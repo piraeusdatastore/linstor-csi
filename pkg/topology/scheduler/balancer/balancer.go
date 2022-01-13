@@ -119,7 +119,8 @@ func getStorageNodesInRack(ctx context.Context, rack string, clientset kubernete
 func getNodesUtil(ctx context.Context, nClient NodeLinstorClient, selectedNodes []string) (nodes map[string]*Node, err error) {
 	nodes = map[string]*Node{}
 	for _, node := range selectedNodes {
-		spls, err := nClient.GetStoragePools(ctx, node)
+		cache := true
+		spls, err := nClient.GetStoragePools(ctx, node, &lapi.ListOpts{Cached: &cache})
 		if err != nil {
 			return nodes, err
 		}
