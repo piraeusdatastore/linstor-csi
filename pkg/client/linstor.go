@@ -612,40 +612,29 @@ func (s *Linstor) Detach(ctx context.Context, volId, node string) error {
 		"targetNode": node,
 	})
 
-	ress, err := s.client.Resources.GetResourceView(ctx, &lapi.ListOpts{Node: []string{node}, Resource: []string{volId}})
+	vols, err := s.client.Resources.GetVolumes(ctx, volId, node)
 	if err != nil {
-		return err
+		return nil404(err)
 	}
 
-	if len(ress) == 0 {
-		// if the resource could not be found there is nothing to detach
-		return nil
+	if len(vols) != 1 {
+		return fmt.Errorf("expected exactly 1 volume, got %d instead", len(vols))
 	}
 
-	if len(ress) != 1 {
-		return fmt.Errorf("expected exactly 1 resource, got %d instead", len(ress))
-	}
-
-	res := &ress[0]
-
-	if len(res.Volumes) != 1 {
-		return fmt.Errorf("expected exactly 1 volume, got %d instead", len(res.Volumes))
-	}
-
-	createdFor, ok := res.Volumes[0].Props[linstor.PropertyCreatedFor]
+	createdFor, ok := vols[0].Props[linstor.PropertyCreatedFor]
 	if !ok || createdFor != linstor.CreatedForTemporaryDisklessAttach {
 		log.Info("resource not temporary (not created by Attach) not deleting")
 		return nil
 	}
 
-	if util.DeployedDiskfully(res.Resource) {
+	if vols[0].ProviderKind != lapi.DISKLESS {
 		log.Info("temporary resource created by Attach is now diskfull, not deleting")
 		return nil
 	}
 
 	log.Info("removing temporary resource")
 
-	return s.client.Resources.Delete(ctx, volId, node)
+	return nil404(s.client.Resources.Delete(ctx, volId, node))
 }
 
 // CapacityBytes returns the amount of free space in the storage pool specified by the params and topology.
