@@ -659,7 +659,8 @@ func (s *Linstor) CapacityBytes(ctx context.Context, storagePool string, segment
 	log.WithField("nodes", requestedNodes).Trace("got nodes")
 	log.Trace("get storage pools")
 
-	pools, err := s.client.Nodes.GetStoragePoolView(ctx)
+	cached := true
+	pools, err := s.client.Nodes.GetStoragePoolView(ctx, &lapi.ListOpts{Cached: &cached})
 	if err != nil {
 		return 0, fmt.Errorf("unable to get capacity: %w", err)
 	}
@@ -1547,7 +1548,8 @@ func (s *Linstor) GetNodeTopologies(ctx context.Context, nodename string) (*csi.
 		},
 	}
 
-	pools, err := s.client.Nodes.GetStoragePools(ctx, nodename)
+	cached := true
+	pools, err := s.client.Nodes.GetStoragePools(ctx, nodename, &lapi.ListOpts{Cached: &cached})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get storage pools for node: %w", err)
 	}

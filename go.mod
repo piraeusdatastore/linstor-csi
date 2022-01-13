@@ -3,7 +3,7 @@ module github.com/piraeusdatastore/linstor-csi
 go 1.17
 
 require (
-	github.com/LINBIT/golinstor v0.38.0
+	github.com/LINBIT/golinstor v0.41.0
 	github.com/container-storage-interface/spec v1.5.0
 	github.com/haySwim/data v0.2.0
 	github.com/kubernetes-csi/csi-test/v4 v4.3.0
