@@ -26,3 +26,19 @@ func ContainsString(slice []string, s string) bool {
 
 	return false
 }
+
+// AppendUnique appends the arguments to the slice, but only if it does not exist in the slice.
+func AppendUnique(slice []string, args ...string) []string {
+outer:
+	for _, arg := range args {
+		for _, existing := range slice {
+			if existing == arg {
+				continue outer
+			}
+		}
+
+		slice = append(slice, arg)
+	}
+
+	return slice
+}
