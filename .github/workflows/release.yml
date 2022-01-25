@@ -1,0 +1,30 @@
+name: create release binary
+on:
+  release:
+    types: [created]
+jobs:
+  artifacts:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goarch:
+          - amd64
+          - arm64
+    steps:
+      - uses: actions/checkout@v2
+      - name: compile and release
+        uses: wangyoucao577/go-release-action@v1.22
+        with:
+          binary_name: linstor-csi
+          project_path: ./cmd/linstor-csi
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          goarch: ${{ matrix.goarch }}
+          goos: linux
+          ldflags: >
+            -extldflags -static
+            -X "github.com/piraeusdatastore/linstor-csi/pkg/driver.Version=${{ github.ref }}"
+            -w
+            -s
+          md5sum: "FALSE"
+          sha256sum: "TRUE"
+          extra_files: LICENSE README.md
