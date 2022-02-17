@@ -898,16 +898,16 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volu
 		return err
 	}
 
-	logger.Debug("reconcile resource placement after restore")
+	logger.Debug("reconcile volume definition from request (may expand volume)")
 
-	err = s.reconcileResourcePlacement(ctx, vol, params, topologies)
+	_, err = s.reconcileVolumeDefinition(ctx, vol)
 	if err != nil {
 		return err
 	}
 
-	logger.Debug("reconcile volume definition from request (may expand volume)")
+	logger.Debug("reconcile resource placement after restore")
 
-	_, err = s.reconcileVolumeDefinition(ctx, vol)
+	err = s.reconcileResourcePlacement(ctx, vol, params, topologies)
 	if err != nil {
 		return err
 	}
