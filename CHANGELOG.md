@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - ControllerUnpublishVolume could fail if LINSTOR node was deleted before the detach operation was executed.
+- LINSTOR CSI now expands a restored or cloned volume (if required) before deploying to multiple nodes. A single
+  resource should always be in sync, so it is always safe to expand them.
 
 ## [0.17.0] - 2021-12-09
 
