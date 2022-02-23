@@ -3,15 +3,15 @@ module github.com/piraeusdatastore/linstor-csi
 go 1.17
 
 require (
-	github.com/LINBIT/golinstor v0.41.0
+	github.com/LINBIT/golinstor v0.41.2
 	github.com/container-storage-interface/spec v1.5.0
 	github.com/haySwim/data v0.2.0
 	github.com/kubernetes-csi/csi-test/v4 v4.3.0
 	github.com/pborman/uuid v1.2.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e
-	golang.org/x/time v0.0.0-20211116232009-f0f3c7e86c11
+	golang.org/x/sys v0.0.0-20220222200937-f2425489ef4c
+	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8
 	google.golang.org/grpc v1.43.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
@@ -24,7 +24,7 @@ require (
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/donovanhide/eventsource v0.0.0-20171031113327-3ed64d21fb0b // indirect
+	github.com/donovanhide/eventsource v0.0.0-20210830082556-c59027999da0 // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/go-logr/logr v1.2.0 // indirect
@@ -44,11 +44,10 @@ require (
 	github.com/onsi/gomega v1.10.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/stretchr/objx v0.3.0 // indirect
-	golang.org/x/net v0.0.0-20210825183410-e898025ed96a // indirect
+	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/oauth2 v0.0.0-20210819190943-2bc19b11175f // indirect
-	golang.org/x/term v0.0.0-20210615171337-6886f2dfbf5b // indirect
+	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
