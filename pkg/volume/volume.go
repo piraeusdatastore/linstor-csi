@@ -31,6 +31,7 @@ type Info struct {
 	ID            string
 	SizeBytes     int64
 	ResourceGroup string
+	FsType        string
 	Properties    map[string]string
 }
 
@@ -101,7 +102,7 @@ type Querier interface {
 
 // Mounter handles the filesystems located on volumes.
 type Mounter interface {
-	Mount(ctx context.Context, source, target, fsType string, readonly bool, mntOpts, mkfsOpts []string) error
+	Mount(ctx context.Context, source, target, fsType string, readonly bool, mntOpts []string) error
 	Unmount(target string) error
 	IsNotMountPoint(target string) (bool, error)
 }

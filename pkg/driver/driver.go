@@ -341,7 +341,7 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		return nil, status.Errorf(codes.NotFound, "NodePublishVolume failed for %s: assignment not found", req.GetVolumeId())
 	}
 
-	err = d.Mounter.Mount(ctx, assignment.Path, req.GetTargetPath(), fsType, req.GetReadonly(), volCtx.MountOptions, volCtx.MkfsOptions)
+	err = d.Mounter.Mount(ctx, assignment.Path, req.GetTargetPath(), fsType, req.GetReadonly(), volCtx.MountOptions)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
 	}
@@ -352,9 +352,8 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 			"XFS_IO":     volCtx.PostMountXfsOptions,
 			"FSType":     fsType,
 			"targetPath": req.GetTargetPath(),
-		}).Debug("Post-mount XXXFS_io")
+		}).Debug("Post-mount XFS_io")
 
-		// xfs_io -c "extsize 2m" /mnt/dax
 		_, err := exec.Command("xfs_io", "-c", volCtx.PostMountXfsOptions, req.GetTargetPath()).CombinedOutput()
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
@@ -478,6 +477,11 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 		return nil, missingAttr("ValidateVolumeCapabilities", req.GetName(), "VolumeCapabilities")
 	}
 
+	fsType, err := fsTypeForCapabilities(req.GetVolumeCapabilities())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "CreateVolume failed for %s: %v", req.Name, err)
+	}
+
 	// Determine how much storage we need to actually allocate for a given number
 	// of bytes.
 	requiredKiB, err := d.Storage.AllocationSizeKiB(req.GetCapacityRange().GetRequiredBytes(), req.GetCapacityRange().GetLimitBytes())
@@ -508,6 +512,12 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 	if err != nil {
 		return nil, status.Errorf(
 			codes.Internal, "CreateVolume failed for %s: %v", req.Name, err)
+	}
+
+	// Ignore this check for existing volumes with no FsType set: they may have been provisioned before we used the
+	// LINSTOR built-in method. Also ignore if we have no fstype set. Using FS as block volume is fine.
+	if existingVolume != nil && existingVolume.FsType != "" && fsType != "" && existingVolume.FsType != fsType {
+		return nil, status.Errorf(codes.AlreadyExists, "FsType don't match: existing: '%s', requested: '%s'", existingVolume.FsType, fsType)
 	}
 
 	if existingVolume != nil && strings.HasPrefix(existingVolume.Properties[linstor.PropertyProvisioningCompletedBy], "linstor-csi") {
@@ -570,6 +580,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 			ID:            volId,
 			SizeBytes:     int64(volumeSize.InclusiveBytes()),
 			ResourceGroup: params.ResourceGroup,
+			FsType:        fsType,
 			Properties:    map[string]string{linstor.PropertyProvisioningCompletedBy: "linstor-csi/" + Version},
 		},
 		&params,
@@ -1316,6 +1327,32 @@ func (d Driver) failpathDelete(ctx context.Context, volId string) {
 			"volume": volId,
 		}).WithError(err).Error("failed to clean up volume")
 	}
+}
+
+func fsTypeForCapabilities(caps []*csi.VolumeCapability) (string, error) {
+	fsType := ""
+
+	for _, cap := range caps {
+		m := cap.GetMount()
+
+		if m == nil {
+			continue
+		}
+
+		t := m.GetFsType()
+		if t == "" {
+			// Set default if non was given (sanity tests might complain otherwise)
+			t = "ext4"
+		}
+
+		if fsType != "" && t != fsType {
+			return "", fmt.Errorf("conflicting fs types: '%s' vs '%s'", fsType, t)
+		}
+
+		fsType = t
+	}
+
+	return fsType, nil
 }
 
 const (

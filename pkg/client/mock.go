@@ -231,7 +231,7 @@ func (s *MockStorage) CapacityBytes(ctx context.Context, sp string, segments map
 	return 50000000, nil
 }
 
-func (s *MockStorage) Mount(ctx context.Context, source, target, fsType string, readonly bool, mntOpts, mkfsOpts []string) error {
+func (s *MockStorage) Mount(ctx context.Context, source, target, fsType string, readonly bool, mntOpts []string) error {
 	if _, err := os.Stat(target); os.IsNotExist(err) {
 		return os.MkdirAll(target, 0755)
 	}
