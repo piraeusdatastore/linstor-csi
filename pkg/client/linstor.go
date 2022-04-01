@@ -212,6 +212,7 @@ func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinitionWithV
 		return nil
 	}
 
+	fsType := resDef.Props[lapiconsts.NamespcFilesystem+"/"+lapiconsts.KeyFsType]
 	props := make(map[string]string)
 
 	for k, v := range resDef.Props {
@@ -224,6 +225,7 @@ func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinitionWithV
 		ID:            resDef.Name,
 		SizeBytes:     int64(resDef.VolumeDefinitions[0].SizeKib << 10),
 		ResourceGroup: resDef.ResourceGroupName,
+		FsType:        fsType,
 		Properties:    props,
 	}
 }
@@ -290,7 +292,7 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, params *volume.P
 
 	logger.Debug("reconcile resource definition for volume")
 
-	_, err = s.reconcileResourceDefinition(ctx, vol.ID, rGroup.Name)
+	_, err = s.reconcileResourceDefinition(ctx, vol.ID, rGroup.Name, vol.FsType, params.FSOpts)
 	if err != nil {
 		logger.Debugf("reconcile resource definition failed: %v", err)
 		return err
@@ -872,7 +874,7 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volu
 
 	logger.Debug("reconcile resource definition for volume")
 
-	rDef, err := s.reconcileResourceDefinition(ctx, vol.ID, rGroup.Name)
+	rDef, err := s.reconcileResourceDefinition(ctx, vol.ID, rGroup.Name, vol.FsType, params.FSOpts)
 	if err != nil {
 		return err
 	}
@@ -1176,7 +1178,7 @@ func (s *Linstor) reconcileResourceGroup(ctx context.Context, params *volume.Par
 	return &rg, nil
 }
 
-func (s *Linstor) reconcileResourceDefinition(ctx context.Context, volId, rgName string) (*lapi.ResourceDefinition, error) {
+func (s *Linstor) reconcileResourceDefinition(ctx context.Context, volId, rgName, fsType, mkfsOpts string) (*lapi.ResourceDefinition, error) {
 	logger := s.log.WithFields(logrus.Fields{
 		"volume": volId,
 	})
@@ -1193,6 +1195,13 @@ func (s *Linstor) reconcileResourceDefinition(ctx context.Context, volId, rgName
 				Name:              volId,
 				ResourceGroupName: rgName,
 			},
+		}
+
+		if fsType != "" {
+			rdCreate.ResourceDefinition.Props = map[string]string{
+				lapiconsts.NamespcFilesystem + "/" + lapiconsts.KeyFsType:           fsType,
+				lapiconsts.NamespcFilesystem + "/" + lapiconsts.KeyFsMkfsparameters: mkfsOpts,
+			}
 		}
 
 		err = s.client.ResourceDefinitions.Create(ctx, rdCreate)
@@ -1594,7 +1603,7 @@ func (s *Linstor) FindAssignmentOnNode(ctx context.Context, volId, node string) 
 // Mount makes volumes consumable from the source to the target.
 // Filesystems are formatted and block devices are bind mounted.
 // Operates locally on the machines where it is called.
-func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, readonly bool, mntOpts, fsOpts []string) error {
+func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, readonly bool, mntOpts []string) error {
 	// If there is no fsType, then this is a block mode volume.
 	var block bool
 	if fsType == "" {
@@ -1605,7 +1614,6 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 		"source":          source,
 		"target":          target,
 		"mountOpts":       mntOpts,
-		"fsOpts":          fsOpts,
 		"filesystem":      fsType,
 		"blockAccessMode": block,
 	}).Info("mounting volume")
@@ -1637,10 +1645,6 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 
 	// This is a regular filesystem so format the device and create the mountpoint.
 	if !block {
-		if err := s.formatDevice(ctx, source, fsType, fsOpts); err != nil {
-			return fmt.Errorf("mounting volume failed: %v", err)
-		}
-
 		if err := os.MkdirAll(target, os.FileMode(0755)); err != nil {
 			return fmt.Errorf("could not create target directory %s, %v", target, err)
 		}
@@ -1665,11 +1669,7 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 		return nil
 	}
 
-	if block {
-		return s.mounter.Mount(source, target, fsType, mntOpts)
-	}
-
-	err = s.mounter.FormatAndMount(source, target, fsType, mntOpts)
+	err = s.mounter.Mount(source, target, fsType, mntOpts)
 	if err != nil {
 		return err
 	}
@@ -1681,7 +1681,7 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 		return fmt.Errorf("unable to determine if resize required: %w", err)
 	}
 
-	if resize {
+	if !block && resize {
 		_, err := resizerFs.Resize(source, target)
 		if err != nil {
 			unmountErr := s.Unmount(target)
@@ -1694,52 +1694,6 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 	}
 
 	return nil
-}
-
-func (s *Linstor) formatDevice(ctx context.Context, source, fsType string, mkfsArgs []string) error {
-	// Format device with Storage Class's filesystem options.
-	deviceFS, err := s.mounter.GetDiskFormat(source)
-	if err != nil {
-		return fmt.Errorf("unable to determine filesystem type of %s: %v", source, err)
-	}
-
-	// Device is formatted correctly already.
-	if deviceFS == fsType {
-		s.log.WithFields(logrus.Fields{
-			"deviceFS":    deviceFS,
-			"requestedFS": fsType,
-			"device":      source,
-		}).Debug("device already formatted with requested filesystem")
-		return nil
-	}
-
-	if deviceFS != "" && deviceFS != fsType {
-		return fmt.Errorf("device %q already formatted with %q filesystem, refusing to overwrite with %q filesystem", source, deviceFS, fsType)
-	}
-
-	args := append(mkfsArgs, source)
-	cmd := "mkfs." + fsType
-
-	s.log.WithFields(logrus.Fields{
-		"command": cmd,
-		"args":    args,
-	}).Debug("creating filesystem")
-
-	out, err := s.mounter.Exec.CommandContext(ctx, cmd, args...).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("couldn't create %s filesystem on %s: %v: %q", fsType, source, err, out)
-	}
-
-	return nil
-}
-
-// Build mkfs args in the form [opt1, opt2, opt3..., source].
-func mkfsArgs(opts, source string) []string {
-	if opts == "" {
-		return []string{source}
-	}
-
-	return append(strings.Split(opts, " "), source)
 }
 
 func (s *Linstor) setDevReadOnly(ctx context.Context, srcPath string) error {

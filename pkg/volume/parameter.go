@@ -62,7 +62,7 @@ type Parameters struct {
 	// DoNotPlaceWithRegex corresponds to the `linstor resource create`
 	// option of the same name.
 	DoNotPlaceWithRegex string
-	// FSOpts is a string of filesystem options passed at mount time.
+	// FSOpts is a string of filesystem options passed at creation time.
 	FSOpts string
 	// MountOpts is a string of mount options passed at mount time. Comma
 	// separated like in /etc/fstab.

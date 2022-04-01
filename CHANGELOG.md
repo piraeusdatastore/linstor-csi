@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Breaking
+
+- An empty filesystem volume that was provisioned with 0.18.0, but never attached will not be attachable. It is missing
+  the filesystem, since LINSTOR CSI no longer creates it on attach. You have to recreate these volumes (by definition,
+  they hold no data).
+
+### Changed
+
+- Use LINSTOR native properties to provision filesystem volumes. This might slightly alter the default options used
+  when running `mkfs`, LINSTOR choses defaults optimized for DRBD. Previously filesystem creation was part of the usual
+  mount process. This could run into timeouts for very large volumes: as the process would be restarted from scratch
+  on every timeout, it would never complete.
+
 ## [0.18.0] - 2022-02-24
 
 ### Added

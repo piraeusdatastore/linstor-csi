@@ -23,7 +23,6 @@ package client
 import (
 	"context"
 	"encoding/json"
-	"reflect"
 	"testing"
 
 	lapiconsts "github.com/LINBIT/golinstor"
@@ -137,24 +136,6 @@ func TestLinstorifyResourceName(t *testing.T) {
 
 		if resName != test.out {
 			t.Fatalf("Expected that input '%s' transforms to '%s', but got '%s'\n", test.in, test.out, resName)
-		}
-	}
-}
-
-func TestMkfsArgs(t *testing.T) {
-	tableTests := []struct {
-		opts, source string
-		expected     []string
-	}{
-		{"-K", "/dev/path", []string{"-K", "/dev/path"}},
-		{"", "/dev/path", []string{"/dev/path"}},
-	}
-
-	for _, tt := range tableTests {
-		actual := mkfsArgs(tt.opts, tt.source)
-		if !reflect.DeepEqual(tt.expected, actual) {
-			t.Errorf("Expected that mkfsArgs(%q, %q) results in\n\t%v\nbut got\n\t%v\n",
-				tt.opts, tt.source, tt.expected, actual)
 		}
 	}
 }
