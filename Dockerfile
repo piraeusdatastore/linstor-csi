@@ -28,7 +28,8 @@ ARG LINSTOR_WAIT_UNTIL
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       xfsprogs e2fsprogs \
-      && apt-get clean && rm -rf /var/lib/apt/lists/*
+      && apt-get clean && rm -rf /var/lib/apt/lists/* \
+      && ln -sf /proc/mounts /etc/mtab
 
 COPY --from=builder /linstor-csi /
 COPY --from=downloader /linstor-wait-until /linstor-wait-until
