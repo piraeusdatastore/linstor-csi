@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Snapshots from S3 are now restored by preferred topology, if possible. Previously, all admissible nodes based
+  on the provided cluster topology were considered in random order. Now the order is fixed to be based on the
+  preferred topology instead.
+
 ### Breaking
 
 - An empty filesystem volume that was provisioned with 0.18.0, but never attached will not be attachable. It is missing

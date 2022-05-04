@@ -27,6 +27,7 @@ import (
 
 	lapiconsts "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -35,6 +36,7 @@ import (
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
+	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
 func TestAllocationSizeKiB(t *testing.T) {
@@ -398,6 +400,63 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 			cap, err := cl.CapacityBytes(context.Background(), testcase.storagePool, testcase.topology)
 			assert.NoError(t, err)
 			assert.Equal(t, testcase.expectedCapacity, cap)
+		})
+	}
+}
+
+func TestLinstor_SortByPreferred(t *testing.T) {
+	t.Parallel()
+
+	m := &mocks.NodeProvider{}
+	m.On("GetAll", mock.Anything, &lapi.ListOpts{Prop: []string{"Aux/zone=1"}}).Return([]lapi.Node{{Name: "node-b"}, {Name: "node-c"}}, nil)
+
+	cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Nodes: m}}, log: logrus.WithField("test", t.Name())}
+
+	testcases := []struct {
+		name              string
+		nodes             []string
+		policy            volume.RemoteAccessPolicy
+		preferredTopology []*csi.Topology
+		expected          []string
+	}{
+		{
+			name:              "no-preferred",
+			nodes:             []string{"node-a", "node-b", "node-c"},
+			preferredTopology: nil,
+			expected:          []string{"node-a", "node-b", "node-c"},
+		},
+		{
+			name:              "one-preferred",
+			nodes:             []string{"node-a", "node-b", "node-c"},
+			policy:            volume.RemoteAccessPolicyLocalOnly,
+			preferredTopology: []*csi.Topology{{Segments: map[string]string{topology.LinstorNodeKey: "node-c"}}},
+			expected:          []string{"node-c", "node-a", "node-b"},
+		},
+		{
+			name:  "all-have-preference",
+			nodes: []string{"node-a", "node-b", "node-c"},
+			preferredTopology: []*csi.Topology{
+				{Segments: map[string]string{topology.LinstorNodeKey: "node-c"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node-b"}},
+				{Segments: map[string]string{topology.LinstorNodeKey: "node-a"}},
+			},
+			expected: []string{"node-c", "node-b", "node-a"},
+		},
+		{
+			name:              "preference-with-remote-policy",
+			nodes:             []string{"node-a", "node-b", "node-c"},
+			policy:            []volume.RemoteAccessPolicyRule{{FromSame: []string{"zone"}}},
+			preferredTopology: []*csi.Topology{{Segments: map[string]string{topology.LinstorNodeKey: "node-c", "zone": "1"}}},
+			expected:          []string{"node-c", "node-b", "node-a"},
+		},
+	}
+
+	for i := range testcases {
+		tcase := &testcases[i]
+		t.Run(tcase.name, func(t *testing.T) {
+			actual, err := cl.SortByPreferred(context.Background(), tcase.nodes, tcase.policy, tcase.preferredTopology)
+			assert.NoError(t, err)
+			assert.Equal(t, tcase.expected, actual)
 		})
 	}
 }

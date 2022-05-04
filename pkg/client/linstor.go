@@ -865,6 +865,13 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volu
 		return err
 	}
 
+	logger.Debug("sort nodes by preference")
+
+	preferredNodes, err := s.SortByPreferred(ctx, nodes, params.AllowRemoteVolumeAccess, topologies.GetPreferred())
+	if err != nil {
+		return err
+	}
+
 	logger.Debug("reconcile resource group from storage class")
 
 	rGroup, err := s.reconcileResourceGroup(ctx, params)
@@ -881,7 +888,7 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volu
 
 	logger.Debug("reconcile snapshot")
 
-	err = s.reconcileSnapshot(ctx, snap.SourceVolumeId, snap.SnapshotId, nodes, params.StoragePool)
+	err = s.reconcileSnapshot(ctx, snap.SourceVolumeId, snap.SnapshotId, preferredNodes, params.StoragePool)
 	if err != nil {
 		return err
 	}
@@ -895,7 +902,7 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volu
 
 	logger.Debug("reconcile resources from snapshot")
 
-	err = s.reconcileSnapshotResources(ctx, snap, rDef.Name, nodes)
+	err = s.reconcileSnapshotResources(ctx, snap, rDef.Name, preferredNodes)
 	if err != nil {
 		return err
 	}
@@ -1951,4 +1958,60 @@ func (s *Linstor) deleteResourceDefinitionAndGroupIfUnused(ctx context.Context, 
 	}
 
 	return nil
+}
+
+// SortByPreferred sorts nodes based on the given topology preferences.
+//
+// The resulting list of nodes contains the same nodes as in the input, but sorted by the preferred topologies.
+// A node matching the first preferred topology will be first in the output, after that nodes that match the first
+// preferred topology via volume.RemoteAccessPolicy, after that nodes for the second preferred topology, until
+// at the end all nodes that don't match any preferred topology are listed.
+func (s *Linstor) SortByPreferred(ctx context.Context, nodes []string, remotePolicy volume.RemoteAccessPolicy, preferred []*csi.Topology) ([]string, error) {
+	prefMap := make(map[string]int)
+
+	for _, node := range nodes {
+		prefMap[node] = math.MaxInt
+	}
+
+	order := 0
+
+	for _, pref := range preferred {
+		// First add the original node directly
+		nodes, err := s.client.NodesForTopology(ctx, pref.GetSegments())
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch nodes for topology: %w", err)
+		}
+
+		for _, node := range nodes {
+			if prefMap[node] == math.MaxInt {
+				prefMap[node] = order
+			}
+		}
+
+		order++
+
+		for _, seg := range remotePolicy.AccessibleSegments(pref.GetSegments()) {
+			nodes, err = s.client.NodesForTopology(ctx, seg)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch nodes for topology: %w", err)
+			}
+
+			for _, node := range nodes {
+				if prefMap[node] == math.MaxInt {
+					prefMap[node] = order
+				}
+			}
+
+			order++
+		}
+	}
+
+	orderedNodes := make([]string, len(nodes))
+	copy(orderedNodes, nodes)
+
+	sort.SliceStable(orderedNodes, func(i, j int) bool {
+		return prefMap[orderedNodes[i]] < prefMap[orderedNodes[j]]
+	})
+
+	return orderedNodes, nil
 }
