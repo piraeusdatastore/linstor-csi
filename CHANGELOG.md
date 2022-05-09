@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.19.0] - 2022-05-09
+
 ### Added
 
 - Snapshots from S3 are now restored by preferred topology, if possible. Previously, all admissible nodes based
@@ -381,7 +383,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.16.1...v0.17.0
 [0.16.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.16.0...v0.16.1
