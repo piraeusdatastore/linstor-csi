@@ -643,7 +643,7 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 			"ControllerPublishVolume failed for %s on node %s: %v", req.GetVolumeId(), req.GetNodeId(), err)
 	}
 
-	err = d.Assignments.Attach(ctx, req.GetVolumeId(), req.GetNodeId(), req.GetReadonly())
+	err = d.Assignments.Attach(ctx, req.GetVolumeId(), req.GetNodeId(), req.GetReadonly(), existingVolume.UseQuorum)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err)

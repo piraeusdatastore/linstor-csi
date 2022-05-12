@@ -33,6 +33,7 @@ type Info struct {
 	ResourceGroup string
 	FsType        string
 	Properties    map[string]string
+	UseQuorum     bool
 }
 
 // Assignment represents a volume situated on a particular node.
@@ -82,7 +83,7 @@ type SnapshotCreateDeleter interface {
 // AttacherDettacher handles operations relating to volume accessiblity on nodes.
 type AttacherDettacher interface {
 	Querier
-	Attach(ctx context.Context, volId, node string, readOnly bool) error
+	Attach(ctx context.Context, volId, node string, readOnly, useQuorum bool) error
 	Detach(ctx context.Context, volId, node string) error
 	NodeAvailable(ctx context.Context, node string) error
 	FindAssignmentOnNode(ctx context.Context, volId, node string) (*Assignment, error)

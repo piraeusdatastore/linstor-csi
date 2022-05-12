@@ -227,6 +227,7 @@ func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinitionWithV
 		ResourceGroup: resDef.ResourceGroupName,
 		FsType:        fsType,
 		Properties:    props,
+		UseQuorum:     resDef.Props["DrbdOptions/Resource/quorum"] != "off",
 	}
 }
 
@@ -426,7 +427,7 @@ func (s *Linstor) GetLegacyVolumeParameters(ctx context.Context, volId string) (
 }
 
 // Attach idempotently creates a resource on the given node.
-func (s *Linstor) Attach(ctx context.Context, volId, node string, readOnly bool) error {
+func (s *Linstor) Attach(ctx context.Context, volId, node string, readOnly, volQuorum bool) error {
 	s.log.WithFields(logrus.Fields{
 		"volume":     volId,
 		"targetNode": node,
@@ -491,7 +492,7 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, readOnly bool)
 
 		// If only half of the expected resources are available, we need a diskfull deployment to have any hope
 		// of achieving quorum on the node. See the comment above availableDiskfullResources.
-		shouldDeployDiskful := availableDiskfullResources > 0 && unavailableDiskfullResources >= availableDiskfullResources
+		shouldDeployDiskful := availableDiskfullResources > 0 && unavailableDiskfullResources >= availableDiskfullResources && volQuorum
 
 		if shouldDeployDiskful {
 			s.log.Infof("%d replicas of %d are apparently not reachable, create a new diskfull resource for quorum", unavailableDiskfullResources, unavailableDiskfullResources+availableDiskfullResources)
