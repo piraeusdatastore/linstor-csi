@@ -23,6 +23,9 @@ import (
 )
 
 const (
+	// DriverName is the name used in CSI calls for this driver.
+	DriverName = "linstor.csi.linbit.com"
+
 	// LegacyParameterPassKey is the Aux props key in linstor where serialized CSI parameters
 	// are stored.
 	LegacyParameterPassKey = lc.NamespcAuxiliary + "/csi-volume-annotations"
@@ -42,14 +45,14 @@ const (
 	PublishedReadOnlyKey = lc.NamespcAuxiliary + "/csi-publish-readonly"
 
 	// ParameterNamespace is the preferred namespace when setting parameters in
-	ParameterNamespace = "linstor.csi.linbit.com"
+	ParameterNamespace = DriverName
 
 	// SnapshotParameterNamespace is the namespace when setting snapshot parameters in storage and snapshot classes.
-	SnapshotParameterNamespace = "snap.linstor.csi.linbit.com"
+	SnapshotParameterNamespace = "snap." + DriverName
 
 	// PropertyNamespace is the namespace for LINSTOR properties in kubernetes storage class parameters.
-	PropertyNamespace = "property.linstor.csi.linbit.com"
+	PropertyNamespace = "property." + DriverName
 
 	// ResourceGroupNamespace is the UUID namespace for generated resource groups
-	ResourceGroupNamespace = "resourcegroup.linstor.csi.linbit.com"
+	ResourceGroupNamespace = "resourcegroup." + DriverName
 )
