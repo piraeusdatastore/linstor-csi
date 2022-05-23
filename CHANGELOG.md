@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Store access policy in volume context, enabling volume context parsing without access to the storage class.
+  This improves the situation for LINSTOR Scheduler and Affinity Controller, which need to access this value.
+
 ## [0.19.0] - 2022-05-09
 
 ### Added
