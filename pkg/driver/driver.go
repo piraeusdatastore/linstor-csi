@@ -298,7 +298,11 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		return nil, status.Errorf(codes.AlreadyExists, "NodePublishVolume failed for %s: controller published readonly=true, but request is for readonly=false", req.GetVolumeId())
 	}
 
-	volCtx := VolumeContextFromMap(req.GetVolumeContext())
+	volCtx, err := VolumeContextFromMap(req.GetVolumeContext())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: invalid volume context: %v", req.GetVolumeId(), err)
+	}
+
 	if volCtx == nil {
 		params, err := d.Storage.GetLegacyVolumeParameters(ctx, req.GetVolumeId())
 		if err != nil {
@@ -561,7 +565,10 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 				volId, err)
 		}
 
-		volCtx := VolumeContextFromParameters(&params)
+		volCtx, err := VolumeContextFromParameters(&params).ToMap()
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: unable to encode volume context: %v", volId, err)
+		}
 
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
@@ -569,7 +576,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 				CapacityBytes:      existingVolume.SizeBytes,
 				ContentSource:      req.GetVolumeContentSource(),
 				AccessibleTopology: topos,
-				VolumeContext:      volCtx.ToMap(),
+				VolumeContext:      volCtx,
 			},
 		}, nil
 	}
@@ -1280,7 +1287,10 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 			info.ID, err)
 	}
 
-	volCtx := VolumeContextFromParameters(params)
+	volCtx, err := VolumeContextFromParameters(params).ToMap()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", info.ID, err)
+	}
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
@@ -1288,7 +1298,7 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 			ContentSource:      req.GetVolumeContentSource(),
 			CapacityBytes:      info.SizeBytes,
 			AccessibleTopology: topos,
-			VolumeContext:      volCtx.ToMap(),
+			VolumeContext:      volCtx,
 		},
 	}, nil
 }
