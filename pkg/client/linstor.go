@@ -272,7 +272,7 @@ func (s *Linstor) CompatibleVolumeId(name, pvcNamespace, pvcName string) string 
 
 	s.log.WithField("reason", invalid).Debug("volume name is invalid, will generate fallback")
 
-	uuidv5 := uuid.NewSHA1([]byte("linstor.csi.linbit.com"), []byte(name))
+	uuidv5 := uuid.NewSHA1([]byte(linstor.DriverName), []byte(name))
 
 	return fmt.Sprintf("vol-%s", uuidv5.String())
 }
@@ -700,7 +700,7 @@ func (s *Linstor) CompatibleSnapshotId(name string) string {
 
 	s.log.WithField("reason", invalid).Debug("snapshot name is invalid, will generate fallback")
 
-	uuidv5 := uuid.NewSHA1([]byte("linstor.csi.linbit.com"), []byte(name))
+	uuidv5 := uuid.NewSHA1([]byte(linstor.DriverName), []byte(name))
 
 	return fmt.Sprintf("snapshot-%s", uuidv5.String())
 }
