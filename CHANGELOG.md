@@ -6,10 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.19.1] - 2022-05-24
+
 ### Added
 
 - Store access policy in volume context, enabling volume context parsing without access to the storage class.
   This improves the situation for LINSTOR Scheduler and Affinity Controller, which need to access this value.
+
+### Changed
+
+- The attach logic was updated to take the quorum configuration into account. Previously, the CSI driver would
+  create a diskful resource in the assumption that it is required to achieve quorum, even if the cluster was
+  configured without quorum.
 
 ## [0.19.0] - 2022-05-09
 
@@ -388,7 +396,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.19.1...HEAD
+[0.19.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.16.1...v0.17.0
