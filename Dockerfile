@@ -9,7 +9,7 @@ COPY . /src/
 ARG TARGETARCH
 ARG TARGETOS
 ARG VERSION=unknown
-RUN GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 \
+RUN --mount=type=cache,target=/root/.cache/go-build GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 \
     go build \
     -a \
     -ldflags "-X github.com/piraeusdatastore/linstor-csi/pkg/driver.Version=$VERSION -extldflags -static"  \
