@@ -729,12 +729,23 @@ func (s *Linstor) createInClusterSnapshot(ctx context.Context, id, sourceVolId s
 
 	log.Debug("Creating in-cluster snapshot")
 
+	ress, err := s.client.Resources.GetAll(ctx, sourceVolId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list source resources: %w", err)
+	}
+
+	for i := range ress {
+		if ress[i].State == nil {
+			return nil, fmt.Errorf("resource in unknown state, refusing to snapshot")
+		}
+	}
+
 	snapConfig := lapi.Snapshot{
 		Name:         id,
 		ResourceName: sourceVolId,
 	}
 
-	err := s.client.Resources.CreateSnapshot(ctx, snapConfig)
+	err = s.client.Resources.CreateSnapshot(ctx, snapConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create snapshot: %v", err)
 	}
