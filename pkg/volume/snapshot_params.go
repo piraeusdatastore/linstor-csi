@@ -10,7 +10,7 @@ import (
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 )
 
-//go:generate enumer -type=SnapshotType -trimprefix=SnapshotType
+//go:generate go run github.com/alvaroloes/enumer@v1.1.2 -type=SnapshotType -trimprefix=SnapshotType
 
 type SnapshotType int
 
