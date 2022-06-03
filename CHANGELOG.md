@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- A new check ensures snapshots are only attempted when the resource is completely in sync. This prevents an issue
+  with LINSTOR creating too many error reports in case a node is (temporarily) offline.
+
 ## [0.19.1] - 2022-05-24
 
 ### Added
