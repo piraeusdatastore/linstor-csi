@@ -87,6 +87,8 @@ type AttacherDettacher interface {
 	Detach(ctx context.Context, volId, node string) error
 	NodeAvailable(ctx context.Context, node string) error
 	FindAssignmentOnNode(ctx context.Context, volId, node string) (*Assignment, error)
+	// Status returns the currently deployed nodes and condition of the given volume
+	Status(ctx context.Context, volId string) ([]string, *csi.VolumeCondition, error)
 }
 
 // Querier retrives various states of volumes.

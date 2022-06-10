@@ -784,6 +784,11 @@ func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*
 	// Build up entries list from paginated volume slice.
 	entries := make([]*csi.ListVolumesResponse_Entry, len(volumes))
 	for i, vol := range volumes {
+		nodes, condition, err := d.Assignments.Status(ctx, vol.ID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "ListVolumes failed to find nodes for volume '%s': %v", vol.ID, err)
+		}
+
 		entries[i] = &csi.ListVolumesResponse_Entry{
 			Volume: &csi.Volume{
 				VolumeId:      vol.ID,
@@ -791,7 +796,10 @@ func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*
 				// NB: Topology is specifically excluded here. For topology we would need the volume context, which
 				// we don't have here. This might not be strictly to spec, but current consumers don't do anything with
 				// the information, so it should be fine.
-				// TODO: volume status
+			},
+			Status: &csi.ListVolumesResponse_VolumeStatus{
+				PublishedNodeIds: nodes,
+				VolumeCondition:  condition,
 			},
 		}
 	}
@@ -889,6 +897,21 @@ func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Controll
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
+				},
+			}},
+			{Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: csi.ControllerServiceCapability_RPC_GET_VOLUME,
+				},
+			}},
+			{Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: csi.ControllerServiceCapability_RPC_LIST_VOLUMES_PUBLISHED_NODES,
+				},
+			}},
+			{Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: csi.ControllerServiceCapability_RPC_VOLUME_CONDITION,
 				},
 			}},
 		},
@@ -1125,8 +1148,31 @@ func (d Driver) ControllerExpandVolume(ctx context.Context, req *csi.ControllerE
 }
 
 // ControllerGetVolume https://github.com/container-storage-interface/spec/blob/v1.6.0/spec.md#controllergetvolume
-func (d Driver) ControllerGetVolume(ctx context.Context, request *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "")
+func (d Driver) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
+	vol, err := d.Storage.FindByID(ctx, req.GetVolumeId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to find volume '%s': %v", req.GetVolumeId(), err)
+	}
+
+	if vol == nil {
+		return nil, status.Errorf(codes.NotFound, "no volume '%s' found", req.GetVolumeId())
+	}
+
+	nodes, condition, err := d.Assignments.Status(ctx, vol.ID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to find nodes for volume '%s': %v", vol.ID, err)
+	}
+
+	return &csi.ControllerGetVolumeResponse{
+		Volume: &csi.Volume{
+			VolumeId:      vol.ID,
+			CapacityBytes: vol.SizeBytes,
+		},
+		Status: &csi.ControllerGetVolumeResponse_VolumeStatus{
+			PublishedNodeIds: nodes,
+			VolumeCondition:  condition,
+		},
+	}, nil
 }
 
 // Run the server.

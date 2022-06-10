@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A new check ensures snapshots are only attempted when the resource is completely in sync. This prevents an issue
   with LINSTOR creating too many error reports in case a node is (temporarily) offline.
+- Support CSI Volume Conditions
 
 ### Changed
 

@@ -460,3 +460,47 @@ func TestLinstor_SortByPreferred(t *testing.T) {
 		})
 	}
 }
+
+func TestLinstor_Status(t *testing.T) {
+	tcases := []struct {
+		name              string
+		response          []byte
+		expectedNodes     []string
+		expectedCondition *csi.VolumeCondition
+	}{
+		{
+			// All resource connected and up to date
+			name:              "pvc-080c4024-9f03-4d71-909f-be4aa58e64ff",
+			response:          []byte(`[{"name":"pvc-080c4024-9f03-4d71-909f-be4aa58e64ff","node_name":"openshift-worker-0.oc","props":{"StorPoolName":"worker-pool"},"layer_object":{"children":[{"type":"STORAGE","storage":{"storage_volumes":[{"volume_number":0,"device_path":"/dev/linstor-vg/pvc-080c4024-9f03-4d71-909f-be4aa58e64ff_00000","allocated_size_kib":507758,"usable_size_kib":8392704,"disk_state":"[]"}]}}],"type":"DRBD","drbd":{"drbd_resource_definition":{"peer_slots":7,"al_stripes":1,"al_stripe_size_kib":32,"port":7004,"transport_type":"IP","secret":"0iTx8wUc7WfRFZ9f5clx","down":false},"node_id":2,"peer_slots":7,"al_stripes":1,"al_size":32,"drbd_volumes":[{"drbd_volume_definition":{"volume_number":0,"minor_number":1004},"device_path":"/dev/drbd1004","backing_device":"/dev/linstor-vg/pvc-080c4024-9f03-4d71-909f-be4aa58e64ff_00000","allocated_size_kib":8390440,"usable_size_kib":8388608}],"connections":{"openshift-worker-2.oc":{"connected":true,"message":"Connected"},"openshift-worker-1.oc":{"connected":true,"message":"Connected"}},"promotion_score":10103,"may_promote":false}},"state":{"in_use":false},"uuid":"0c9c79f1-0c7d-44d6-9113-18f1f8da2f36","create_timestamp":1650958143619},{"name":"pvc-080c4024-9f03-4d71-909f-be4aa58e64ff","node_name":"openshift-worker-1.oc","props":{"StorPoolName":"worker-pool"},"layer_object":{"children":[{"type":"STORAGE","storage":{"storage_volumes":[{"volume_number":0,"device_path":"/dev/linstor-vg/pvc-080c4024-9f03-4d71-909f-be4aa58e64ff_00000","allocated_size_kib":507758,"usable_size_kib":8392704,"disk_state":"[]"}]}}],"type":"DRBD","drbd":{"drbd_resource_definition":{"peer_slots":7,"al_stripes":1,"al_stripe_size_kib":32,"port":7004,"transport_type":"IP","secret":"0iTx8wUc7WfRFZ9f5clx","down":false},"node_id":1,"peer_slots":7,"al_stripes":1,"al_size":32,"drbd_volumes":[{"drbd_volume_definition":{"volume_number":0,"minor_number":1004},"device_path":"/dev/drbd1004","backing_device":"/dev/linstor-vg/pvc-080c4024-9f03-4d71-909f-be4aa58e64ff_00000","allocated_size_kib":8390440,"usable_size_kib":8388608}],"connections":{"openshift-worker-2.oc":{"connected":true,"message":"Connected"},"openshift-worker-0.oc":{"connected":true,"message":"Connected"}},"promotion_score":10103,"may_promote":false}},"state":{"in_use":true},"uuid":"75a226de-172e-4464-ab1c-e1ad22ae8929","create_timestamp":1650958145216},{"name":"pvc-080c4024-9f03-4d71-909f-be4aa58e64ff","node_name":"openshift-worker-2.oc","props":{"StorPoolName":"worker-pool"},"layer_object":{"children":[{"type":"STORAGE","storage":{"storage_volumes":[{"volume_number":0,"device_path":"/dev/linstor-vg/pvc-080c4024-9f03-4d71-909f-be4aa58e64ff_00000","allocated_size_kib":507758,"usable_size_kib":8392704,"disk_state":"[]"}]}}],"type":"DRBD","drbd":{"drbd_resource_definition":{"peer_slots":7,"al_stripes":1,"al_stripe_size_kib":32,"port":7004,"transport_type":"IP","secret":"0iTx8wUc7WfRFZ9f5clx","down":false},"node_id":0,"peer_slots":7,"al_stripes":1,"al_size":32,"drbd_volumes":[{"drbd_volume_definition":{"volume_number":0,"minor_number":1004},"device_path":"/dev/drbd1004","backing_device":"/dev/linstor-vg/pvc-080c4024-9f03-4d71-909f-be4aa58e64ff_00000","allocated_size_kib":8390440,"usable_size_kib":8388608}],"connections":{"openshift-worker-0.oc":{"connected":true,"message":"Connected"},"openshift-worker-1.oc":{"connected":true,"message":"Connected"}},"promotion_score":10103,"may_promote":false}},"state":{"in_use":false},"uuid":"3939463f-2c72-4918-b485-53d44ca4337d","create_timestamp":1650958142041}]`),
+			expectedNodes:     []string{"openshift-worker-0.oc", "openshift-worker-1.oc", "openshift-worker-2.oc"},
+			expectedCondition: &csi.VolumeCondition{Abnormal: false, Message: "Volume healthy"},
+		},
+		{
+			// One resource disconnected
+			name:              "res1",
+			response:          []byte(`[{"name":"res1","node_name":"openshift-master-0.oc","props":{"StorPoolName":"master-pool"},"layer_object":{"children":[{"type":"STORAGE","storage":{"storage_volumes":[{"volume_number":0,"device_path":"/dev/linstor-vg/res1_00000","allocated_size_kib":421,"usable_size_kib":1052672,"disk_state":"[]"}]}}],"type":"DRBD","drbd":{"drbd_resource_definition":{"peer_slots":7,"al_stripes":1,"al_stripe_size_kib":32,"port":7006,"transport_type":"IP","secret":"cADS/SmRP49riL4Ge+zf","down":false},"node_id":0,"peer_slots":7,"al_stripes":1,"al_size":32,"drbd_volumes":[{"drbd_volume_definition":{"volume_number":0,"minor_number":1006},"device_path":"/dev/drbd1006","backing_device":"/dev/linstor-vg/res1_00000","allocated_size_kib":1048840,"usable_size_kib":1048576}],"connections":{"openshift-master-1.oc":{"connected":false,"message":"Connecting"},"openshift-master-2.oc":{"connected":true,"message":"Connected"}},"promotion_score":10101,"may_promote":true}},"state":{"in_use":false},"uuid":"0b6003e6-c973-40ca-b1fd-46039f79c238","create_timestamp":1655106116603},{"name":"res1","node_name":"openshift-master-1.oc","props":{"StorPoolName":"master-pool"},"layer_object":{"children":[{"type":"STORAGE","storage":{"storage_volumes":[{"volume_number":0,"device_path":"/dev/linstor-vg/res1_00000","allocated_size_kib":421,"usable_size_kib":1052672,"disk_state":"[]"}]}}],"type":"DRBD","drbd":{"drbd_resource_definition":{"peer_slots":7,"al_stripes":1,"al_stripe_size_kib":32,"port":7006,"transport_type":"IP","secret":"cADS/SmRP49riL4Ge+zf","down":false},"node_id":1,"peer_slots":7,"al_stripes":1,"al_size":32,"drbd_volumes":[{"drbd_volume_definition":{"volume_number":0,"minor_number":1006},"device_path":"/dev/drbd1006","backing_device":"/dev/linstor-vg/res1_00000","allocated_size_kib":1048840,"usable_size_kib":1048576}],"connections":{"openshift-master-2.oc":{"connected":false,"message":"StandAlone"},"openshift-master-0.oc":{"connected":false,"message":"StandAlone"}},"promotion_score":0,"may_promote":false}},"state":{"in_use":false},"uuid":"787cd251-0e6f-4135-8a41-3bf6292d4853","create_timestamp":1655106118277},{"name":"res1","node_name":"openshift-master-2.oc","props":{"StorPoolName":"DfltDisklessStorPool"},"flags":["DISKLESS","DRBD_DISKLESS","TIE_BREAKER"],"layer_object":{"children":[{"type":"STORAGE","storage":{"storage_volumes":[{"volume_number":0,"allocated_size_kib":0,"usable_size_kib":1048576}]}}],"type":"DRBD","drbd":{"drbd_resource_definition":{"peer_slots":7,"al_stripes":1,"al_stripe_size_kib":32,"port":7006,"transport_type":"IP","secret":"cADS/SmRP49riL4Ge+zf","down":false},"node_id":2,"peer_slots":7,"al_stripes":1,"al_size":32,"flags":["DISKLESS","INITIALIZED"],"drbd_volumes":[{"drbd_volume_definition":{"volume_number":0,"minor_number":1006},"device_path":"/dev/drbd1006","allocated_size_kib":-1,"usable_size_kib":1048576}],"connections":{"openshift-master-1.oc":{"connected":false,"message":"Connecting"},"openshift-master-0.oc":{"connected":true,"message":"Connected"}},"promotion_score":1,"may_promote":true}},"state":{"in_use":false},"uuid":"b3aae5c4-64d9-4d24-a1ba-a306b21d53a8","create_timestamp":1655106114421}]`),
+			expectedNodes:     []string{"openshift-master-0.oc", "openshift-master-1.oc", "openshift-master-2.oc"},
+			expectedCondition: &csi.VolumeCondition{Abnormal: true, Message: "Resource with issues on node(s): openshift-master-1.oc"},
+		},
+	}
+
+	for i := range tcases {
+		tcase := &tcases[i]
+
+		t.Run(tcase.name, func(t *testing.T) {
+			var parsedResponse []lapi.Resource
+			err := json.Unmarshal(tcase.response, &parsedResponse)
+			assert.NoError(t, err)
+
+			r := &mocks.ResourceProvider{}
+			r.On("GetAll", mock.Anything, tcase.name).Return(parsedResponse, nil)
+			cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: r}}, log: logrus.WithField("test", t.Name())}
+
+			actualNodes, actualCondition, err := cl.Status(context.Background(), tcase.name)
+			assert.NoError(t, err)
+			r.AssertExpectations(t)
+			assert.ElementsMatch(t, tcase.expectedNodes, actualNodes)
+			assert.Equal(t, tcase.expectedCondition, actualCondition)
+		})
+	}
+}

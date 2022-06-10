@@ -227,6 +227,15 @@ func (s *MockStorage) FindAssignmentOnNode(ctx context.Context, volId, node stri
 	return nil, nil
 }
 
+func (s *MockStorage) Status(ctx context.Context, volId string) ([]string, *csi.VolumeCondition, error) {
+	nodes := make([]string, 0, len(s.assignedVolumes[volId]))
+	for _, a := range s.assignedVolumes[volId] {
+		nodes = append(nodes, a.Node)
+	}
+
+	return nodes, &csi.VolumeCondition{Abnormal: false, Message: "All replicas normal"}, nil
+}
+
 func (s *MockStorage) CapacityBytes(ctx context.Context, sp string, segments map[string]string) (int64, error) {
 	return 50000000, nil
 }
