@@ -21,6 +21,7 @@ package util
 import (
 	apiconst "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
+	"github.com/LINBIT/golinstor/devicelayerkind"
 )
 
 // DeployedDiskfullyNodes lists all nodes where a resource has volumes physically
@@ -92,4 +93,19 @@ nextCandidate:
 		return false
 	}
 	return true
+}
+
+func GetDrbdLayer(layer *lapi.ResourceLayer) *lapi.DrbdResource {
+	if layer.Type == devicelayerkind.Drbd {
+		return &layer.Drbd
+	}
+
+	for i := range layer.Children {
+		drbd := GetDrbdLayer(&layer.Children[i])
+		if drbd != nil {
+			return drbd
+		}
+	}
+
+	return nil
 }

@@ -1619,6 +1619,47 @@ func (s *Linstor) FindAssignmentOnNode(ctx context.Context, volId, node string) 
 	return va, nil
 }
 
+func (s *Linstor) Status(ctx context.Context, volId string) ([]string, *csi.VolumeCondition, error) {
+	s.log.WithFields(logrus.Fields{
+		"volume": volId,
+	}).Debug("getting assignments")
+
+	ress, err := s.client.Resources.GetAll(ctx, volId)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to list resources for '%s': %w", volId, err)
+	}
+
+	var allNodes, abnormalNodes []string
+
+	for i := range ress {
+		res := &ress[i]
+
+		allNodes = append(allNodes, res.NodeName)
+
+		if res.State == nil {
+			abnormalNodes = append(abnormalNodes, res.NodeName)
+			continue
+		}
+
+		drbd := util.GetDrbdLayer(&res.LayerObject)
+		if drbd != nil && drbd.PromotionScore == 0 {
+			abnormalNodes = append(abnormalNodes, res.NodeName)
+		}
+	}
+
+	condition := &csi.VolumeCondition{
+		Abnormal: false,
+		Message:  "Volume healthy",
+	}
+
+	if len(abnormalNodes) > 0 {
+		condition.Abnormal = true
+		condition.Message = fmt.Sprintf("Resource with issues on node(s): %s", strings.Join(abnormalNodes, ","))
+	}
+
+	return allNodes, condition, nil
+}
+
 // Mount makes volumes consumable from the source to the target.
 // Filesystems are formatted and block devices are bind mounted.
 // Operates locally on the machines where it is called.
