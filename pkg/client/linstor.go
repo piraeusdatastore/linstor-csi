@@ -1257,9 +1257,10 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 	logger.Debug("check if volume definition already exists")
 	vDef, err := s.client.Client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ID, 0)
 	if err == lapi.NotFoundError {
+		zero := int32(0)
 		vdCreate := lapi.VolumeDefinitionCreate{
 			VolumeDefinition: lapi.VolumeDefinition{
-				VolumeNumber: 0,
+				VolumeNumber: &zero,
 				SizeKib:      expectedSizeKiB,
 			},
 		}
@@ -1899,7 +1900,7 @@ func (s *Linstor) ControllerExpand(ctx context.Context, vol *volume.Info) error 
 		return fmt.Errorf("storage only support expand does not support reduce.volumeInfo: %v old: %d, new: %d", vol, volumeDefinitions[0].SizeKib, volumeDefinitionModify.SizeKib)
 	}
 
-	err = s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, vol.ID, int(volumeDefinitions[0].VolumeNumber), volumeDefinitionModify)
+	err = s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, vol.ID, int(*volumeDefinitions[0].VolumeNumber), volumeDefinitionModify)
 	if err != nil {
 		return err
 	}
