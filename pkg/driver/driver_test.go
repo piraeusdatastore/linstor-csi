@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	lapi "github.com/LINBIT/golinstor/client"
-	"github.com/kubernetes-csi/csi-test/v4/pkg/sanity"
+	"github.com/kubernetes-csi/csi-test/v5/pkg/sanity"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 
@@ -28,7 +28,6 @@ var (
 	logLevel              = flag.String("sanity.log-level", "debug", "how much logging to do")
 	rps                   = flag.Float64("sanity.linstor-api-requests-per-second", 0, "Maximum allowed number of LINSTOR API requests per second. Default: Unlimited")
 	burst                 = flag.Int("sanity.linstor-api-burst", 1, "Maximum number of API requests allowed before being limited by requests-per-second. Default: 1 (no bursting)")
-	junitfile             = flag.String("sanity.junitfile", "", "File to write the test results to")
 )
 
 func TestDriver(t *testing.T) {
@@ -117,7 +116,6 @@ func TestDriver(t *testing.T) {
 	cfg.TargetPath = mntDir + "/csi-target"
 	cfg.StagingPath = mntStageDir + "/csi-staging"
 	cfg.TestVolumeParametersFile = *paramsFile
-	cfg.JUnitFile = *junitfile
 
 	// Now call the test suite
 	sanity.Test(t, cfg)
