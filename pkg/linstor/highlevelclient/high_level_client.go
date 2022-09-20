@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"strings"
 
-	linstor "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 
@@ -36,6 +35,7 @@ import (
 // HighLevelClient is a golinstor client with convience functions.
 type HighLevelClient struct {
 	*lapi.Client
+	PropertyNamespace string
 }
 
 // NewHighLevelClient returns a pointer to a golinstor client with convience.
@@ -44,7 +44,8 @@ func NewHighLevelClient(options ...lapi.Option) (*HighLevelClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &HighLevelClient{c}, nil
+
+	return &HighLevelClient{Client: c}, nil
 }
 
 // GenericAccessibleTopologies returns topologies based on linstor storage pools
@@ -70,8 +71,8 @@ func (c *HighLevelClient) GenericAccessibleTopologies(ctx context.Context, volId
 		segs := make(map[string]string)
 
 		for k, v := range nodes[i].Props {
-			if strings.HasPrefix(k, linstor.NamespcAuxiliary+"/") {
-				segs[k[len(linstor.NamespcAuxiliary+"/"):]] = v
+			if strings.HasPrefix(k, c.PropertyNamespace+"/") {
+				segs[k[len(c.PropertyNamespace+"/"):]] = v
 			}
 		}
 
@@ -133,7 +134,7 @@ func (c *HighLevelClient) NodesForTopology(ctx context.Context, segments map[str
 	opts := &lapi.ListOpts{}
 
 	for k, v := range segments {
-		opts.Prop = append(opts.Prop, fmt.Sprintf("Aux/%s=%s", k, v))
+		opts.Prop = append(opts.Prop, fmt.Sprintf("%s/%s=%s", c.PropertyNamespace, k, v))
 	}
 
 	nodes, err := c.Nodes.GetAll(ctx, opts)

@@ -64,6 +64,7 @@ type Linstor struct {
 	fallbackPrefix string
 	client         *lc.HighLevelClient
 	mounter        *mount.SafeFormatAndMount
+	labelBySP      bool
 }
 
 // NewLinstor returns a high-level linstor client for CSI applications to interact with
@@ -78,7 +79,10 @@ func NewLinstor(options ...func(*Linstor) error) (*Linstor, error) {
 		fallbackPrefix: "csi-",
 		log:            logrus.NewEntry(logrus.New()),
 		client:         c,
+		labelBySP:      true,
 	}
+
+	l.client.PropertyNamespace = lapiconsts.NamespcAuxiliary
 
 	// run all option functions.
 	for _, opt := range options {
@@ -129,6 +133,14 @@ func LogOut(out io.Writer) func(*Linstor) error {
 func LogFmt(fmt logrus.Formatter) func(*Linstor) error {
 	return func(l *Linstor) error {
 		l.log.Logger.SetFormatter(fmt)
+		return nil
+	}
+}
+
+func PropertyNamespace(ns string) func(*Linstor) error {
+	return func(l *Linstor) error {
+		l.client.PropertyNamespace = ns
+
 		return nil
 	}
 }
@@ -1935,7 +1947,7 @@ func (s *Linstor) GetNodeTopologies(ctx context.Context, nodename string) (*csi.
 		return nil, fmt.Errorf("failed to get node: %w", err)
 	}
 
-	const auxPrefix = lapiconsts.NamespcAuxiliary + "/"
+	auxPrefix := s.client.PropertyNamespace + "/"
 	for k, v := range node.Props {
 		if strings.HasPrefix(k, auxPrefix) {
 			topo.Segments[k[len(auxPrefix):]] = v
