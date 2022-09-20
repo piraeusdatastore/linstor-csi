@@ -145,6 +145,14 @@ func PropertyNamespace(ns string) func(*Linstor) error {
 	}
 }
 
+func LabelBySP(b bool) func(*Linstor) error {
+	return func(l *Linstor) error {
+		l.labelBySP = b
+
+		return nil
+	}
+}
+
 // LogLevel sets the logging intensity. Debug additionally reports the function
 // from which the logger was called.
 func LogLevel(s string) func(*Linstor) error {
@@ -1927,10 +1935,17 @@ func (s *Linstor) GetNodeTopologies(ctx context.Context, nodename string) (*csi.
 		},
 	}
 
-	cached := true
-	pools, err := s.client.Nodes.GetStoragePools(ctx, nodename, &lapi.ListOpts{Cached: &cached})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get storage pools for node: %w", err)
+	var pools []lapi.StoragePool
+
+	if s.labelBySP {
+		cached := true
+
+		p, err := s.client.Nodes.GetStoragePools(ctx, nodename, &lapi.ListOpts{Cached: &cached})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get storage pools for node: %w", err)
+		}
+
+		pools = p
 	}
 
 	// Ideally we could pass the configured storage pools as a single "linbit.com/storage-pool = [pool1, pool2, ...]".

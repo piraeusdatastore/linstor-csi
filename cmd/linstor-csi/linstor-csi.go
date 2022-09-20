@@ -50,6 +50,7 @@ func main() {
 		burst                 = flag.Int("linstor-api-burst", 1, "Maximum number of API requests allowed before being limited by requests-per-second. Default: 1 (no bursting)")
 		bearerTokenFile       = flag.String("bearer-token", "", "Read the bearer token from the given file and use it for authentication.")
 		propNs                = flag.String("property-namespace", linstor.NamespcAuxiliary, "Limit the reported topology keys to properties from the given namespace.")
+		labelBySP             = flag.Bool("label-by-storage-pool", true, "Set to false to disable labeling of nodes based on their configured storage pools.")
 	)
 
 	flag.Var(&volume.DefaultRemoteAccessPolicy, "default-remote-access-policy", "")
@@ -135,6 +136,7 @@ func main() {
 		client.LogLevel(*logLevel),
 		client.LogOut(logOut),
 		client.PropertyNamespace(*propNs),
+		client.LabelBySP(*labelBySP),
 	)
 	if err != nil {
 		log.Fatal(err)
