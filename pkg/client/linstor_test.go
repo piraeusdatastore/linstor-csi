@@ -326,7 +326,7 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 	m.On("GetAll", mock.Anything, &lapi.ListOpts{Prop: []string{"Aux/topology.kubernetes.io/zone=zone-1"}}).Return([]lapi.Node{{Name: "node-1"}}, nil)
 	m.On("GetAll", mock.Anything, mock.Anything).Return([]lapi.Node{{Name: "node-1"}, {Name: "node-2"}}, nil)
 
-	cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Nodes: &m}}, log: logrus.WithField("test", t.Name())}
+	cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Nodes: &m}, PropertyNamespace: lapiconsts.NamespcAuxiliary}, log: logrus.WithField("test", t.Name())}
 
 	testcases := []struct {
 		name             string
@@ -410,7 +410,7 @@ func TestLinstor_SortByPreferred(t *testing.T) {
 	m := &mocks.NodeProvider{}
 	m.On("GetAll", mock.Anything, &lapi.ListOpts{Prop: []string{"Aux/zone=1"}}).Return([]lapi.Node{{Name: "node-b"}, {Name: "node-c"}}, nil)
 
-	cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Nodes: m}}, log: logrus.WithField("test", t.Name())}
+	cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Nodes: m}, PropertyNamespace: lapiconsts.NamespcAuxiliary}, log: logrus.WithField("test", t.Name())}
 
 	testcases := []struct {
 		name              string
