@@ -179,7 +179,7 @@ func TestLinstor_Attach(t *testing.T) {
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		err := cl.Attach(context.Background(), ExampleResourceID, "node-2", false, false, true)
+		err := cl.Attach(context.Background(), ExampleResourceID, "node-2", false, false)
 		assert.NoError(t, err)
 		m.AssertExpectations(t)
 	})
@@ -196,7 +196,7 @@ func TestLinstor_Attach(t *testing.T) {
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, false, true)
+		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, false)
 		assert.NoError(t, err)
 		m.AssertExpectations(t)
 	})
@@ -214,59 +214,7 @@ func TestLinstor_Attach(t *testing.T) {
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, false, true)
-		assert.NoError(t, err)
-		m.AssertExpectations(t)
-	})
-
-	t.Run("no resource with reduced diskfull resources", func(t *testing.T) {
-		m := mocks.ResourceProvider{}
-		rv, rvErr := fromJson(ResourceViewOneOfflineNoQuorum)
-
-		m.ExpectedCalls = []*mock.Call{
-			{Method: "GetResourceView", Arguments: mock.Arguments{mock.Anything, mock.Anything}, ReturnArguments: mock.Arguments{rv, rvErr}},
-			{Method: "Get", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3"}, ReturnArguments: mock.Arguments{lapi.Resource{}, nil}},
-			{Method: "MakeAvailable", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", lapi.ResourceMakeAvailable{Diskful: true}}, ReturnArguments: mock.Arguments{nil}},
-			{Method: "ModifyVolume", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", 0, ResourceModifyReadWriteWithTemporaryAttach}, ReturnArguments: mock.Arguments{nil}},
-		}
-		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
-
-		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, false, true)
-		assert.NoError(t, err)
-		m.AssertExpectations(t)
-	})
-
-	t.Run("no resource with reduced diskfull resources - make-available conflict", func(t *testing.T) {
-		m := mocks.ResourceProvider{}
-		rv, rvErr := fromJson(ResourceViewOneOfflineNoQuorum)
-
-		m.ExpectedCalls = []*mock.Call{
-			{Method: "GetResourceView", Arguments: mock.Arguments{mock.Anything, mock.Anything}, ReturnArguments: mock.Arguments{rv, rvErr}},
-			{Method: "Get", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3"}, ReturnArguments: mock.Arguments{lapi.Resource{}, nil}},
-			{Method: "MakeAvailable", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", lapi.ResourceMakeAvailable{Diskful: true}}, ReturnArguments: mock.Arguments{lapi.NotFoundError}},
-			{Method: "Create", Arguments: mock.Arguments{mock.Anything, lapi.ResourceCreate{Resource: lapi.Resource{Name: ExampleResourceID, NodeName: "node-3"}}}, ReturnArguments: mock.Arguments{nil}},
-			{Method: "ModifyVolume", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", 0, ResourceModifyReadWriteWithTemporaryAttach}, ReturnArguments: mock.Arguments{nil}},
-		}
-		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
-
-		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, false, true)
-		assert.NoError(t, err)
-		m.AssertExpectations(t)
-	})
-
-	t.Run("no resource with reduced standalone resources", func(t *testing.T) {
-		m := mocks.ResourceProvider{}
-		rv, rvErr := fromJson(ResourceViewOneDrbdForceDisconnectNoQuorum)
-
-		m.ExpectedCalls = []*mock.Call{
-			{Method: "GetResourceView", Arguments: mock.Arguments{mock.Anything, mock.Anything}, ReturnArguments: mock.Arguments{rv, rvErr}},
-			{Method: "Get", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3"}, ReturnArguments: mock.Arguments{lapi.Resource{}, nil}},
-			{Method: "MakeAvailable", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", lapi.ResourceMakeAvailable{Diskful: true}}, ReturnArguments: mock.Arguments{nil}},
-			{Method: "ModifyVolume", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", 0, ResourceModifyReadWriteWithTemporaryAttach}, ReturnArguments: mock.Arguments{nil}},
-		}
-		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
-
-		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, false, true)
+		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, false)
 		assert.NoError(t, err)
 		m.AssertExpectations(t)
 	})
@@ -283,7 +231,7 @@ func TestLinstor_Attach(t *testing.T) {
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		err := cl.Attach(context.Background(), ExampleResourceID, "node-2", true, false, true)
+		err := cl.Attach(context.Background(), ExampleResourceID, "node-2", true, false)
 		assert.NoError(t, err)
 		m.AssertExpectations(t)
 	})

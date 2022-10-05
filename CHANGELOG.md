@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - When using another property namespace (other than `Aux/`), also use it to prefix `replicasOnSame`
   and `replicasOnDifferent`. Values already prefixed with `Aux/` will be left unchanged.
+- Starting with 0.13.1, the CSI driver tried to work around an issue in quorum calculation
+  by forcing the creation of a diskful instead of the normal diskless resource. Since DRBD 9.1.12/9.2.0,
+  this is no longer necessary, as quorum is now inherited from the diskful counterparts.
 
 ## [1.0.1] - 2023-04-24
 
