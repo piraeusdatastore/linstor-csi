@@ -666,7 +666,7 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 	// ReadWriteMany block volume
 	rwxBlock := req.VolumeCapability.AccessMode.GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER && req.VolumeCapability.GetBlock() != nil
 
-	err = d.Assignments.Attach(ctx, req.GetVolumeId(), req.GetNodeId(), req.GetReadonly(), rwxBlock, existingVolume.UseQuorum)
+	err = d.Assignments.Attach(ctx, req.GetVolumeId(), req.GetNodeId(), req.GetReadonly(), rwxBlock)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err)
