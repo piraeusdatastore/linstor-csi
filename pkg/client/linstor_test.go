@@ -179,7 +179,7 @@ func TestLinstor_Attach(t *testing.T) {
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		err := cl.Attach(context.Background(), ExampleResourceID, "node-2", false, true)
+		err := cl.Attach(context.Background(), ExampleResourceID, "node-2", false, false, true)
 		assert.NoError(t, err)
 		m.AssertExpectations(t)
 	})
@@ -196,7 +196,7 @@ func TestLinstor_Attach(t *testing.T) {
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, true)
+		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, false, true)
 		assert.NoError(t, err)
 		m.AssertExpectations(t)
 	})
@@ -214,7 +214,7 @@ func TestLinstor_Attach(t *testing.T) {
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, true)
+		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, false, true)
 		assert.NoError(t, err)
 		m.AssertExpectations(t)
 	})
@@ -231,7 +231,7 @@ func TestLinstor_Attach(t *testing.T) {
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, true)
+		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, false, true)
 		assert.NoError(t, err)
 		m.AssertExpectations(t)
 	})
@@ -249,7 +249,7 @@ func TestLinstor_Attach(t *testing.T) {
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, true)
+		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, false, true)
 		assert.NoError(t, err)
 		m.AssertExpectations(t)
 	})
@@ -266,7 +266,7 @@ func TestLinstor_Attach(t *testing.T) {
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, true)
+		err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false, false, true)
 		assert.NoError(t, err)
 		m.AssertExpectations(t)
 	})
@@ -283,7 +283,7 @@ func TestLinstor_Attach(t *testing.T) {
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		err := cl.Attach(context.Background(), ExampleResourceID, "node-2", true, true)
+		err := cl.Attach(context.Background(), ExampleResourceID, "node-2", true, false, true)
 		assert.NoError(t, err)
 		m.AssertExpectations(t)
 	})

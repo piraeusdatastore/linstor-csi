@@ -83,7 +83,7 @@ type SnapshotCreateDeleter interface {
 // AttacherDettacher handles operations relating to volume accessiblity on nodes.
 type AttacherDettacher interface {
 	Querier
-	Attach(ctx context.Context, volId, node string, readOnly, useQuorum bool) error
+	Attach(ctx context.Context, volId, node string, readOnly, rwxBlock, useQuorum bool) error
 	Detach(ctx context.Context, volId, node string) error
 	NodeAvailable(ctx context.Context, node string) error
 	FindAssignmentOnNode(ctx context.Context, volId, node string) (*Assignment, error)
