@@ -447,7 +447,7 @@ func (s *Linstor) GetLegacyVolumeParameters(ctx context.Context, volId string) (
 }
 
 // Attach idempotently creates a resource on the given node.
-func (s *Linstor) Attach(ctx context.Context, volId, node string, readOnly, volQuorum bool) error {
+func (s *Linstor) Attach(ctx context.Context, volId, node string, readOnly, rwxBlock, volQuorum bool) error {
 	s.log.WithFields(logrus.Fields{
 		"volume":     volId,
 		"targetNode": node,
@@ -462,17 +462,34 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, readOnly, volQ
 
 	existingSharedName := ""
 
+	otherResInUse := 0
 	for i := range ress {
 		if ress[i].NodeName == node {
 			existingRes = &ress[i].Resource
 			existingSharedName = ress[i].SharedName
-			break
+		} else if ress[i].State != nil && ress[i].State.InUse != nil && *ress[i].State.InUse {
+			otherResInUse++
 		}
+	}
+
+	if otherResInUse >= 2 {
+		return fmt.Errorf("two other resources already InUse")
 	}
 
 	propsModify := lapi.GenericPropsModify{OverrideProps: map[string]string{
 		linstor.PublishedReadOnlyKey: strconv.FormatBool(readOnly),
 	}}
+
+	if otherResInUse > 0 && rwxBlock {
+		rdPropsModify := lapi.GenericPropsModify{OverrideProps: map[string]string{
+			linstor.PropertyAllowTwoPrimaries: "yes",
+		}}
+
+		err = s.client.ResourceDefinitions.Modify(ctx, volId, rdPropsModify)
+		if err != nil {
+			return err
+		}
+	}
 
 	// If the resource is already on the node, don't worry about attaching.
 	if existingRes == nil {
@@ -635,6 +652,30 @@ func (s *Linstor) Detach(ctx context.Context, volId, node string) error {
 		"volume":     volId,
 		"targetNode": node,
 	})
+
+	ress, err := s.client.Resources.GetAll(ctx, volId)
+	if err != nil {
+		return nil404(err)
+	}
+
+	resInUse := 0
+
+	for i := range ress {
+		if ress[i].State != nil && ress[i].State.InUse != nil && *ress[i].State.InUse {
+			resInUse++
+		}
+	}
+
+	if resInUse <= 1 {
+		rdPropsModify := lapi.GenericPropsModify{DeleteProps: []string{
+			linstor.PropertyAllowTwoPrimaries,
+		}}
+
+		err = s.client.ResourceDefinitions.Modify(ctx, volId, rdPropsModify)
+		if err != nil {
+			return err
+		}
+	}
 
 	vols, err := s.client.Resources.GetVolumes(ctx, volId, node)
 	if err != nil {

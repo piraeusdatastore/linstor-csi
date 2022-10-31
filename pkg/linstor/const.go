@@ -38,6 +38,9 @@ const (
 	// resource) exists.
 	PropertyCreatedFor = lc.NamespcAuxiliary + "/csi-created-for"
 
+	// PropertyAllowTwoPrimaries is DRBD option to allow second primary. Mainly used for live-migration.
+	PropertyAllowTwoPrimaries = lc.NamespcDrbdNetOptions + "/allow-two-primaries"
+
 	// CreatedForTemporaryDisklessAttach marks a resource as temporary, i.e. it should be removed after it is no longer
 	// needed.
 	CreatedForTemporaryDisklessAttach = "temporary-diskless-attach"
