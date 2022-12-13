@@ -7,4 +7,3 @@ parameters:
   placementCount: "2"
   storagePool: "lvm-thin"
   resourceGroup: "kubevirt"
-  DrbdOptions/Net/allow-two-primaries: "yes"
