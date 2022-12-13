@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- LINSTOR may return more backups than requested when searching for a specific snapshot ID. The results are now
+  filtered, ensuring we really restore from the expected backup.
+
 ## [0.21.0] - 2022-10-21
 
 ### Added
