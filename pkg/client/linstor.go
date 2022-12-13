@@ -1445,6 +1445,11 @@ func (s *Linstor) snapOrBackupById(ctx context.Context, id string) (*lapi.Snapsh
 		bMap := info.Linstor
 
 		for k := range bMap {
+			if bMap[k].OriginSnap != id {
+				log.WithField("backup", bMap[k].Id).Trace("skipping backup with wrong snapshot ID")
+				continue
+			}
+
 			if len(bMap[k].Vlms) != 1 {
 				log.WithField("backup", bMap[k].Id).Trace("skipping backup with wrong number of volumes")
 				continue
