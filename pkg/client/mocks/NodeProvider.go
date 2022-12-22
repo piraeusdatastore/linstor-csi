@@ -43,6 +43,20 @@ func (_m *NodeProvider) CreateDevicePool(ctx context.Context, nodeName string, p
 	return r0
 }
 
+// CreateEbsNode provides a mock function with given fields: ctx, name, remoteName
+func (_m *NodeProvider) CreateEbsNode(ctx context.Context, name string, remoteName string) error {
+	ret := _m.Called(ctx, name, remoteName)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, name, remoteName)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // CreateNetInterface provides a mock function with given fields: ctx, nodeName, nif
 func (_m *NodeProvider) CreateNetInterface(ctx context.Context, nodeName string, nif client.NetInterface) error {
 	ret := _m.Called(ctx, nodeName, nif)
@@ -257,8 +271,31 @@ func (_m *NodeProvider) GetNetInterfaces(ctx context.Context, nodeName string, o
 	return r0, r1
 }
 
-// GetPhysicalStorage provides a mock function with given fields: ctx, opts
-func (_m *NodeProvider) GetPhysicalStorage(ctx context.Context, opts ...*client.ListOpts) ([]client.PhysicalStorage, error) {
+// GetPhysicalStorage provides a mock function with given fields: ctx, nodeName
+func (_m *NodeProvider) GetPhysicalStorage(ctx context.Context, nodeName string) ([]client.PhysicalStorageNode, error) {
+	ret := _m.Called(ctx, nodeName)
+
+	var r0 []client.PhysicalStorageNode
+	if rf, ok := ret.Get(0).(func(context.Context, string) []client.PhysicalStorageNode); ok {
+		r0 = rf(ctx, nodeName)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]client.PhysicalStorageNode)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, nodeName)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetPhysicalStorageView provides a mock function with given fields: ctx, opts
+func (_m *NodeProvider) GetPhysicalStorageView(ctx context.Context, opts ...*client.ListOpts) ([]client.PhysicalStorageViewItem, error) {
 	_va := make([]interface{}, len(opts))
 	for _i := range opts {
 		_va[_i] = opts[_i]
@@ -268,12 +305,12 @@ func (_m *NodeProvider) GetPhysicalStorage(ctx context.Context, opts ...*client.
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
-	var r0 []client.PhysicalStorage
-	if rf, ok := ret.Get(0).(func(context.Context, ...*client.ListOpts) []client.PhysicalStorage); ok {
+	var r0 []client.PhysicalStorageViewItem
+	if rf, ok := ret.Get(0).(func(context.Context, ...*client.ListOpts) []client.PhysicalStorageViewItem); ok {
 		r0 = rf(ctx, opts...)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]client.PhysicalStorage)
+			r0 = ret.Get(0).([]client.PhysicalStorageViewItem)
 		}
 	}
 

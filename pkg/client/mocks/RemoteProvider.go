@@ -15,6 +15,20 @@ type RemoteProvider struct {
 	mock.Mock
 }
 
+// CreateEbs provides a mock function with given fields: ctx, create
+func (_m *RemoteProvider) CreateEbs(ctx context.Context, create client.EbsRemote) error {
+	ret := _m.Called(ctx, create)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, client.EbsRemote) error); ok {
+		r0 = rf(ctx, create)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // CreateLinstor provides a mock function with given fields: ctx, create
 func (_m *RemoteProvider) CreateLinstor(ctx context.Context, create client.LinstorRemote) error {
 	ret := _m.Called(ctx, create)
@@ -85,6 +99,36 @@ func (_m *RemoteProvider) GetAll(ctx context.Context, opts ...*client.ListOpts) 
 	return r0, r1
 }
 
+// GetAllEbs provides a mock function with given fields: ctx, opts
+func (_m *RemoteProvider) GetAllEbs(ctx context.Context, opts ...*client.ListOpts) ([]client.EbsRemote, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 []client.EbsRemote
+	if rf, ok := ret.Get(0).(func(context.Context, ...*client.ListOpts) []client.EbsRemote); ok {
+		r0 = rf(ctx, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]client.EbsRemote)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, ...*client.ListOpts) error); ok {
+		r1 = rf(ctx, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetAllLinstor provides a mock function with given fields: ctx, opts
 func (_m *RemoteProvider) GetAllLinstor(ctx context.Context, opts ...*client.ListOpts) ([]client.LinstorRemote, error) {
 	_va := make([]interface{}, len(opts))
@@ -143,6 +187,20 @@ func (_m *RemoteProvider) GetAllS3(ctx context.Context, opts ...*client.ListOpts
 	}
 
 	return r0, r1
+}
+
+// ModifyEbs provides a mock function with given fields: ctx, remoteName, modify
+func (_m *RemoteProvider) ModifyEbs(ctx context.Context, remoteName string, modify client.EbsRemote) error {
+	ret := _m.Called(ctx, remoteName, modify)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, client.EbsRemote) error); ok {
+		r0 = rf(ctx, remoteName, modify)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
 }
 
 // ModifyLinstor provides a mock function with given fields: ctx, remoteName, modify
