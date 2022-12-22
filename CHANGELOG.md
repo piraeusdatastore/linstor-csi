@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Use golinstor based initialization of LINSTOR client. This enables checking the server TLS without requiring a
+  mutual TLS config, as well as using the new built-in User-Agent and Bearer Token configs.
+
 ## [0.22.0] - 2022-12-13
 
 ### Added

@@ -20,10 +20,7 @@ package main
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"flag"
-	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -41,7 +38,7 @@ import (
 
 func main() {
 	var (
-		lsEndpoint            = flag.String("linstor-endpoint", "http://localhost:3070", "Controller API endpoint for LINSTOR")
+		lsEndpoint            = flag.String("linstor-endpoint", "", "Controller API endpoint for LINSTOR")
 		lsSkipTLSVerification = flag.Bool("linstor-skip-tls-verification", false, "If true, do not verify tls")
 		csiEndpoint           = flag.String("csi-endpoint", "unix:///var/lib/kubelet/plugins/linstor.csi.linbit.com/csi.sock", "CSI endpoint")
 		node                  = flag.String("node", "", "Node ID to pass to node service")
@@ -65,67 +62,54 @@ func main() {
 	log.SetFormatter(logFmt)
 	log.SetOutput(logOut)
 
-	// Setup API Client and High-Level Client.
-	u, err := url.Parse(*lsEndpoint)
-	if err != nil {
-		log.Fatal(err)
-	}
-	r := rate.Limit(*rps)
-	if r <= 0 {
-		r = rate.Inf
-	}
-
-	// Setup HTTP client with optional TLS mutual auth.
-	h := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: *lsSkipTLSVerification}}}
-	certPEM, cert := os.LookupEnv("LS_USER_CERTIFICATE")
-	keyPEM, key := os.LookupEnv("LS_USER_KEY")
-	caPEM, ca := os.LookupEnv("LS_ROOT_CA")
-	if cert && key && ca {
-		keyPair, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
-		if err != nil {
-			log.Fatal(err)
-		}
-		caPool := x509.NewCertPool()
-		ok := caPool.AppendCertsFromPEM([]byte(caPEM))
-		if !ok {
-			log.Fatal("failed to get a valid certificate from LS_ROOT_CA")
-		}
-		h = &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{Certificates: []tls.Certificate{keyPair}, RootCAs: caPool, InsecureSkipVerify: *lsSkipTLSVerification}}}
-	}
-
-	headers := make(http.Header)
-	headers.Set("User-Agent", "linstor-csi/"+driver.Version)
-
-	if *bearerTokenFile != "" {
-		token, err := ioutil.ReadFile(*bearerTokenFile)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		headers.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-	}
-
-	h.Transport = &additionalHeaderRoundTripper{
-		RoundTripper:      h.Transport,
-		additionalHeaders: headers,
-	}
-
 	logger := log.NewEntry(log.New())
 	level, err := log.ParseLevel(*logLevel)
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	logger.Logger.SetLevel(level)
 	logger.Logger.SetOutput(logOut)
 	logger.Logger.SetFormatter(logFmt)
 
-	c, err := lc.NewHighLevelClient(
-		lapi.BaseURL(u),
-		lapi.BasicAuth(&lapi.BasicAuthCfg{Username: os.Getenv("LS_USERNAME"), Password: os.Getenv("LS_PASSWORD")}),
-		lapi.HTTPClient(h),
+	r := rate.Limit(*rps)
+	if r <= 0 {
+		r = rate.Inf
+	}
+
+	linstorOpts := []lapi.Option{
 		lapi.Limit(r, *burst),
+		lapi.UserAgent("linstor-csi/" + driver.Version),
 		lapi.Log(logger),
-	)
+	}
+
+	if *lsEndpoint != "" {
+		u, err := url.Parse(*lsEndpoint)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		linstorOpts = append(linstorOpts, lapi.BaseURL(u))
+	}
+
+	if *lsSkipTLSVerification {
+		linstorOpts = append(linstorOpts, lapi.HTTPClient(&http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		}))
+	}
+
+	if *bearerTokenFile != "" {
+		token, err := os.ReadFile(*bearerTokenFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		linstorOpts = append(linstorOpts, lapi.BearerToken(string(token)))
+	}
+
+	c, err := lc.NewHighLevelClient(linstorOpts...)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -165,18 +149,4 @@ func main() {
 	if err := drv.Run(); err != nil {
 		log.Fatal(err)
 	}
-}
-
-// additionalHeaderRoundTripper adds additional headers to every request.
-type additionalHeaderRoundTripper struct {
-	http.RoundTripper
-	additionalHeaders http.Header
-}
-
-func (a *additionalHeaderRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	for k, v := range a.additionalHeaders {
-		req.Header[k] = v
-	}
-
-	return a.RoundTripper.RoundTrip(req)
 }
