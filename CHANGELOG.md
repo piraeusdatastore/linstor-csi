@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.1] - 2022-12-27
+
 ### Changed
 
 - Use golinstor based initialization of LINSTOR client. This enables checking the server TLS without requiring a
@@ -432,7 +434,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.22.1...HEAD
+[0.22.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.19.1...v0.20.0
