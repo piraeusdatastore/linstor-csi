@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Add `_netdev` mount option to all mounts. This ensures unmounting on system shutdown happens before the
+  network is unconfigured, which might cause DRBD to lose quorum.
+
 ## [0.22.1] - 2022-12-27
 
 ### Changed

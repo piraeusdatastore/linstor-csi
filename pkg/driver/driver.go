@@ -316,6 +316,8 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		}
 	}
 
+	volCtx.MountOptions = append(volCtx.MountOptions, "_netdev")
+
 	var fsType string
 
 	if block := req.GetVolumeCapability().GetBlock(); block != nil {
