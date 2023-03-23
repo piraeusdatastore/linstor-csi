@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Ignore storage capacity from "unschedulable" nodes. Those are nodes that are either evicted/evacuated or have the
+  `AutoplaceTarget` property set to `false`.
+
 ## [1.0.0] - 2023-02-28
 
 ### Changed
