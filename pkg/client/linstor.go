@@ -730,6 +730,33 @@ func (s *Linstor) CapacityBytes(ctx context.Context, storagePool string, segment
 		return 0, fmt.Errorf("unable to get capacity: %w", err)
 	}
 
+	allNodes, err := s.client.Nodes.GetAll(ctx, &lapi.ListOpts{Cached: &cached})
+	if err != nil {
+		return 0, fmt.Errorf("unable to get nodes: %w", err)
+	}
+
+	var filteredNodes []string
+
+	for i := range allNodes {
+		node := &allNodes[i]
+
+		if !slice.ContainsString(requestedNodes, node.Name) {
+			continue
+		}
+
+		if slice.ContainsString(node.Flags, lapiconsts.FlagEvicted) || slice.ContainsString(node.Flags, lapiconsts.FlagEvacuate) {
+			continue
+		}
+
+		if node.Props[lapiconsts.KeyAutoplaceAllowTarget] == "false" {
+			continue
+		}
+
+		filteredNodes = append(filteredNodes, node.Name)
+	}
+
+	requestedNodes = filteredNodes
+
 	var total int64
 	for _, sp := range pools {
 		log := log.WithField("pool-to-check", sp.StoragePoolName).WithField("node", sp.NodeName)
