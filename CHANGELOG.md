@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2023-04-24
+
 ### Added
 
 - Ignore storage capacity from "unschedulable" nodes. Those are nodes that are either evicted/evacuated or have the
@@ -446,7 +448,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.22.1...v1.0.0
 [0.22.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.21.0...v0.22.0
