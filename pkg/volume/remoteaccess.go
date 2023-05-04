@@ -104,11 +104,12 @@ func subsetOf(a, b map[string]string) bool {
 // a more general pattern.
 //
 // Some examples
-//   [{a:1}, {a:1}] => [{a:1}]
-//   [{a:1}, {a:2}] => [{a:1}, {a:2}]
-//   [{a:1, b:1}, {a:1}] => [{a:1}]
-//   [{a:1, b:1}, {a:1, b:2}] => [{a:1, b:1}, {a:1, b:2}]
-//   [{a:1}, {a:1, b:1}, {a:1, b:2}] => [{a:1}]
+//
+//	[{a:1}, {a:1}] => [{a:1}]
+//	[{a:1}, {a:2}] => [{a:1}, {a:2}]
+//	[{a:1, b:1}, {a:1}] => [{a:1}]
+//	[{a:1, b:1}, {a:1, b:2}] => [{a:1, b:1}, {a:1, b:2}]
+//	[{a:1}, {a:1, b:1}, {a:1, b:2}] => [{a:1}]
 func PrunePattern(sources ...map[string]string) []map[string]string {
 	var result []map[string]string
 

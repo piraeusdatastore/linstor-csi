@@ -32,6 +32,7 @@ import (
 	"strconv"
 	"strings"
 
+	lc "github.com/LINBIT/golinstor"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/haySwim/data"
 	"github.com/sirupsen/logrus"
@@ -66,6 +67,8 @@ type Driver struct {
 	endpoint string
 	// nodeID is the hostname of the node where this plugin is running locally.
 	nodeID string
+	// topologyPrefix is the name
+	topologyPrefix string
 }
 
 // NewDriver builds up a driver.
@@ -74,17 +77,18 @@ func NewDriver(options ...func(*Driver) error) (*Driver, error) {
 	mockStorage := client.NewMockStorage()
 
 	d := &Driver{
-		name:          linstor.DriverName,
-		version:       Version,
-		nodeID:        "localhost",
-		Storage:       mockStorage,
-		Assignments:   mockStorage,
-		Mounter:       mockStorage,
-		Snapshots:     mockStorage,
-		Expander:      mockStorage,
-		VolumeStatter: mockStorage,
-		NodeInformer:  mockStorage,
-		log:           logrus.NewEntry(logrus.New()),
+		name:           linstor.DriverName,
+		version:        Version,
+		nodeID:         "localhost",
+		Storage:        mockStorage,
+		Assignments:    mockStorage,
+		Mounter:        mockStorage,
+		Snapshots:      mockStorage,
+		Expander:       mockStorage,
+		VolumeStatter:  mockStorage,
+		NodeInformer:   mockStorage,
+		log:            logrus.NewEntry(logrus.New()),
+		topologyPrefix: lc.NamespcAuxiliary,
 	}
 
 	d.log.Logger.SetOutput(ioutil.Discard)
@@ -185,6 +189,13 @@ func Endpoint(ep string) func(*Driver) error {
 func Name(name string) func(*Driver) error {
 	return func(d *Driver) error {
 		d.name = name
+		return nil
+	}
+}
+
+func TopologyPrefix(prefix string) func(*Driver) error {
+	return func(d *Driver) error {
+		d.topologyPrefix = prefix
 		return nil
 	}
 }
@@ -497,7 +508,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 	}
 	volumeSize := data.NewKibiByte(data.KiB * data.ByteSize(requiredKiB))
 
-	params, err := volume.NewParameters(req.GetParameters())
+	params, err := volume.NewParameters(req.GetParameters(), d.topologyPrefix)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to parse parameters: %v", err)
 	}
@@ -814,7 +825,7 @@ func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*
 
 // GetCapacity https://github.com/container-storage-interface/spec/blob/v1.6.0/spec.md#getcapacity
 func (d Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
-	params, err := volume.NewParameters(req.GetParameters())
+	params, err := volume.NewParameters(req.GetParameters(), d.topologyPrefix)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid parameters: %v", err)
 	}

@@ -100,7 +100,7 @@ var DefaultRemoteAccessPolicy = RemoteAccessPolicyAnywhere
 
 // NewParameters parses out the raw parameters we get and sets appropriate
 // zero values
-func NewParameters(params map[string]string) (Parameters, error) {
+func NewParameters(params map[string]string, topologyPrefix string) (Parameters, error) {
 	// set zero values
 	p := Parameters{
 		LayerList:               []devicelayerkind.DeviceLayerKind{devicelayerkind.Drbd, devicelayerkind.Storage},
@@ -159,9 +159,9 @@ func NewParameters(params map[string]string) (Parameters, error) {
 
 			p.LayerList = l
 		case replicasonsame:
-			p.ReplicasOnSame = maybeAddAux(strings.Split(v, " ")...)
+			p.ReplicasOnSame = maybeAddTopologyPrefix(topologyPrefix, strings.Split(v, " ")...)
 		case replicasondifferent:
-			p.ReplicasOnDifferent = maybeAddAux(strings.Split(v, " ")...)
+			p.ReplicasOnDifferent = maybeAddTopologyPrefix(topologyPrefix, strings.Split(v, " ")...)
 		case storagepool:
 			p.StoragePool = v
 		case disklessstoragepool:

@@ -438,7 +438,7 @@ func (s *Linstor) GetLegacyVolumeParameters(ctx context.Context, volId string) (
 		return nil, err
 	}
 
-	params, err := volume.NewParameters(decoded.Parameters)
+	params, err := volume.NewParameters(decoded.Parameters, s.client.PropertyNamespace)
 	if err != nil {
 		return nil, err
 	}
