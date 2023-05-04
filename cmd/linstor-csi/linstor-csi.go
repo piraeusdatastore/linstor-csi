@@ -138,6 +138,7 @@ func main() {
 		driver.VolumeStatter(linstorClient),
 		driver.Expander(linstorClient),
 		driver.NodeInformer(linstorClient),
+		driver.TopologyPrefix(*propNs),
 	)
 	if err != nil {
 		log.Fatal(err)

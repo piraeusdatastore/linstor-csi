@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- When using another property namespace (other than `Aux/`), also use it to prefix `replicasOnSame`
+  and `replicasOnDifferent`. Values already prefixed with `Aux/` will be left unchanged.
+
 ## [1.0.1] - 2023-04-24
 
 ### Added

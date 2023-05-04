@@ -13,19 +13,19 @@ import (
 )
 
 func TestNewParameters(t *testing.T) {
-	empty, err := volume.NewParameters(nil)
+	empty, err := volume.NewParameters(nil, lc.NamespcAuxiliary)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, empty.ResourceGroup)
 
 	fixed, err := volume.NewParameters(map[string]string{
 		"resourcegroup": "rg1",
-	})
+	}, lc.NamespcAuxiliary)
 	assert.NoError(t, err)
 	assert.Equal(t, "rg1", fixed.ResourceGroup)
 
 	fixedWithNamespace, err := volume.NewParameters(map[string]string{
 		linstor.ParameterNamespace + "/resourcegroup": "rg1",
-	})
+	}, lc.NamespcAuxiliary)
 	assert.NoError(t, err)
 	assert.Equal(t, "rg1", fixedWithNamespace.ResourceGroup)
 
@@ -33,14 +33,14 @@ func TestNewParameters(t *testing.T) {
 		"DrbdOptions/auto-quorum":  "suspend-io",
 		"DrbdOptions/Net/protocol": "C",
 	}
-	legacy, err := volume.NewParameters(expected)
+	legacy, err := volume.NewParameters(expected, lc.NamespcAuxiliary)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, legacy.Properties)
 
 	generalProps, err := volume.NewParameters(map[string]string{
 		linstor.PropertyNamespace + "/DrbdOptions/auto-quorum":  "suspend-io",
 		linstor.PropertyNamespace + "/DrbdOptions/Net/protocol": "C",
-	})
+	}, lc.NamespcAuxiliary)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, generalProps.Properties)
 }

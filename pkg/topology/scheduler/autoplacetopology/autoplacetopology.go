@@ -25,7 +25,8 @@ import (
 // * If a `Requisite` topology is requested, all placement will be restricted onto those nodes.
 // * If a `Preferred` topology is requested, this scheduler will try to place at least one volume on those nodes.
 // This scheduler complies with the CSI spec for topology:
-//   https://github.com/container-storage-interface/spec/blob/v1.4.0/csi.proto#L523
+//
+//	https://github.com/container-storage-interface/spec/blob/v1.4.0/csi.proto#L523
 type Scheduler struct {
 	*lc.HighLevelClient
 	log *logrus.Entry
@@ -46,13 +47,13 @@ var _ scheduler.Interface = &Scheduler{}
 // constraint could mean we are not able to place the volume on the first preferred node.
 //
 // To fulfil all these requirements, this scheduler executes the following steps:
-// 1. It collects the list of requisite nodes. Note that only one replica on any requisite nodes is enough to fulfil
-//    the CSI spec.
-//   1a. Bail out early if we already have the required replica count _and_ any requisite node has a replica.
-// 2. Iterate over the preferred segments until we successfully placed a replica
-//   2a. Bail out early if we now have the required replica count _and_ any requisite node has a replica.
-// 3. Try to place remaining replicas on requisite nodes.
-// 4. Try to place remaining replicas on any nodes.
+//  1. It collects the list of requisite nodes. Note that only one replica on any requisite nodes is enough to fulfil
+//     the CSI spec.
+//     1a. Bail out early if we already have the required replica count _and_ any requisite node has a replica.
+//  2. Iterate over the preferred segments until we successfully placed a replica
+//     2a. Bail out early if we now have the required replica count _and_ any requisite node has a replica.
+//  3. Try to place remaining replicas on requisite nodes.
+//  4. Try to place remaining replicas on any nodes.
 func (s *Scheduler) Create(ctx context.Context, volId string, params *volume.Parameters, topologies *csi.TopologyRequirement) error {
 	log := s.log.WithField("volume", volId)
 

@@ -136,7 +136,9 @@ type Expander interface {
 	ControllerExpand(ctx context.Context, vol *Info) error
 }
 
-func maybeAddAux(props ...string) []string {
+// Add the given prefix to the property name.
+// If the property is already prefixed (with "Aux/"), no modification is made.
+func maybeAddTopologyPrefix(prefix string, props ...string) []string {
 	const auxPrefix = lc.NamespcAuxiliary + "/"
 
 	result := make([]string, len(props))
@@ -144,7 +146,7 @@ func maybeAddAux(props ...string) []string {
 		if strings.HasPrefix(prop, auxPrefix) {
 			result[i] = prop
 		} else {
-			result[i] = auxPrefix + prop
+			result[i] = prefix + "/" + prop
 		}
 	}
 
