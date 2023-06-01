@@ -296,19 +296,6 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		return &csi.NodePublishVolumeResponse{}, missingAttr("NodePublishVolume", req.GetVolumeId(), "VolumeCapability slice")
 	}
 
-	// Don't try to publish volumes in ROX configurations without the "ro" option.
-	// You might think this is something ControllerPublishVolume could do already. You are wrong. The Readonly flag
-	// passed to ControllerPublishVolume is *always* false i.e. completely useless.
-	// The Readonly flag passed here is the one set in pod specs as spec.volumes[].persistentVolumeClaim.readOnly
-	// See: https://github.com/kubernetes/kubernetes/issues/70505
-	if req.GetVolumeCapability().GetAccessMode().GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY && !req.GetReadonly() {
-		return nil, status.Errorf(codes.InvalidArgument, "NodePublishVolume failed for %s: access mode requires 'persistentVolumeClaim.readOnly' to be true", req.GetVolumeId())
-	}
-
-	if req.GetPublishContext()[linstor.PublishedReadOnlyKey] == "true" && !req.GetReadonly() {
-		return nil, status.Errorf(codes.AlreadyExists, "NodePublishVolume failed for %s: controller published readonly=true, but request is for readonly=false", req.GetVolumeId())
-	}
-
 	volCtx, err := VolumeContextFromMap(req.GetVolumeContext())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: invalid volume context: %v", req.GetVolumeId(), err)
@@ -358,7 +345,9 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		return nil, status.Errorf(codes.NotFound, "NodePublishVolume failed for %s: assignment not found", req.GetVolumeId())
 	}
 
-	err = d.Mounter.Mount(ctx, assignment.Path, req.GetTargetPath(), fsType, req.GetReadonly(), volCtx.MountOptions)
+	ro := req.GetReadonly() || req.GetVolumeCapability().GetAccessMode().GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
+
+	err = d.Mounter.Mount(ctx, assignment.Path, req.GetTargetPath(), fsType, ro, volCtx.MountOptions)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
 	}
@@ -648,15 +637,6 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 
 	d.log.WithField("existingVolume", fmt.Sprintf("%+v", existingVolume)).Debug("found existing volume")
 
-	assignment, err := d.Assignments.FindAssignmentOnNode(ctx, req.GetVolumeId(), req.GetNodeId())
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume failed for %s: failed to check existing assignment: %v", req.GetVolumeId(), err)
-	}
-
-	if assignment != nil && assignment.ReadOnly != nil && *assignment.ReadOnly != req.GetReadonly() {
-		return nil, status.Errorf(codes.AlreadyExists, "ControllerPublishVolume failed for %s: volume attributes changes for already existing volume", req.GetVolumeId())
-	}
-
 	// Don't even attempt to put it on nodes that aren't available.
 	if err := d.Assignments.NodeAvailable(ctx, req.GetNodeId()); err != nil {
 		return nil, status.Errorf(codes.NotFound,
@@ -666,15 +646,13 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 	// ReadWriteMany block volume
 	rwxBlock := req.VolumeCapability.AccessMode.GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER && req.VolumeCapability.GetBlock() != nil
 
-	err = d.Assignments.Attach(ctx, req.GetVolumeId(), req.GetNodeId(), req.GetReadonly(), rwxBlock)
+	err = d.Assignments.Attach(ctx, req.GetVolumeId(), req.GetNodeId(), rwxBlock)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err)
 	}
 
-	return &csi.ControllerPublishVolumeResponse{
-		PublishContext: map[string]string{linstor.PublishedReadOnlyKey: strconv.FormatBool(req.GetReadonly())},
-	}, nil
+	return &csi.ControllerPublishVolumeResponse{}, nil
 }
 
 // ControllerUnpublishVolume https://github.com/container-storage-interface/spec/blob/v1.6.0/spec.md#controllerunpublishvolume
@@ -902,12 +880,6 @@ func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Controll
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_GET_CAPACITY,
-				},
-			}},
-			// Tell the CO we support readonly volumes.
-			{Type: &csi.ControllerServiceCapability_Rpc{
-				Rpc: &csi.ControllerServiceCapability_RPC{
-					Type: csi.ControllerServiceCapability_RPC_PUBLISH_READONLY,
 				},
 			}},
 			{Type: &csi.ControllerServiceCapability_Rpc{

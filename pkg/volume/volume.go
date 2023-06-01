@@ -42,8 +42,6 @@ type Assignment struct {
 	Node string
 	// Path is a location on the Node's filesystem where the volume may be accessed.
 	Path string
-	// ReadOnly indicates if this volume was published as read only.
-	ReadOnly *bool
 }
 
 // CreateDeleter handles the creation and deletion of volumes.
@@ -83,7 +81,7 @@ type SnapshotCreateDeleter interface {
 // AttacherDettacher handles operations relating to volume accessiblity on nodes.
 type AttacherDettacher interface {
 	Querier
-	Attach(ctx context.Context, volId, node string, readOnly, rwxBlock bool) error
+	Attach(ctx context.Context, volId, node string, rwxBlock bool) error
 	Detach(ctx context.Context, volId, node string) error
 	NodeAvailable(ctx context.Context, node string) error
 	FindAssignmentOnNode(ctx context.Context, volId, node string) (*Assignment, error)

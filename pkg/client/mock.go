@@ -194,8 +194,8 @@ func (s *MockStorage) VolFromVol(ctx context.Context, sourceVol, vol *volume.Inf
 	return nil
 }
 
-func (s *MockStorage) Attach(ctx context.Context, volId, node string, readOnly, rwxBlock bool) error {
-	s.assignedVolumes[volId] = append(s.assignedVolumes[volId], volume.Assignment{Node: node, Path: "/dev/" + volId, ReadOnly: &readOnly})
+func (s *MockStorage) Attach(ctx context.Context, volId, node string, rwxBlock bool) error {
+	s.assignedVolumes[volId] = append(s.assignedVolumes[volId], volume.Assignment{Node: node, Path: "/dev/" + volId})
 	return nil
 }
 
