@@ -45,8 +45,6 @@ const (
 	// needed.
 	CreatedForTemporaryDisklessAttach = "temporary-diskless-attach"
 
-	PublishedReadOnlyKey = lc.NamespcAuxiliary + "/csi-publish-readonly"
-
 	// ParameterNamespace is the preferred namespace when setting parameters in
 	ParameterNamespace = DriverName
 

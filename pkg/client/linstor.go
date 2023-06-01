@@ -28,7 +28,6 @@ import (
 	"os"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -447,7 +446,7 @@ func (s *Linstor) GetLegacyVolumeParameters(ctx context.Context, volId string) (
 }
 
 // Attach idempotently creates a resource on the given node.
-func (s *Linstor) Attach(ctx context.Context, volId, node string, readOnly, rwxBlock bool) error {
+func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool) error {
 	s.log.WithFields(logrus.Fields{
 		"volume":     volId,
 		"targetNode": node,
@@ -482,10 +481,6 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, readOnly, rwxB
 		return fmt.Errorf("two other resources already InUse")
 	}
 
-	propsModify := lapi.GenericPropsModify{OverrideProps: map[string]string{
-		linstor.PublishedReadOnlyKey: strconv.FormatBool(readOnly),
-	}}
-
 	if otherResInUse > 0 && rwxBlock {
 		rdPropsModify := lapi.GenericPropsModify{OverrideProps: map[string]string{
 			linstor.PropertyAllowTwoPrimaries: "yes",
@@ -496,6 +491,8 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, readOnly, rwxB
 			return err
 		}
 	}
+
+	propsModify := lapi.GenericPropsModify{OverrideProps: map[string]string{}}
 
 	// If the resource is already on the node, don't worry about attaching.
 	if existingRes == nil {
@@ -1640,19 +1637,9 @@ func (s *Linstor) FindAssignmentOnNode(ctx context.Context, volId, node string) 
 		return nil, nil404(err)
 	}
 
-	var readOnly *bool
-
-	if linVol.Props != nil {
-		b, err := strconv.ParseBool(linVol.Props[linstor.PublishedReadOnlyKey])
-		if err == nil {
-			readOnly = &b
-		}
-	}
-
 	va := &volume.Assignment{
-		Node:     node,
-		Path:     linVol.DevicePath,
-		ReadOnly: readOnly,
+		Node: node,
+		Path: linVol.DevicePath,
 	}
 
 	s.log.WithFields(logrus.Fields{
