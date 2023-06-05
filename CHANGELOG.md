@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2023-06-05
+
 ### Changed
 
 - Removed unnecessary checks for read-only publishing by the controller.
@@ -462,7 +464,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v0.22.1...v1.0.0
