@@ -11,9 +11,9 @@ jobs:
           - amd64
           - arm64
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: compile and release
-        uses: wangyoucao577/go-release-action@v1.22
+        uses: wangyoucao577/go-release-action@v1
         with:
           binary_name: linstor-csi
           project_path: ./cmd/linstor-csi
