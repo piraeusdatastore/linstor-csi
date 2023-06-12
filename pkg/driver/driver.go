@@ -935,9 +935,12 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 
 	if !ok {
 		d.log.Debug("existing snapshot is in failed state, deleting")
-		err := d.Snapshots.SnapDelete(ctx, &csi.Snapshot{
-			SourceVolumeId: req.GetSourceVolumeId(),
-			SnapshotId:     req.GetName(),
+		err := d.Snapshots.SnapDelete(ctx, &volume.Snapshot{
+			Snapshot: csi.Snapshot{
+				SourceVolumeId: req.GetSourceVolumeId(),
+				SnapshotId:     req.GetName(),
+			},
+			Remote: params.RemoteName,
 		})
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "tried deleting a leftover unsuccessful snapshot")
@@ -953,7 +956,7 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 		}).Debug("found existing snapshot")
 
 		if existingSnap.GetSourceVolumeId() == req.GetSourceVolumeId() {
-			return &csi.CreateSnapshotResponse{Snapshot: existingSnap}, nil
+			return &csi.CreateSnapshotResponse{Snapshot: &existingSnap.Snapshot}, nil
 		}
 		return nil, status.Errorf(codes.AlreadyExists, "can't use %q for snapshot name for volume %q, snapshot name is in use for volume %q",
 			req.GetName(), req.GetSourceVolumeId(), existingSnap.GetSourceVolumeId())
@@ -964,7 +967,7 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 		return nil, status.Errorf(codes.Internal, "failed to create snapshot: %v", err)
 	}
 
-	return &csi.CreateSnapshotResponse{Snapshot: snap}, nil
+	return &csi.CreateSnapshotResponse{Snapshot: &snap.Snapshot}, nil
 }
 
 // DeleteSnapshot https://github.com/container-storage-interface/spec/blob/v1.6.0/spec.md#deletesnapshot
@@ -1000,7 +1003,7 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 		return nil, status.Errorf(codes.Aborted, "Invalid starting token: %v", err)
 	}
 
-	var snapshots []*csi.Snapshot
+	var snapshots []*volume.Snapshot
 	switch {
 	// Handle case where a single snapshot is requested.
 	case req.GetSnapshotId() != "":
@@ -1017,7 +1020,8 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 			"requestedSnapshot": req.GetSnapshotId(),
 			"napshot":           fmt.Sprintf("%+v", snap),
 		}).Debug("found single snapshot")
-		snapshots = []*csi.Snapshot{snap}
+
+		snapshots = []*volume.Snapshot{snap}
 
 		// Handle case where a single volumes snapshots are requested.
 	case req.GetSourceVolumeId() != "":
@@ -1053,7 +1057,7 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 
 	entries := make([]*csi.ListSnapshotsResponse_Entry, len(snapshots))
 	for i, snap := range snapshots {
-		entries[i] = &csi.ListSnapshotsResponse_Entry{Snapshot: snap}
+		entries[i] = &csi.ListSnapshotsResponse_Entry{Snapshot: &snap.Snapshot}
 	}
 
 	return &csi.ListSnapshotsResponse{Entries: entries, NextToken: nextToken}, nil
@@ -1282,18 +1286,25 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 					"CreateVolume failed for %s: source volume not found in storage backend", req.GetName())
 			}
 
-			snap, err := d.CreateSnapshot(ctx, &csi.CreateSnapshotRequest{Name: snapshotForVolumeName(req.GetName()), SourceVolumeId: sourceVol.ID})
+			createdSnap, err := d.CreateSnapshot(ctx, &csi.CreateSnapshotRequest{Name: snapshotForVolumeName(req.GetName()), SourceVolumeId: sourceVol.ID})
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: failed to create snapshot for source volume: %v", req.GetName(), err)
 			}
 
-			if !snap.Snapshot.ReadyToUse {
+			if !createdSnap.Snapshot.ReadyToUse {
 				return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: snapshot not ready", req.GetName())
 			}
 
-			defer d.Snapshots.SnapDelete(ctx, snap.Snapshot)
+			snap := &volume.Snapshot{Snapshot: *createdSnap.Snapshot}
 
-			err = d.Snapshots.VolFromSnap(ctx, snap.Snapshot, info, params, req.GetAccessibilityRequirements())
+			defer func() {
+				err := d.Snapshots.SnapDelete(ctx, snap)
+				if err != nil {
+					logger.WithError(err).Errorf("failed to delete temporary snapshot %s for clone", snap.GetSnapshotId())
+				}
+			}()
+
+			err = d.Snapshots.VolFromSnap(ctx, snap, info, params, req.GetAccessibilityRequirements())
 			if err != nil {
 				d.failpathDelete(ctx, info.ID)
 

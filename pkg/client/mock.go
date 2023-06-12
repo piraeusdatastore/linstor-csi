@@ -34,7 +34,7 @@ import (
 type MockStorage struct {
 	createdVolumes  []*volume.Info
 	assignedVolumes map[string][]volume.Assignment
-	snapshots       []*csi.Snapshot
+	snapshots       []*volume.Snapshot
 }
 
 func NewMockStorage() *MockStorage {
@@ -102,7 +102,7 @@ func (s *MockStorage) CompatibleSnapshotId(name string) string {
 	return name
 }
 
-func (s *MockStorage) SnapCreate(ctx context.Context, id, sourceVolId string, params *volume.SnapshotParameters) (*csi.Snapshot, error) {
+func (s *MockStorage) SnapCreate(ctx context.Context, id, sourceVolId string, params *volume.SnapshotParameters) (*volume.Snapshot, error) {
 	for _, snap := range s.snapshots {
 		if snap.SnapshotId == id {
 			return nil, fmt.Errorf("snapshot '%s' already exists", id)
@@ -118,12 +118,14 @@ func (s *MockStorage) SnapCreate(ctx context.Context, id, sourceVolId string, pa
 	}
 
 	// Fill in missing snapshot fields on creation, keep original SourceVolumeId.
-	snap := &csi.Snapshot{
-		SnapshotId:     id,
-		SourceVolumeId: sourceVolId,
-		CreationTime:   timestamppb.Now(),
-		SizeBytes:      size,
-		ReadyToUse:     true,
+	snap := &volume.Snapshot{
+		Snapshot: csi.Snapshot{
+			SnapshotId:     id,
+			SourceVolumeId: sourceVolId,
+			CreationTime:   timestamppb.Now(),
+			SizeBytes:      size,
+			ReadyToUse:     true,
+		},
 	}
 
 	s.snapshots = append(s.snapshots, snap)
@@ -131,7 +133,7 @@ func (s *MockStorage) SnapCreate(ctx context.Context, id, sourceVolId string, pa
 	return snap, nil
 }
 
-func (s *MockStorage) SnapDelete(ctx context.Context, snap *csi.Snapshot) error {
+func (s *MockStorage) SnapDelete(ctx context.Context, snap *volume.Snapshot) error {
 	for i, item := range s.snapshots {
 		if item.GetSnapshotId() == snap.GetSnapshotId() {
 			s.snapshots = append(s.snapshots[:i], s.snapshots[i+1:]...)
@@ -142,7 +144,7 @@ func (s *MockStorage) SnapDelete(ctx context.Context, snap *csi.Snapshot) error 
 	return nil
 }
 
-func (s *MockStorage) ListSnaps(ctx context.Context, start, limit int) ([]*csi.Snapshot, error) {
+func (s *MockStorage) ListSnaps(ctx context.Context, start, limit int) ([]*volume.Snapshot, error) {
 	if limit == 0 {
 		limit = len(s.snapshots) - start
 	}
@@ -155,7 +157,7 @@ func (s *MockStorage) ListSnaps(ctx context.Context, start, limit int) ([]*csi.S
 	return s.snapshots[start:end], nil
 }
 
-func (s *MockStorage) FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, bool, error) {
+func (s *MockStorage) FindSnapByID(ctx context.Context, id string) (*volume.Snapshot, bool, error) {
 	for _, snap := range s.snapshots {
 		if snap.GetSnapshotId() == id {
 			return snap, true, nil
@@ -164,8 +166,8 @@ func (s *MockStorage) FindSnapByID(ctx context.Context, id string) (*csi.Snapsho
 	return nil, false, nil
 }
 
-func (s *MockStorage) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info, start, limit int) ([]*csi.Snapshot, error) {
-	var results []*csi.Snapshot
+func (s *MockStorage) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info, start, limit int) ([]*volume.Snapshot, error) {
+	var results []*volume.Snapshot
 
 	for _, snap := range s.snapshots {
 		if snap.GetSourceVolumeId() == sourceVol.ID {
@@ -184,7 +186,7 @@ func (s *MockStorage) FindSnapsBySource(ctx context.Context, sourceVol *volume.I
 	return results[start:end], nil
 }
 
-func (s *MockStorage) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volume.Info, parameters *volume.Parameters, topologies *csi.TopologyRequirement) error {
+func (s *MockStorage) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *volume.Info, parameters *volume.Parameters, topologies *csi.TopologyRequirement) error {
 	s.createdVolumes = append(s.createdVolumes, vol)
 	return nil
 }

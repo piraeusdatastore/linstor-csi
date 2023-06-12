@@ -740,7 +740,7 @@ func (s *Linstor) CompatibleSnapshotId(name string) string {
 }
 
 // SnapCreate calls LINSTOR to create a new snapshot name "id" or backup of the volume "sourceVolId".
-func (s *Linstor) SnapCreate(ctx context.Context, id, sourceVolId string, params *volume.SnapshotParameters) (*csi.Snapshot, error) {
+func (s *Linstor) SnapCreate(ctx context.Context, id, sourceVolId string, params *volume.SnapshotParameters) (*volume.Snapshot, error) {
 	var lsnap *lapi.Snapshot
 
 	var err error
@@ -882,14 +882,40 @@ func (s *Linstor) reconcileRemote(ctx context.Context, params *volume.SnapshotPa
 }
 
 // SnapDelete calls LINSTOR to delete the snapshot based on the CSI Snapshot ID.
-func (s *Linstor) SnapDelete(ctx context.Context, snap *csi.Snapshot) error {
+func (s *Linstor) SnapDelete(ctx context.Context, snap *volume.Snapshot) error {
 	log := s.log.WithField("snapshot", snap)
 
-	log.Debug("deleting snapshot")
+	if snap.Remote != "" {
+		log.WithField("remote", snap.Remote).Debug("deleting backup from remote")
+
+		backups, err := s.client.Backup.GetAll(ctx, snap.Remote, snap.GetSourceVolumeId(), snap.GetSnapshotId())
+		if nil404(err) != nil {
+			return fmt.Errorf("failed to list backups for snapshot %s: %w", snap.GetSnapshotId(), err)
+		}
+
+		if backups != nil {
+			for id := range backups.Linstor {
+				// LINSTOR may return some extra results
+				if backups.Linstor[id].OriginRsc != snap.GetSourceVolumeId() || backups.Linstor[id].OriginSnap != snap.GetSnapshotId() {
+					log.WithField("remote_id", id).Debug("Skipping backup with wrong resource or snapshot name")
+					continue
+				}
+
+				err := s.client.Backup.DeleteAll(ctx, snap.Remote, lapi.BackupDeleteOpts{
+					ID: id,
+				})
+				if nil404(err) != nil {
+					return fmt.Errorf("failed to delete backup %s: %w", id, err)
+				}
+			}
+		}
+	}
+
+	log.Debug("deleting local snapshot")
 
 	err := s.client.Resources.DeleteSnapshot(ctx, snap.GetSourceVolumeId(), snap.SnapshotId)
 	if nil404(err) != nil {
-		return fmt.Errorf("failed to remove snaphsot: %v", err)
+		return fmt.Errorf("failed to remove snapshot: %w", err)
 	}
 
 	err = s.deleteResourceDefinitionAndGroupIfUnused(ctx, snap.GetSourceVolumeId())
@@ -898,7 +924,7 @@ func (s *Linstor) SnapDelete(ctx context.Context, snap *csi.Snapshot) error {
 }
 
 // VolFromSnap creates the volume using the data contained within the snapshot.
-func (s *Linstor) VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *volume.Info, params *volume.Parameters, topologies *csi.TopologyRequirement) error {
+func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *volume.Info, params *volume.Parameters, topologies *csi.TopologyRequirement) error {
 	logger := s.log.WithFields(logrus.Fields{
 		"volume":   fmt.Sprintf("%+v", vol),
 		"snapshot": fmt.Sprintf("%+v", snap),
@@ -1103,7 +1129,7 @@ func (s *Linstor) findBackupInfo(ctx context.Context, sourceVolId, snapId string
 	return "", nil, nil
 }
 
-func (s *Linstor) reconcileSnapshotVolumeDefinitions(ctx context.Context, snapshot *csi.Snapshot, targetRD string) error {
+func (s *Linstor) reconcileSnapshotVolumeDefinitions(ctx context.Context, snapshot *volume.Snapshot, targetRD string) error {
 	logger := s.log.WithFields(logrus.Fields{"snapshot": snapshot, "target": targetRD})
 
 	logger.Debug("checking for existing volume definitions")
@@ -1125,7 +1151,7 @@ func (s *Linstor) reconcileSnapshotVolumeDefinitions(ctx context.Context, snapsh
 	return nil
 }
 
-func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *csi.Snapshot, targetRD string, preferredNodes []string) error {
+func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *volume.Snapshot, targetRD string, preferredNodes []string) error {
 	logger := s.log.WithFields(logrus.Fields{"snapshot": snapshot, "target": targetRD})
 
 	logger.Debug("checking for existing resources")
@@ -1348,7 +1374,7 @@ func (s *Linstor) reconcileResourcePlacement(ctx context.Context, vol *volume.In
 // * the snapshot, nil if not found
 // * true, if the snapshot is either in progress or successful
 // * any error encountered
-func (s *Linstor) FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, bool, error) {
+func (s *Linstor) FindSnapByID(ctx context.Context, id string) (*volume.Snapshot, bool, error) {
 	matchingSnap, matchingBackup, err := s.snapOrBackupById(ctx, id)
 	if err != nil {
 		return nil, false, err
@@ -1367,18 +1393,26 @@ func (s *Linstor) FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, b
 
 		return csiSnap, true, nil
 	case matchingBackup != nil:
-		return &csi.Snapshot{
-			SnapshotId:     matchingBackup.OriginSnap,
-			SourceVolumeId: matchingBackup.OriginRsc,
-			CreationTime:   timestamppb.New(matchingBackup.StartTimestamp.Time),
-			ReadyToUse:     matchingBackup.Restorable,
+		return &volume.Snapshot{
+			Snapshot: csi.Snapshot{
+				SnapshotId:     matchingBackup.OriginSnap,
+				SourceVolumeId: matchingBackup.OriginRsc,
+				CreationTime:   timestamppb.New(matchingBackup.StartTimestamp.Time),
+				ReadyToUse:     matchingBackup.Restorable,
+			},
+			Remote: matchingBackup.Remote,
 		}, true, nil
 	default:
 		return nil, true, nil
 	}
 }
 
-func (s *Linstor) snapOrBackupById(ctx context.Context, id string) (*lapi.Snapshot, *lapi.Backup, error) {
+type BackupWithRemote struct {
+	lapi.Backup
+	Remote string
+}
+
+func (s *Linstor) snapOrBackupById(ctx context.Context, id string) (*lapi.Snapshot, *BackupWithRemote, error) {
 	log := s.log.WithField("id", id)
 
 	log.Debug("getting snapshot view")
@@ -1435,14 +1469,17 @@ func (s *Linstor) snapOrBackupById(ctx context.Context, id string) (*lapi.Snapsh
 
 			bCopy := bMap[k]
 
-			return nil, &bCopy, nil
+			return nil, &BackupWithRemote{
+				Remote: remote,
+				Backup: bCopy,
+			}, nil
 		}
 	}
 
 	return nil, nil, nil
 }
 
-func (s *Linstor) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info, start, limit int) ([]*csi.Snapshot, error) {
+func (s *Linstor) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info, start, limit int) ([]*volume.Snapshot, error) {
 	log := s.log.WithFields(logrus.Fields{"start": start, "limit": limit, "sourceVol": sourceVol})
 
 	log.Debug("fetching snapshots for resource definition")
@@ -1462,7 +1499,7 @@ func (s *Linstor) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info,
 		return nil, fmt.Errorf("failed to fetch list of snapshots: %w", err)
 	}
 
-	var result []*csi.Snapshot
+	var result []*volume.Snapshot
 	for _, lsnap := range snaps {
 		log := log.WithField("snap", lsnap)
 
@@ -1479,7 +1516,7 @@ func (s *Linstor) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info,
 }
 
 // ListSnaps returns list of snapshots available in the cluster, including those available in remote (S3) locations
-func (s *Linstor) ListSnaps(ctx context.Context, start, limit int) ([]*csi.Snapshot, error) {
+func (s *Linstor) ListSnaps(ctx context.Context, start, limit int) ([]*volume.Snapshot, error) {
 	log := s.log.WithFields(logrus.Fields{"start": start, "limit": limit})
 
 	log.Debug("getting snapshot view")
@@ -1501,7 +1538,7 @@ func (s *Linstor) ListSnaps(ctx context.Context, start, limit int) ([]*csi.Snaps
 
 	log.WithField("snaps", snaps).Trace("got snapshots")
 
-	var result []*csi.Snapshot
+	var result []*volume.Snapshot
 
 	foundIds := make(map[string]struct{})
 
@@ -1553,13 +1590,16 @@ func (s *Linstor) ListSnaps(ctx context.Context, start, limit int) ([]*csi.Snaps
 				continue
 			}
 
-			result = append(result, &csi.Snapshot{
-				SnapshotId:     bMap[k].OriginSnap,
-				SourceVolumeId: bMap[k].OriginRsc,
-				CreationTime:   timestamppb.New(bMap[k].StartTimestamp.Time),
-				// At this point, we don't know the size of the snapshot, that would require a separate REST call,
-				// which we skip for performance reasons. This field is optional.
-				SizeBytes: 0,
+			result = append(result, &volume.Snapshot{
+				Snapshot: csi.Snapshot{
+					SnapshotId:     bMap[k].OriginSnap,
+					SourceVolumeId: bMap[k].OriginRsc,
+					CreationTime:   timestamppb.New(bMap[k].StartTimestamp.Time),
+					// At this point, we don't know the size of the snapshot, that would require a separate REST call,
+					// which we skip for performance reasons. This field is optional.
+					SizeBytes: 0,
+				},
+				Remote: s3remotes[i].RemoteName,
 			})
 		}
 	}
@@ -1567,7 +1607,7 @@ func (s *Linstor) ListSnaps(ctx context.Context, start, limit int) ([]*csi.Snaps
 	return result, nil
 }
 
-func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*csi.Snapshot, error) {
+func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*volume.Snapshot, error) {
 	if len(lsnap.VolumeDefinitions) == 0 {
 		return nil, fmt.Errorf("missing volume definitions")
 	}
@@ -1597,12 +1637,17 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*csi.Snapshot, error) {
 		creationTimeMicroSecs = &lapi.TimeStampMs{}
 	}
 
-	return &csi.Snapshot{
-		SnapshotId:     lsnap.Name,
-		SourceVolumeId: lsnap.ResourceName,
-		SizeBytes:      int64(snapSizeBytes),
-		CreationTime:   timestamppb.New(creationTimeMicroSecs.Time),
-		ReadyToUse:     ready,
+	remote := lsnap.Props["BackupShipping/BackupTargetRemote"]
+
+	return &volume.Snapshot{
+		Snapshot: csi.Snapshot{
+			SnapshotId:     lsnap.Name,
+			SourceVolumeId: lsnap.ResourceName,
+			SizeBytes:      int64(snapSizeBytes),
+			CreationTime:   timestamppb.New(creationTimeMicroSecs.Time),
+			ReadyToUse:     ready,
+		},
+		Remote: remote,
 	}, nil
 }
 
