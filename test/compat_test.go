@@ -18,26 +18,30 @@ import (
 )
 
 var (
-	snapshotA = &csi.Snapshot{
-		SnapshotId:     "snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956",
-		SourceVolumeId: "pvc-5113e62a-2874-421c-979a-ef08e1543581",
-		CreationTime: &timestamppb.Timestamp{
-			Seconds: 1607588002,
-			Nanos:   126000000,
+	snapshotA = &volume.Snapshot{
+		Snapshot: csi.Snapshot{
+			SnapshotId:     "snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956",
+			SourceVolumeId: "pvc-5113e62a-2874-421c-979a-ef08e1543581",
+			CreationTime: &timestamppb.Timestamp{
+				Seconds: 1607588002,
+				Nanos:   126000000,
+			},
+			SizeBytes:  838860800,
+			ReadyToUse: true,
 		},
-		SizeBytes:  838860800,
-		ReadyToUse: true,
 	}
 
-	snapshotB = &csi.Snapshot{
-		SnapshotId:     "snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831",
-		SourceVolumeId: "pvc-9f0cceb1-6ef7-425e-9f29-15c482b3ac65",
-		CreationTime: &timestamppb.Timestamp{
-			Seconds: 1607588001,
-			Nanos:   392000000,
+	snapshotB = &volume.Snapshot{
+		Snapshot: csi.Snapshot{
+			SnapshotId:     "snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831",
+			SourceVolumeId: "pvc-9f0cceb1-6ef7-425e-9f29-15c482b3ac65",
+			CreationTime: &timestamppb.Timestamp{
+				Seconds: 1607588001,
+				Nanos:   392000000,
+			},
+			SizeBytes:  524288000,
+			ReadyToUse: true,
 		},
-		SizeBytes:  524288000,
-		ReadyToUse: true,
 	}
 
 	fakeControllerResponses = []fakeControllerCfg{
@@ -108,7 +112,7 @@ func TestCompatListSnaps(t *testing.T) {
 	snaps, err := compatClient.ListSnaps(ctx, 0, 0)
 	assert.NoError(t, err)
 
-	expectedSnaps := []*csi.Snapshot{snapshotA, snapshotB}
+	expectedSnaps := []*volume.Snapshot{snapshotA, snapshotB}
 	assert.ElementsMatch(t, expectedSnaps, snaps)
 }
 
@@ -141,5 +145,5 @@ func TestCompatFindSnapBySource(t *testing.T) {
 	volB := &volume.Info{ID: snapshotB.SourceVolumeId}
 	actual, err := compatClient.FindSnapsBySource(ctx, volB, 0, 0)
 	assert.NoError(t, err)
-	assert.ElementsMatch(t, []*csi.Snapshot{snapshotB}, actual)
+	assert.ElementsMatch(t, []*volume.Snapshot{snapshotB}, actual)
 }

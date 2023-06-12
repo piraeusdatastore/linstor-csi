@@ -44,6 +44,11 @@ type Assignment struct {
 	Path string
 }
 
+type Snapshot struct {
+	csi.Snapshot
+	Remote string
+}
+
 // CreateDeleter handles the creation and deletion of volumes.
 type CreateDeleter interface {
 	Querier
@@ -63,19 +68,19 @@ type CreateDeleter interface {
 type SnapshotCreateDeleter interface {
 	// CompatibleSnapshotId returns an ID unique to the suggested name
 	CompatibleSnapshotId(name string) string
-	SnapCreate(ctx context.Context, id string, sourceVolId string, params *SnapshotParameters) (*csi.Snapshot, error)
-	SnapDelete(ctx context.Context, snap *csi.Snapshot) error
+	SnapCreate(ctx context.Context, id string, sourceVolId string, params *SnapshotParameters) (*Snapshot, error)
+	SnapDelete(ctx context.Context, snap *Snapshot) error
 	// FindSnapByID searches the snapshot in the backend
 	// It returns:
 	// * the snapshot, nil if not found
 	// * true, if the snapshot is either in progress or successful
 	// * any error encountered
-	FindSnapByID(ctx context.Context, id string) (*csi.Snapshot, bool, error)
-	FindSnapsBySource(ctx context.Context, sourceVol *Info, start, limit int) ([]*csi.Snapshot, error)
+	FindSnapByID(ctx context.Context, id string) (*Snapshot, bool, error)
+	FindSnapsBySource(ctx context.Context, sourceVol *Info, start, limit int) ([]*Snapshot, error)
 	// List Snapshots should return a sorted list of snapshots.
-	ListSnaps(ctx context.Context, start, limit int) ([]*csi.Snapshot, error)
+	ListSnaps(ctx context.Context, start, limit int) ([]*Snapshot, error)
 	// VolFromSnap creates a new volume based on the provided snapshot.
-	VolFromSnap(ctx context.Context, snap *csi.Snapshot, vol *Info, params *Parameters, topologies *csi.TopologyRequirement) error
+	VolFromSnap(ctx context.Context, snap *Snapshot, vol *Info, params *Parameters, topologies *csi.TopologyRequirement) error
 }
 
 // AttacherDettacher handles operations relating to volume accessiblity on nodes.
