@@ -956,8 +956,14 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 		}).Debug("found existing snapshot")
 
 		if existingSnap.GetSourceVolumeId() == req.GetSourceVolumeId() {
+			err = d.maybeDeleteLocalSnapshot(ctx, existingSnap, params)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to delete local snapshot: %s", err)
+			}
+
 			return &csi.CreateSnapshotResponse{Snapshot: &existingSnap.Snapshot}, nil
 		}
+
 		return nil, status.Errorf(codes.AlreadyExists, "can't use %q for snapshot name for volume %q, snapshot name is in use for volume %q",
 			req.GetName(), req.GetSourceVolumeId(), existingSnap.GetSourceVolumeId())
 	}
@@ -965,6 +971,11 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 	snap, err := d.Snapshots.SnapCreate(ctx, id, req.GetSourceVolumeId(), params)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create snapshot: %v", err)
+	}
+
+	err = d.maybeDeleteLocalSnapshot(ctx, snap, params)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to delete local snapshot: %s", err)
 	}
 
 	return &csi.CreateSnapshotResponse{Snapshot: &snap.Snapshot}, nil
@@ -1346,6 +1357,25 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 			VolumeContext:      volCtx,
 		},
 	}, nil
+}
+
+// maybeDeleteLocalSnapshot deletes the local portion of a snapshot according to their volume.SnapshotParameters.
+// It will not delete a snapshot that is not ready, does not have a remote target, or where local deletion is disabled.
+func (d Driver) maybeDeleteLocalSnapshot(ctx context.Context, snap *volume.Snapshot, params *volume.SnapshotParameters) error {
+	if !snap.ReadyToUse {
+		return nil
+	}
+
+	if params.Type == volume.SnapshotTypeInCluster {
+		return nil
+	}
+
+	if !params.DeleteLocal {
+		return nil
+	}
+
+	// Create a new, local only snapshot object (no remote set!), so we don't accidentally delete the remote backup
+	return d.Snapshots.SnapDelete(ctx, &volume.Snapshot{Snapshot: snap.Snapshot})
 }
 
 func missingAttr(methodCall, volumeID, attr string) error {
