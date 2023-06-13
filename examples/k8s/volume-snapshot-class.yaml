@@ -15,6 +15,8 @@ parameters:
   # See https://linbit.com/drbd-user-guide/linstor-guide-1_0-en/#s-shipping_snapshots-linstor for details
   # on each parameter.
   snap.linstor.csi.linbit.com/remote-name: snapshot-bucket
+  # Delete local copy of the snapshot after uploading completes
+  snap.linstor.csi.linbit.com/delete-local: "true"
   snap.linstor.csi.linbit.com/allow-incremental: "false"
   snap.linstor.csi.linbit.com/s3-bucket: snapshot-bucket
   snap.linstor.csi.linbit.com/s3-endpoint: s3.us-west-1.amazonaws.com

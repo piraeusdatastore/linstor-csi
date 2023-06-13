@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Delete S3 backups in delete snapshot requests.
+- Delete local snapshots when creating S3 backups when new "delete-local" parameter is true.
 
 ## [1.1.1] - 2023-06-05
 
