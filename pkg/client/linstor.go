@@ -1117,6 +1117,10 @@ func (s *Linstor) findBackupInfo(ctx context.Context, sourceVolId, snapId string
 			return "", nil, fmt.Errorf("failed to check remote '%s' for presence of snapshot '%s'", remote, snapId)
 		}
 
+		if info == nil {
+			continue
+		}
+
 		if len(info.Storpools) < 1 {
 			return "", nil, fmt.Errorf("backup has no associated storage pool information")
 		}
