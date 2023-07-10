@@ -1453,6 +1453,10 @@ func (s *Linstor) snapOrBackupById(ctx context.Context, id string) (*lapi.Snapsh
 			return nil, nil, fmt.Errorf("failed to check remote '%s' for backups of id '%s': %w", remote, id, err)
 		}
 
+		if info == nil {
+			continue
+		}
+
 		bMap := info.Linstor
 
 		for k := range bMap {
@@ -1574,6 +1578,10 @@ func (s *Linstor) ListSnaps(ctx context.Context, start, limit int) ([]*volume.Sn
 		list, err := s.client.Backup.GetAll(ctx, s3remotes[i].RemoteName, "", "")
 		if err != nil {
 			return nil, fmt.Errorf("failed to list backups in remote '%s': %w", s3remotes[i].RemoteName, err)
+		}
+
+		if list == nil {
+			continue
 		}
 
 		bMap := list.Linstor
