@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fix a crash when searching for potential backups to restore from.
+- Fix crashes when listing backups
 
 ## [1.2.0] - 2023-06-15
 
