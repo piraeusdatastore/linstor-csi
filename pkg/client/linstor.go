@@ -1341,7 +1341,9 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 		return nil, err
 	}
 
-	if vDef.SizeKib != expectedSizeKiB {
+	// We don't support shrinking. This is mostly covered by the provisioner, but with backups there may be
+	// edge cases where the "no shrinking" rule cannot be enforced. So we only allow volume growth here.
+	if vDef.SizeKib < expectedSizeKiB {
 		err := s.client.Client.ResourceDefinitions.ModifyVolumeDefinition(ctx, info.ID, 0, lapi.VolumeDefinitionModify{
 			SizeKib: expectedSizeKiB,
 		})
