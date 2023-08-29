@@ -452,26 +452,24 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 		"targetNode": node,
 	}).Info("attaching volume")
 
-	ress, err := s.client.Resources.GetResourceView(ctx, &lapi.ListOpts{Resource: []string{volId}})
+	ress, err := s.client.Resources.GetAll(ctx, volId)
 	if nil404(err) != nil {
 		return err
 	}
 
 	var existingRes *lapi.Resource
 
-	existingSharedName := ""
 	disklessFlag := ""
 	otherResInUse := 0
 
 	for i := range ress {
-		flag := getDisklessFlag(&ress[i].Resource)
+		flag := getDisklessFlag(&ress[i])
 		if flag != "" && disklessFlag == "" {
 			disklessFlag = flag
 		}
 
 		if ress[i].NodeName == node {
-			existingRes = &ress[i].Resource
-			existingSharedName = ress[i].SharedName
+			existingRes = &ress[i]
 		} else if ress[i].State != nil && ress[i].State.InUse != nil && *ress[i].State.InUse {
 			otherResInUse++
 		}
@@ -494,8 +492,8 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 
 	propsModify := lapi.GenericPropsModify{OverrideProps: map[string]string{}}
 
-	// If the resource is already on the node, don't worry about attaching.
-	if existingRes == nil {
+	// If the resource is already on the node, don't worry about attaching, unless we also need to activate it.
+	if existingRes == nil || slice.ContainsString(existingRes.Flags, lapiconsts.FlagRscInactive) {
 		err := s.client.Resources.MakeAvailable(ctx, volId, node, lapi.ResourceMakeAvailable{Diskful: false})
 
 		if errors.Is(err, lapi.NotFoundError) {
@@ -512,10 +510,12 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 			err = s.client.Resources.Create(ctx, rCreate)
 		}
 
-		propsModify.OverrideProps[linstor.PropertyCreatedFor] = linstor.CreatedForTemporaryDisklessAttach
-
 		if err != nil {
 			return err
+		}
+
+		if existingRes == nil {
+			propsModify.OverrideProps[linstor.PropertyCreatedFor] = linstor.CreatedForTemporaryDisklessAttach
 		}
 
 		newRsc, err := s.client.Resources.Get(ctx, volId, node)
@@ -537,31 +537,6 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 			Kind:      "resource",
 			Name:      volId,
 		}
-	}
-
-	if slice.ContainsString(existingRes.Flags, lapiconsts.FlagRscInactive) {
-		for i := range ress {
-			res := &ress[i]
-
-			if res.SharedName == "" {
-				continue
-			}
-
-			if res.SharedName != existingSharedName {
-				continue
-			}
-
-			if slice.ContainsString(res.Flags, lapiconsts.FlagRscInactive) {
-				continue
-			}
-
-			err := s.client.Resources.Deactivate(ctx, res.Name, res.NodeName)
-			if err != nil {
-				return fmt.Errorf("failed to deactivate node %s in shared storage pool %s for volume %s: %w", res.NodeName, res.SharedName, volId, err)
-			}
-		}
-
-		return s.client.Resources.Activate(ctx, volId, node)
 	}
 
 	return nil
