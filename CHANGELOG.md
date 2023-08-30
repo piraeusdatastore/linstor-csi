@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Reduced load on LINSTOR when attaching volumes.
+- Reduced load on LINSTOR when checking node stats.
 
 ## [1.2.2] - 2023-07-13
 
