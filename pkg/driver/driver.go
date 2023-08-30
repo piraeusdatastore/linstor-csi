@@ -397,15 +397,6 @@ func (d Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeSt
 		return nil, missingAttr("NodeGetVolumeStats", req.GetVolumeId(), "VolumeId")
 	}
 
-	volume, err := d.Storage.FindByID(ctx, req.GetVolumeId())
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "NodeGetVolumeStats failed for %s: failed to check if volume exists: %v", req.GetVolumeId(), err)
-	}
-
-	if volume == nil {
-		return nil, status.Errorf(codes.NotFound, "NodeGetVolumeStats failed for %s: volume does not exist", req.GetVolumeId())
-	}
-
 	notMounted, err := d.Mounter.IsNotMountPoint(req.GetVolumePath())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodeGetVolumeStats failed for %s: failed to check if path %v is mounted: %v", req.GetVolumeId(), req.GetVolumePath(), err)
