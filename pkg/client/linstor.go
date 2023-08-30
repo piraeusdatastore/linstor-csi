@@ -662,7 +662,7 @@ func (s *Linstor) CapacityBytes(ctx context.Context, storagePool string, segment
 		return 0, fmt.Errorf("unable to get capacity: %w", err)
 	}
 
-	allNodes, err := s.client.Nodes.GetAll(ctx, &lapi.ListOpts{Cached: &cached})
+	allNodes, err := s.client.Nodes.GetAll(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("unable to get nodes: %w", err)
 	}
@@ -1705,6 +1705,7 @@ func (s *Linstor) Status(ctx context.Context, volId string) ([]string, *csi.Volu
 	}
 
 	nodes, conds := NodesAndConditionFromResources(ress)
+
 	return nodes, conds, nil
 }
 
