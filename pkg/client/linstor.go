@@ -613,22 +613,18 @@ func (s *Linstor) Detach(ctx context.Context, volId, node string) error {
 		}
 	}
 
-	vols, err := s.client.Resources.GetVolumes(ctx, volId, node)
+	vol, err := s.client.Resources.GetVolume(ctx, volId, node, 0)
 	if err != nil {
 		return nil404(err)
 	}
 
-	if len(vols) != 1 {
-		return fmt.Errorf("expected exactly 1 volume, got %d instead", len(vols))
-	}
-
-	createdFor, ok := vols[0].Props[linstor.PropertyCreatedFor]
+	createdFor, ok := vol.Props[linstor.PropertyCreatedFor]
 	if !ok || createdFor != linstor.CreatedForTemporaryDisklessAttach {
 		log.Info("resource not temporary (not created by Attach) not deleting")
 		return nil
 	}
 
-	if vols[0].ProviderKind != lapi.DISKLESS {
+	if vol.ProviderKind != lapi.DISKLESS {
 		log.Info("temporary resource created by Attach is now diskfull, not deleting")
 		return nil
 	}
