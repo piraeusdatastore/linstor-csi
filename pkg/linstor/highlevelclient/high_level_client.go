@@ -22,6 +22,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -43,6 +45,11 @@ func NewHighLevelClient(options ...lapi.Option) (*HighLevelClient, error) {
 	c, err := lapi.NewClient(options...)
 	if err != nil {
 		return nil, err
+	}
+
+	c.Nodes = &NodeCacheProvider{
+		NodeProvider: c.Nodes,
+		timeout:      1 * time.Minute,
 	}
 
 	return &HighLevelClient{Client: c}, nil
@@ -149,4 +156,89 @@ func (c *HighLevelClient) NodesForTopology(ctx context.Context, segments map[str
 	}
 
 	return result, nil
+}
+
+type NodeCacheProvider struct {
+	lapi.NodeProvider
+	timeout      time.Duration
+	nodesMu      sync.Mutex
+	nodesUpdated time.Time
+	nodes        []lapi.Node
+	poolsMu      sync.Mutex
+	poolsUpdated time.Time
+	pools        []lapi.StoragePool
+}
+
+func (n *NodeCacheProvider) GetAll(ctx context.Context, opts ...*lapi.ListOpts) ([]lapi.Node, error) {
+	n.nodesMu.Lock()
+	defer n.nodesMu.Unlock()
+
+	now := time.Now()
+
+	if n.nodesUpdated.Add(n.timeout).After(now) {
+		return filter(n.nodes, func(node lapi.Node) string {
+			return node.Name
+		}, opts...), nil
+	}
+
+	nodes, err := n.NodeProvider.GetAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	n.nodes = nodes
+	n.nodesUpdated = now
+
+	return filter(n.nodes, func(node lapi.Node) string {
+		return node.Name
+	}, opts...), nil
+}
+
+func (n *NodeCacheProvider) GetStoragePoolView(ctx context.Context, opts ...*lapi.ListOpts) ([]lapi.StoragePool, error) {
+	n.poolsMu.Lock()
+	defer n.poolsMu.Unlock()
+
+	now := time.Now()
+
+	if n.poolsUpdated.Add(n.timeout).After(now) {
+		return filter(n.pools, func(pool lapi.StoragePool) string {
+			return pool.NodeName
+		}, opts...), nil
+	}
+
+	pools, err := n.NodeProvider.GetStoragePoolView(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	n.pools = pools
+	n.poolsUpdated = now
+
+	return filter(n.pools, func(pool lapi.StoragePool) string {
+		return pool.NodeName
+	}, opts...), nil
+}
+
+func filter[T any](items []T, getNodeName func(T) string, opts ...*lapi.ListOpts) []T {
+	filterNames := make(map[string]struct{})
+
+	for _, o := range opts {
+		for _, n := range o.Node {
+			filterNames[n] = struct{}{}
+		}
+	}
+
+	if len(filterNames) == 0 {
+		return items
+	}
+
+	var result []T
+
+	for _, item := range items {
+		if _, ok := filterNames[getNodeName(item)]; ok {
+			result = append(result, item)
+		}
+	}
+
+	return result
 }

@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reduced load on LINSTOR when detaching volumes.
 - Reduced load on LINSTOR when checking node stats.
 - Reduced load on LINSTOR when listing volumes with status.
+- Reduced load on LINSTOR when fetching storage capacity.
 
 ## [1.2.2] - 2023-07-13
 
