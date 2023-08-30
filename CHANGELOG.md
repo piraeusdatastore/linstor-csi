@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Reduced load on LINSTOR when attaching volumes.
 - Reduced load on LINSTOR when checking node stats.
+- Reduced load on LINSTOR when listing volumes with status.
 
 ## [1.2.2] - 2023-07-13
 
