@@ -171,20 +171,35 @@ func LogLevel(s string) func(*Linstor) error {
 	}
 }
 
-// ListAll returns a sorted list of pointers to volume.Info. Only the LINSTOR
-// volumes that can be serialized into a volume.Info are included.
-func (s *Linstor) ListAll(ctx context.Context) ([]*volume.Info, error) {
-	vols := make([]*volume.Info, 0)
+// ListAllWithStatus returns a sorted list of volume and their status.
+func (s *Linstor) ListAllWithStatus(ctx context.Context) ([]volume.VolumeStatus, error) {
+	var vols []volume.VolumeStatus
+
+	resourcesByName := make(map[string][]lapi.Resource)
 
 	resDefs, err := s.client.ResourceDefinitions.GetAll(ctx, lapi.RDGetAllRequest{WithVolumeDefinitions: true})
 	if err != nil {
-		return vols, nil
+		return nil, err
+	}
+
+	allResources, err := s.client.Resources.GetResourceView(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range allResources {
+		resourcesByName[allResources[i].Name] = append(resourcesByName[allResources[i].Name], allResources[i].Resource)
 	}
 
 	for _, rd := range resDefs {
 		vol := s.resourceDefinitionToVolume(rd)
 		if vol != nil {
-			vols = append(vols, vol)
+			nodes, conds := NodesAndConditionFromResources(resourcesByName[vol.ID])
+			vols = append(vols, volume.VolumeStatus{
+				Info:       *vol,
+				Nodes:      nodes,
+				Conditions: conds,
+			})
 		}
 	}
 
@@ -1693,6 +1708,11 @@ func (s *Linstor) Status(ctx context.Context, volId string) ([]string, *csi.Volu
 		return nil, nil, fmt.Errorf("failed to list resources for '%s': %w", volId, err)
 	}
 
+	nodes, conds := NodesAndConditionFromResources(ress)
+	return nodes, conds, nil
+}
+
+func NodesAndConditionFromResources(ress []lapi.Resource) ([]string, *csi.VolumeCondition) {
 	var allNodes, abnormalNodes []string
 
 	for i := range ress {
@@ -1721,7 +1741,9 @@ func (s *Linstor) Status(ctx context.Context, volId string) ([]string, *csi.Volu
 		condition.Message = fmt.Sprintf("Resource with issues on node(s): %s", strings.Join(abnormalNodes, ","))
 	}
 
-	return allNodes, condition, nil
+	sort.Strings(allNodes)
+
+	return allNodes, condition
 }
 
 // Mount makes volumes consumable from the source to the target.

@@ -737,7 +737,7 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 
 // ListVolumes https://github.com/container-storage-interface/spec/blob/v1.6.0/spec.md#listvolumes
 func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
-	volumes, err := d.Storage.ListAll(ctx)
+	volumes, err := d.Storage.ListAllWithStatus(ctx)
 	if err != nil {
 		return &csi.ListVolumesResponse{}, status.Errorf(codes.Aborted, "ListVolumes failed: %v", err)
 	}
@@ -769,11 +769,6 @@ func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*
 	// Build up entries list from paginated volume slice.
 	entries := make([]*csi.ListVolumesResponse_Entry, len(volumes))
 	for i, vol := range volumes {
-		nodes, condition, err := d.Assignments.Status(ctx, vol.ID)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "ListVolumes failed to find nodes for volume '%s': %v", vol.ID, err)
-		}
-
 		entries[i] = &csi.ListVolumesResponse_Entry{
 			Volume: &csi.Volume{
 				VolumeId:      vol.ID,
@@ -783,8 +778,8 @@ func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*
 				// the information, so it should be fine.
 			},
 			Status: &csi.ListVolumesResponse_VolumeStatus{
-				PublishedNodeIds: nodes,
-				VolumeCondition:  condition,
+				PublishedNodeIds: vol.Nodes,
+				VolumeCondition:  vol.Conditions,
 			},
 		}
 	}

@@ -96,8 +96,8 @@ type AttacherDettacher interface {
 
 // Querier retrives various states of volumes.
 type Querier interface {
-	// ListAll should return a sorted list of pointers to Info.
-	ListAll(ctx context.Context) ([]*Info, error)
+	// ListAllWithStatus returns a sorted list of volume and their status.
+	ListAllWithStatus(ctx context.Context) ([]VolumeStatus, error)
 	// FindByID returns nil when volume is not found.
 	FindByID(ctx context.Context, ID string) (*Info, error)
 	// AllocationSizeKiB returns the number of KiB required to provision required bytes.
@@ -121,6 +121,12 @@ type VolumeStats struct {
 	AvailableInodes int64
 	TotalInodes     int64
 	UsedInodes      int64
+}
+
+type VolumeStatus struct {
+	Info
+	Nodes      []string
+	Conditions *csi.VolumeCondition
 }
 
 // VolumeStatter provides info about volume/filesystem usage.

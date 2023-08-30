@@ -45,9 +45,13 @@ func NewMockStorage() *MockStorage {
 	}
 }
 
-func (s *MockStorage) ListAll(ctx context.Context) ([]*volume.Info, error) {
-	vols := make([]*volume.Info, 0)
-	vols = append(vols, s.createdVolumes...)
+func (s *MockStorage) ListAllWithStatus(ctx context.Context) ([]volume.VolumeStatus, error) {
+	vols := make([]volume.VolumeStatus, 0)
+	for _, info := range s.createdVolumes {
+		vols = append(vols, volume.VolumeStatus{
+			Info: *info,
+		})
+	}
 
 	sort.Slice(vols, func(i, j int) bool {
 		return vols[i].ID < vols[j].ID
