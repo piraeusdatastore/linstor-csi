@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Support to delete downloaded backups after restore operation (k8s only).
+
 ## [1.2.3] - 2023-08-31
 
 ### Changed

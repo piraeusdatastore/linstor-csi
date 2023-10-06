@@ -39,6 +39,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
@@ -57,6 +62,7 @@ type Driver struct {
 	VolumeStatter volume.VolumeStatter
 	Expander      volume.Expander
 	NodeInformer  volume.NodeInformer
+	kubeClient    dynamic.Interface
 	srv           *grpc.Server
 	log           *logrus.Entry
 	version       string
@@ -233,6 +239,20 @@ func LogLevel(s string) func(*Driver) error {
 			d.log.Logger.SetReportCaller(true)
 		}
 		return nil
+	}
+}
+
+func ConfigureKubernetesIfAvailable() func(*Driver) error {
+	return func(d *Driver) error {
+		cfg, err := rest.InClusterConfig()
+		if err != nil {
+			// Not running in kubernetes
+			return nil
+		}
+
+		d.kubeClient, err = dynamic.NewForConfig(cfg)
+
+		return err
 	}
 }
 
@@ -1259,7 +1279,14 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 					"CreateVolume failed for %s: snapshot not found in storage backend", req.GetName())
 			}
 
-			if err := d.Snapshots.VolFromSnap(ctx, snap, info, params, req.GetAccessibilityRequirements()); err != nil {
+			snapParams, err := d.maybeGetSnapshotParameters(ctx, snap)
+			if err != nil {
+				logger.WithError(err).Warn("failed to fetch snapshot parameters, continuing without it")
+
+				snapParams = nil
+			}
+
+			if err := d.Snapshots.VolFromSnap(ctx, snap, info, params, snapParams, req.GetAccessibilityRequirements()); err != nil {
 				d.failpathDelete(ctx, info.ID)
 				return nil, status.Errorf(codes.Internal,
 					"CreateVolume failed for %s: %v", req.GetName(), err)
@@ -1301,7 +1328,7 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 				}
 			}()
 
-			err = d.Snapshots.VolFromSnap(ctx, snap, info, params, req.GetAccessibilityRequirements())
+			err = d.Snapshots.VolFromSnap(ctx, snap, info, params, nil, req.GetAccessibilityRequirements())
 			if err != nil {
 				d.failpathDelete(ctx, info.ID)
 
@@ -1343,6 +1370,61 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 			VolumeContext:      volCtx,
 		},
 	}, nil
+}
+
+func findMatchingSnapshotClassName(snap *volume.Snapshot, contents ...unstructured.Unstructured) string {
+	for i := range contents {
+		content := contents[i].Object
+		if driver, _, _ := unstructured.NestedString(content, "spec", "driver"); driver != linstor.DriverName {
+			continue
+		}
+
+		if handle, _, _ := unstructured.NestedString(content, "status", "snapshotHandle"); handle != snap.SnapshotId {
+			continue
+		}
+
+		if readyToUse, _, _ := unstructured.NestedBool(content, "status", "readyToUse"); !readyToUse {
+			continue
+		}
+
+		snapshotClass, _, _ := unstructured.NestedString(content, "spec", "volumeSnapshotClassName")
+
+		return snapshotClass
+	}
+
+	return ""
+}
+
+func (d Driver) maybeGetSnapshotParameters(ctx context.Context, snap *volume.Snapshot) (*volume.SnapshotParameters, error) {
+	if d.kubeClient == nil {
+		return nil, nil
+	}
+
+	gv := schema.GroupVersion{Group: "snapshot.storage.k8s.io", Version: "v1"}
+	contentGvr := gv.WithResource("volumesnapshotcontents")
+	classGvr := gv.WithResource("volumesnapshotclasses")
+
+	result, err := d.kubeClient.Resource(contentGvr).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch list of snapshot contents")
+	}
+
+	snapshotClassName := findMatchingSnapshotClassName(snap, result.Items...)
+	if snapshotClassName == "" {
+		return nil, fmt.Errorf("failed to determine snapshot class name")
+	}
+
+	class, err := d.kubeClient.Resource(classGvr).Get(ctx, snapshotClassName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch snapshot class: %w", err)
+	}
+
+	rawParams, _, err := unstructured.NestedStringMap(class.Object, "parameters")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse snapshot class: %w", err)
+	}
+
+	return volume.NewSnapshotParameters(rawParams, nil)
 }
 
 // maybeDeleteLocalSnapshot deletes the local portion of a snapshot according to their volume.SnapshotParameters.

@@ -910,7 +910,7 @@ func (s *Linstor) SnapDelete(ctx context.Context, snap *volume.Snapshot) error {
 }
 
 // VolFromSnap creates the volume using the data contained within the snapshot.
-func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *volume.Info, params *volume.Parameters, topologies *csi.TopologyRequirement) error {
+func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *volume.Info, params *volume.Parameters, snapParams *volume.SnapshotParameters, topologies *csi.TopologyRequirement) error {
 	logger := s.log.WithFields(logrus.Fields{
 		"volume":   fmt.Sprintf("%+v", vol),
 		"snapshot": fmt.Sprintf("%+v", snap),
@@ -985,6 +985,20 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *v
 	if err != nil {
 		logger.Debugf("reconcile extra properties failed: %v", err)
 		return err
+	}
+
+	if snap.Remote != "" && snapParams != nil && snapParams.DeleteLocal {
+		logger.Info("deleting local copy of backup")
+
+		err := s.client.Resources.DeleteSnapshot(ctx, snap.SourceVolumeId, snap.SnapshotId)
+		if err != nil {
+			logger.WithError(err).Warn("deleting local copy of backup failed")
+		}
+
+		err = s.deleteResourceDefinitionAndGroupIfUnused(ctx, snap.GetSourceVolumeId())
+		if err != nil {
+			logger.WithError(err).Warn("deleting local RD of backup failed")
+		}
 	}
 
 	logger.Debug("success")

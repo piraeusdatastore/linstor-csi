@@ -139,6 +139,7 @@ func main() {
 		driver.Expander(linstorClient),
 		driver.NodeInformer(linstorClient),
 		driver.TopologyPrefix(*propNs),
+		driver.ConfigureKubernetesIfAvailable(),
 	)
 	if err != nil {
 		log.Fatal(err)

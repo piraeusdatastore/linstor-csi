@@ -190,7 +190,7 @@ func (s *MockStorage) FindSnapsBySource(ctx context.Context, sourceVol *volume.I
 	return results[start:end], nil
 }
 
-func (s *MockStorage) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *volume.Info, parameters *volume.Parameters, topologies *csi.TopologyRequirement) error {
+func (s *MockStorage) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *volume.Info, parameters *volume.Parameters, snapParams *volume.SnapshotParameters, topologies *csi.TopologyRequirement) error {
 	s.createdVolumes = append(s.createdVolumes, vol)
 	return nil
 }
