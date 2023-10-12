@@ -6,7 +6,7 @@ require (
 	github.com/LINBIT/golinstor v0.49.0
 	github.com/container-storage-interface/spec v1.8.0
 	github.com/haySwim/data v0.2.0
-	github.com/kubernetes-csi/csi-test/v5 v5.0.0
+	github.com/kubernetes-csi/csi-test/v5 v5.1.0
 	github.com/pborman/uuid v1.2.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
@@ -47,8 +47,8 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/onsi/ginkgo/v2 v2.9.4 // indirect
-	github.com/onsi/gomega v1.27.6 // indirect
+	github.com/onsi/ginkgo/v2 v2.12.0 // indirect
+	github.com/onsi/gomega v1.27.10 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/objx v0.5.1 // indirect
@@ -56,7 +56,7 @@ require (
 	golang.org/x/oauth2 v0.13.0 // indirect
 	golang.org/x/term v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
-	golang.org/x/tools v0.8.0 // indirect
+	golang.org/x/tools v0.12.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231009173412-8bfb1ae86b6c // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
