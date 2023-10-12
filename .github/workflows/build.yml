@@ -18,7 +18,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
       - name: Set up Docker Buildx
         id: buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       - name: login to registry
         if: github.event_name != 'pull_request'
         env:
