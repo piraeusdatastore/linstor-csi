@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/LINBIT/golinstor v0.49.0
-	github.com/container-storage-interface/spec v1.8.0
+	github.com/container-storage-interface/spec v1.9.0
 	github.com/haySwim/data v0.2.0
 	github.com/kubernetes-csi/csi-test/v5 v5.1.0
 	github.com/pborman/uuid v1.2.1
