@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/LINBIT/golinstor v0.49.0
-	github.com/container-storage-interface/spec v1.8.0
+	github.com/container-storage-interface/spec v1.9.0
 	github.com/haySwim/data v0.2.0
 	github.com/kubernetes-csi/csi-test/v5 v5.1.0
 	github.com/pborman/uuid v1.2.1
@@ -15,10 +15,10 @@ require (
 	google.golang.org/grpc v1.58.3
 	google.golang.org/protobuf v1.31.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.28.2
-	k8s.io/apimachinery v0.28.2
-	k8s.io/client-go v0.28.2
-	k8s.io/mount-utils v0.28.2
+	k8s.io/api v0.28.3
+	k8s.io/apimachinery v0.28.3
+	k8s.io/client-go v0.28.3
+	k8s.io/mount-utils v0.28.3
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 )
 
