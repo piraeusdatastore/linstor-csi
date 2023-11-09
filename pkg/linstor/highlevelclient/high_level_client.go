@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	lc "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 
@@ -50,6 +51,11 @@ func NewHighLevelClient(options ...lapi.Option) (*HighLevelClient, error) {
 	c.Nodes = &NodeCacheProvider{
 		NodeProvider: c.Nodes,
 		timeout:      1 * time.Minute,
+	}
+
+	c.Resources = &ResourceCacheProvider{
+		ResourceProvider: c.Resources,
+		timeout:          1 * time.Minute,
 	}
 
 	return &HighLevelClient{Client: c}, nil
@@ -168,6 +174,7 @@ func (c *HighLevelClient) ReservedCapacity(ctx context.Context, node, pool strin
 	}
 
 	var reserved int64
+
 	for i := range ress {
 		res := &ress[i]
 
@@ -215,7 +222,7 @@ func (n *NodeCacheProvider) GetAll(ctx context.Context, opts ...*lapi.ListOpts) 
 	if n.nodesUpdated.Add(n.timeout).After(now) {
 		return filter(n.nodes, func(node lapi.Node) string {
 			return node.Name
-		}, opts...), nil
+		}, nil, opts...), nil
 	}
 
 	nodes, err := n.NodeProvider.GetAll(ctx)
@@ -228,7 +235,7 @@ func (n *NodeCacheProvider) GetAll(ctx context.Context, opts ...*lapi.ListOpts) 
 
 	return filter(n.nodes, func(node lapi.Node) string {
 		return node.Name
-	}, opts...), nil
+	}, nil, opts...), nil
 }
 
 func (n *NodeCacheProvider) GetStoragePoolView(ctx context.Context, opts ...*lapi.ListOpts) ([]lapi.StoragePool, error) {
@@ -238,9 +245,11 @@ func (n *NodeCacheProvider) GetStoragePoolView(ctx context.Context, opts ...*lap
 	now := time.Now()
 
 	if n.poolsUpdated.Add(n.timeout).After(now) {
-		return filter(n.pools, func(pool lapi.StoragePool) string {
-			return pool.NodeName
-		}, opts...), nil
+		return filter(n.pools,
+			func(pool lapi.StoragePool) string { return pool.NodeName },
+			func(pool lapi.StoragePool) string { return pool.StoragePoolName },
+			opts...,
+		), nil
 	}
 
 	pools, err := n.NodeProvider.GetStoragePoolView(ctx)
@@ -251,30 +260,80 @@ func (n *NodeCacheProvider) GetStoragePoolView(ctx context.Context, opts ...*lap
 	n.pools = pools
 	n.poolsUpdated = now
 
-	return filter(n.pools, func(pool lapi.StoragePool) string {
-		return pool.NodeName
-	}, opts...), nil
+	return filter(n.pools,
+		func(pool lapi.StoragePool) string { return pool.NodeName },
+		func(pool lapi.StoragePool) string { return pool.StoragePoolName },
+		opts...,
+	), nil
 }
 
-func filter[T any](items []T, getNodeName func(T) string, opts ...*lapi.ListOpts) []T {
+type ResourceCacheProvider struct {
+	lapi.ResourceProvider
+	timeout             time.Duration
+	resourceViewMu      sync.Mutex
+	resourceViewUpdated time.Time
+	resourceView        []lapi.ResourceWithVolumes
+}
+
+func (r *ResourceCacheProvider) GetResourceView(ctx context.Context, opts ...*lapi.ListOpts) ([]lapi.ResourceWithVolumes, error) {
+	r.resourceViewMu.Lock()
+	defer r.resourceViewMu.Unlock()
+
+	now := time.Now()
+
+	if r.resourceViewUpdated.Add(r.timeout).After(now) {
+		return filter(r.resourceView,
+			func(res lapi.ResourceWithVolumes) string { return res.NodeName },
+			func(res lapi.ResourceWithVolumes) string { return res.Props[lc.KeyStorPoolName] },
+			opts...,
+		), nil
+	}
+
+	view, err := r.ResourceProvider.GetResourceView(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	r.resourceView = view
+	r.resourceViewUpdated = now
+
+	return filter(r.resourceView,
+		func(res lapi.ResourceWithVolumes) string { return res.NodeName },
+		func(res lapi.ResourceWithVolumes) string { return res.Props[lc.KeyStorPoolName] },
+		opts...,
+	), nil
+}
+
+func filter[T any](items []T, getNodeName, getPoolName func(T) string, opts ...*lapi.ListOpts) []T {
 	filterNames := make(map[string]struct{})
+	filterPools := make(map[string]struct{})
 
 	for _, o := range opts {
 		for _, n := range o.Node {
 			filterNames[n] = struct{}{}
 		}
-	}
 
-	if len(filterNames) == 0 {
-		return items
+		for _, sp := range o.StoragePool {
+			filterPools[sp] = struct{}{}
+		}
 	}
 
 	var result []T
 
 	for _, item := range items {
-		if _, ok := filterNames[getNodeName(item)]; ok {
-			result = append(result, item)
+		if len(filterNames) > 0 {
+			if _, ok := filterNames[getNodeName(item)]; !ok {
+				continue
+			}
 		}
+
+		if len(filterPools) > 0 {
+			if _, ok := filterPools[getPoolName(item)]; !ok {
+				continue
+			}
+		}
+
+		result = append(result, item)
 	}
 
 	return result
