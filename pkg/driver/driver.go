@@ -829,7 +829,7 @@ func (d Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*
 	for _, segment := range accessibleSegments {
 		d.log.WithField("segment", segment).Debug("Checking capacity of segment")
 
-		bytes, err := d.Storage.CapacityBytes(ctx, params.StoragePool, segment)
+		bytes, err := d.Storage.CapacityBytes(ctx, params.StoragePool, params.OverProvision, segment)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "%v", err)
 		}

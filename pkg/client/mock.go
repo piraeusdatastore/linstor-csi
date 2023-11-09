@@ -242,7 +242,7 @@ func (s *MockStorage) Status(ctx context.Context, volId string) ([]string, *csi.
 	return nodes, &csi.VolumeCondition{Abnormal: false, Message: "All replicas normal"}, nil
 }
 
-func (s *MockStorage) CapacityBytes(ctx context.Context, sp string, segments map[string]string) (int64, error) {
+func (s *MockStorage) CapacityBytes(ctx context.Context, pool string, overProvision *float64, segments map[string]string) (int64, error) {
 	return 50000000, nil
 }
 

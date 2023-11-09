@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Support to delete downloaded backups after restore operation (k8s only).
+- New parameter `overProvision`: when set available capacity on a node is calculated by taking into account
+  the reserved capacity in the pool based on existing volumes.
 
 ## [1.2.3] - 2023-08-31
 

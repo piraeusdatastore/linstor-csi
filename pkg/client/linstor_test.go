@@ -342,7 +342,7 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 		testcase := &testcases[i]
 
 		t.Run(testcase.name, func(t *testing.T) {
-			cap, err := cl.CapacityBytes(context.Background(), testcase.storagePool, testcase.topology)
+			cap, err := cl.CapacityBytes(context.Background(), testcase.storagePool, nil, testcase.topology)
 			assert.NoError(t, err)
 			assert.Equal(t, testcase.expectedCapacity, cap)
 		})
