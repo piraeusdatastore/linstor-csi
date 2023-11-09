@@ -40,6 +40,7 @@ const (
 	postmountxfsopts
 	resourcegroup
 	usepvcname
+	overprovision
 )
 
 // Parameters configuration for linstor volumes.
@@ -91,6 +92,10 @@ type Parameters struct {
 	Properties map[string]string
 	// UsePvcName derives the volume name from the PVC name+namespace, if that information is available.
 	UsePvcName bool
+	// OverProvision determines how much free capacity is reported.
+	// If set, free capacity is calculated by (TotalCapacity * OverProvision) - ReservedCapacity.
+	// If not set, the free capacity is taken directly from LINSTOR.
+	OverProvision *float64
 }
 
 const DefaultDisklessStoragePoolName = "DfltDisklessStorPool"
@@ -229,6 +234,14 @@ func NewParameters(params map[string]string, topologyPrefix string) (Parameters,
 			// This parameter was unused. It is just parsed to not break any old storage classes that might be using
 			// it. Storage sizes are handled via CSI requests directly.
 			log.Warnf("using useless parameter '%s'", rawkey)
+
+		case overprovision:
+			f, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				return p, err
+			}
+
+			p.OverProvision = &f
 		}
 	}
 

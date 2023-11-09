@@ -635,7 +635,7 @@ func (s *Linstor) Detach(ctx context.Context, volId, node string) error {
 }
 
 // CapacityBytes returns the amount of free space in the storage pool specified by the params and topology.
-func (s *Linstor) CapacityBytes(ctx context.Context, storagePool string, segments map[string]string) (int64, error) {
+func (s *Linstor) CapacityBytes(ctx context.Context, storagePool string, overProvision *float64, segments map[string]string) (int64, error) {
 	log := s.log.WithField("storage-pool", storagePool).WithField("segments", segments)
 
 	var requestedStoragePools []string
@@ -703,8 +703,33 @@ func (s *Linstor) CapacityBytes(ctx context.Context, storagePool string, segment
 			continue
 		}
 
-		if storagePool == "" || storagePool == sp.StoragePoolName {
-			log.Trace("adding storage pool capacity")
+		if sp.ProviderKind == lapi.DISKLESS {
+			log.Trace("not adding diskless pool")
+			continue
+		}
+
+		if storagePool != "" && storagePool != sp.StoragePoolName {
+			log.Trace("not a requested storage pool")
+			continue
+		}
+
+		if overProvision != nil {
+			virtualCapacity := float64(sp.TotalCapacity) * *overProvision
+
+			reservedCapacity, err := s.client.ReservedCapacity(ctx, sp.NodeName, sp.StoragePoolName)
+			if err != nil {
+				return 0, fmt.Errorf("failed to fetch reserved capacity: %w", err)
+			}
+
+			if reservedCapacity > int64(virtualCapacity) {
+				log.Trace("ignoring pool with exhausted capacity")
+				continue
+			}
+
+			log.WithField("add-capacity", int64(virtualCapacity)-reservedCapacity).Trace("adding storage pool capacity")
+			total += int64(virtualCapacity) - reservedCapacity
+		} else {
+			log.WithField("add-capacity", sp.FreeCapacity).Trace("adding storage pool capacity")
 			total += sp.FreeCapacity
 		}
 	}

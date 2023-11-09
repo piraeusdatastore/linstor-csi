@@ -158,6 +158,43 @@ func (c *HighLevelClient) NodesForTopology(ctx context.Context, segments map[str
 	return result, nil
 }
 
+func (c *HighLevelClient) ReservedCapacity(ctx context.Context, node, pool string) (int64, error) {
+	ress, err := c.Resources.GetResourceView(ctx, &lapi.ListOpts{
+		Node:        []string{node},
+		StoragePool: []string{pool},
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	var reserved int64
+	for i := range ress {
+		res := &ress[i]
+
+		// can never be too careful with LINSTOR filtering
+		if res.NodeName != node {
+			continue
+		}
+
+		for j := range res.Volumes {
+			vol := &res.Volumes[j]
+			if vol.StoragePoolName != pool {
+				continue
+			}
+
+			// Last layer is the storage layer
+			if len(vol.LayerDataList) > 0 {
+				storageVol, ok := vol.LayerDataList[len(vol.LayerDataList)-1].Data.(*lapi.StorageVolume)
+				if ok {
+					reserved += storageVol.UsableSizeKib
+				}
+			}
+		}
+	}
+
+	return reserved, nil
+}
+
 type NodeCacheProvider struct {
 	lapi.NodeProvider
 	timeout      time.Duration
