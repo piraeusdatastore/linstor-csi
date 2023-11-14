@@ -23,6 +23,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"math/rand"
 	"testing"
 
 	lapiconsts "github.com/LINBIT/golinstor"
@@ -368,7 +369,7 @@ func TestLinstor_SortByPreferred(t *testing.T) {
 			name:              "no-preferred",
 			nodes:             []string{"node-a", "node-b", "node-c"},
 			preferredTopology: nil,
-			expected:          []string{"node-a", "node-b", "node-c"},
+			expected:          []string{"node-a", "node-c", "node-b"},
 		},
 		{
 			name:              "one-preferred",
@@ -399,6 +400,7 @@ func TestLinstor_SortByPreferred(t *testing.T) {
 	for i := range testcases {
 		tcase := &testcases[i]
 		t.Run(tcase.name, func(t *testing.T) {
+			rand.Seed(1) // nolint:staticcheck // Deprecated but useful in this case, as we don't want to seed our own RNG just for this one function
 			actual, err := cl.SortByPreferred(context.Background(), tcase.nodes, tcase.policy, tcase.preferredTopology)
 			assert.NoError(t, err)
 			assert.Equal(t, tcase.expected, actual)

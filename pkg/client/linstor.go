@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"os"
 	"regexp"
 	"sort"
@@ -2156,6 +2157,16 @@ func (s *Linstor) SortByPreferred(ctx context.Context, nodes []string, remotePol
 	}
 
 	order := 0
+
+	if len(preferred) == 0 {
+		// If there is no preferred topology, select a random order, so we don't always end up with the
+		// same selected node for downloading backups.
+		rand.Shuffle(len(nodes), func(i, j int) {
+			nodes[i], nodes[j] = nodes[j], nodes[i]
+		})
+
+		return nodes, nil
+	}
 
 	for _, pref := range preferred {
 		// First add the original node directly
