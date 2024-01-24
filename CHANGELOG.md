@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Default access policy for resources without replication layer is now "local only".
+
 ### Fixed
 
 - Do not try to create diskless resource if there is no compatible diskless layer (DRBD or NVMe) available.

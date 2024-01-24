@@ -11,6 +11,7 @@ import (
 	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/pborman/uuid"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/exp/slices"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
@@ -108,13 +109,12 @@ var DefaultRemoteAccessPolicy = RemoteAccessPolicyAnywhere
 func NewParameters(params map[string]string, topologyPrefix string) (Parameters, error) {
 	// set zero values
 	p := Parameters{
-		LayerList:               []devicelayerkind.DeviceLayerKind{devicelayerkind.Drbd, devicelayerkind.Storage},
-		PlacementCount:          1,
-		DisklessStoragePool:     DefaultDisklessStoragePoolName,
-		Encryption:              false,
-		PlacementPolicy:         topology.AutoPlaceTopology,
-		AllowRemoteVolumeAccess: DefaultRemoteAccessPolicy,
-		Properties:              make(map[string]string),
+		LayerList:           []devicelayerkind.DeviceLayerKind{devicelayerkind.Drbd, devicelayerkind.Storage},
+		PlacementCount:      1,
+		DisklessStoragePool: DefaultDisklessStoragePoolName,
+		Encryption:          false,
+		PlacementPolicy:     topology.AutoPlaceTopology,
+		Properties:          make(map[string]string),
 	}
 
 	for k, v := range params {
@@ -258,6 +258,14 @@ func NewParameters(params map[string]string, topologyPrefix string) (Parameters,
 
 		namespace := uuid.UUID(linstor.ResourceGroupNamespace)
 		p.ResourceGroup = "sc-" + uuid.NewSHA1(namespace, encoded).String()
+	}
+
+	if p.AllowRemoteVolumeAccess == nil {
+		if slices.Contains(p.LayerList, devicelayerkind.Drbd) || slices.Contains(p.LayerList, devicelayerkind.Nvme) {
+			p.AllowRemoteVolumeAccess = DefaultRemoteAccessPolicy
+		} else {
+			p.AllowRemoteVolumeAccess = RemoteAccessPolicyLocalOnly
+		}
 	}
 
 	// User has manually configured deployments, ignore autoplacing options.
