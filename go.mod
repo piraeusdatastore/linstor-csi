@@ -12,6 +12,7 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
+	golang.org/x/exp v0.0.0-20240119083558-1b970713d09a
 	golang.org/x/sys v0.16.0
 	golang.org/x/time v0.5.0
 	google.golang.org/grpc v1.60.1
