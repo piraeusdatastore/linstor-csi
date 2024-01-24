@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Do not try to create diskless resource if there is no compatible diskless layer (DRBD or NVMe) available
+- Do not try to create diskless resource if there is no compatible diskless layer (DRBD or NVMe) available.
+- Do not allow attaching a volume that has no existing replica.
 
 ## [1.3.0] - 2023-11-15
 
