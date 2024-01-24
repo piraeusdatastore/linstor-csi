@@ -517,6 +517,10 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 			// are already covered in the allowed topology bits.
 			s.log.WithError(err).Info("fall back to manual diskless creation after make-available refused")
 
+			if disklessFlag == "" {
+				return fmt.Errorf("resource does not support diskless attachment")
+			}
+
 			rCreate := lapi.ResourceCreate{Resource: lapi.Resource{
 				Name:     volId,
 				NodeName: node,
