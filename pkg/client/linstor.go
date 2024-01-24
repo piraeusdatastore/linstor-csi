@@ -469,8 +469,12 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 	}).Info("attaching volume")
 
 	ress, err := s.client.Resources.GetAll(ctx, volId)
-	if nil404(err) != nil {
+	if err != nil {
 		return err
+	}
+
+	if len(ress) == 0 {
+		return fmt.Errorf("failed to attach resource with no deployed replica")
 	}
 
 	var existingRes *lapi.Resource
