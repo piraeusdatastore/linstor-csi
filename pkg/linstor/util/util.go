@@ -97,7 +97,7 @@ nextCandidate:
 
 func GetDrbdLayer(layer *lapi.ResourceLayer) *lapi.DrbdResource {
 	if layer.Type == devicelayerkind.Drbd {
-		return &layer.Drbd
+		return layer.Drbd
 	}
 
 	for i := range layer.Children {

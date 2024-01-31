@@ -361,7 +361,7 @@ func (params *Parameters) DisklessFlag() (string, error) {
 		switch l {
 		case devicelayerkind.Drbd:
 			return lc.FlagDrbdDiskless, nil
-		case devicelayerkind.Nvme, devicelayerkind.Openflex:
+		case devicelayerkind.Nvme:
 			return lc.FlagNvmeInitiator, nil
 		default:
 			continue
@@ -382,7 +382,6 @@ func ParseLayerList(s string) ([]devicelayerkind.DeviceLayerKind, error) {
 		devicelayerkind.Nvme,
 		devicelayerkind.Cache,
 		devicelayerkind.Writecache,
-		devicelayerkind.Openflex,
 		devicelayerkind.Exos,
 	}
 

@@ -568,7 +568,7 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 
 // getDisklessFlag inspects a resource to determine the right diskless flag to use.
 func getDisklessFlag(resource *lapi.Resource) string {
-	layer := &resource.LayerObject
+	layer := resource.LayerObject
 
 	for layer != nil {
 		switch layer.Type {
@@ -1770,7 +1770,7 @@ func NodesAndConditionFromResources(ress []lapi.Resource) ([]string, *csi.Volume
 			continue
 		}
 
-		drbd := util.GetDrbdLayer(&res.LayerObject)
+		drbd := util.GetDrbdLayer(res.LayerObject)
 		if drbd != nil && drbd.PromotionScore == 0 {
 			abnormalNodes = append(abnormalNodes, res.NodeName)
 		}
