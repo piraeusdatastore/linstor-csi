@@ -77,12 +77,6 @@ func TestDisklessFlag(t *testing.T) {
 			isError:  false,
 		},
 		{
-			name:     "openflex-like-nvme",
-			params:   volume.Parameters{LayerList: []devicelayerkind.DeviceLayerKind{devicelayerkind.Openflex, devicelayerkind.Storage}},
-			expected: lc.FlagNvmeInitiator,
-			isError:  false,
-		},
-		{
 			name:     "no-diskless-layer",
 			params:   volume.Parameters{LayerList: []devicelayerkind.DeviceLayerKind{devicelayerkind.Cache, devicelayerkind.Storage}},
 			expected: "",

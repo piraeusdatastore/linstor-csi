@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- Update golinstor to support LINSTOR 1.26.0, removing support for Openflex layers.
+
 ## [1.3.1] - 2024-01-30
 
 ### Changed
