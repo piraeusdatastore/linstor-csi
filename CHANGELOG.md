@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2024-02-01
+
 ### Breaking
 
 - Update golinstor to support LINSTOR 1.26.0, removing support for Openflex layers.
@@ -522,7 +524,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.2.3...v1.3.0
 [1.2.3]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.2.2...v1.2.3
