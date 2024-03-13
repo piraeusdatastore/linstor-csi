@@ -276,7 +276,7 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		storagePool      string
+		storagePools     []string
 		topology         map[string]string
 		expectedCapacity int64
 	}{
@@ -300,13 +300,18 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 		},
 		{
 			name:             "just pool-a from params",
-			storagePool:      "pool-a",
+			storagePools:     []string{"pool-a"},
 			expectedCapacity: (1 + 2) * 1024,
 		},
 		{
 			name:             "just pool-b from params",
-			storagePool:      "pool-b",
+			storagePools:     []string{"pool-b"},
 			expectedCapacity: (3 + 4) * 1024,
+		},
+		{
+			name:             "both pools like all",
+			storagePools:     []string{"pool-a", "pool-b"},
+			expectedCapacity: (1 + 2 + 3 + 4) * 1024,
 		},
 		{
 			name: "just pool-a from topology",
@@ -343,7 +348,7 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 		testcase := &testcases[i]
 
 		t.Run(testcase.name, func(t *testing.T) {
-			cap, err := cl.CapacityBytes(context.Background(), testcase.storagePool, nil, testcase.topology)
+			cap, err := cl.CapacityBytes(context.Background(), testcase.storagePools, nil, testcase.topology)
 			assert.NoError(t, err)
 			assert.Equal(t, testcase.expectedCapacity, cap)
 		})

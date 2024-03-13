@@ -39,6 +39,7 @@ import (
 	"github.com/haySwim/data"
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/exp/slices"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/mount-utils"
@@ -644,8 +645,8 @@ func (s *Linstor) Detach(ctx context.Context, volId, node string) error {
 }
 
 // CapacityBytes returns the amount of free space in the storage pool specified by the params and topology.
-func (s *Linstor) CapacityBytes(ctx context.Context, storagePool string, overProvision *float64, segments map[string]string) (int64, error) {
-	log := s.log.WithField("storage-pool", storagePool).WithField("segments", segments)
+func (s *Linstor) CapacityBytes(ctx context.Context, storagePools []string, overProvision *float64, segments map[string]string) (int64, error) {
+	log := s.log.WithField("storage-pools", storagePools).WithField("segments", segments)
 
 	var requestedStoragePools []string
 
@@ -717,7 +718,7 @@ func (s *Linstor) CapacityBytes(ctx context.Context, storagePool string, overPro
 			continue
 		}
 
-		if storagePool != "" && storagePool != sp.StoragePoolName {
+		if len(storagePools) > 0 && !slices.Contains(storagePools, sp.StoragePoolName) {
 			log.Trace("not a requested storage pool")
 			continue
 		}
@@ -980,7 +981,7 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *v
 
 	logger.Debug("reconcile snapshot")
 
-	err = s.reconcileSnapshot(ctx, snap.SourceVolumeId, snap.SnapshotId, preferredNodes, params.StoragePool)
+	err = s.reconcileSnapshot(ctx, snap.SourceVolumeId, snap.SnapshotId, preferredNodes, params.StoragePools)
 	if err != nil {
 		return err
 	}
@@ -1040,7 +1041,7 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *v
 }
 
 // reconcileSnapshot ensures that the snapshot exists on a node in the cluster.
-func (s *Linstor) reconcileSnapshot(ctx context.Context, sourceVolId, snapId string, nodes []string, targetPool string) error {
+func (s *Linstor) reconcileSnapshot(ctx context.Context, sourceVolId, snapId string, nodes, targetPools []string) error {
 	logger := s.log.WithField("snapshot", snapId).WithField("source", sourceVolId)
 
 	logger.Debug("checking for existing local snapshot")
@@ -1067,26 +1068,36 @@ func (s *Linstor) reconcileSnapshot(ctx context.Context, sourceVolId, snapId str
 
 	sourcePool := info.Storpools[0].TargetName
 
+	var renameCandidates []string
+	if len(targetPools) == 0 || slices.Contains(targetPools, sourcePool) {
+		renameCandidates = []string{sourcePool}
+	} else {
+		renameCandidates = targetPools
+	}
+
+outer:
 	for _, node := range nodes {
-		var rename map[string]string
-		if targetPool != "" && sourcePool != targetPool {
-			rename = map[string]string{sourcePool: targetPool}
-		}
+		for _, targetPool := range renameCandidates {
+			var rename map[string]string
+			if sourcePool != targetPool {
+				rename = map[string]string{sourcePool: targetPool}
+			}
 
-		err = s.client.Backup.Restore(ctx, remote, lapi.BackupRestoreRequest{
-			LastBackup:    info.Latest,
-			SrcRscName:    info.Rsc,
-			SrcSnapName:   info.Snap,
-			NodeName:      node,
-			DownloadOnly:  true,
-			StorPoolMap:   rename,
-			TargetRscName: info.Rsc,
-		})
-		if err == nil {
-			break
-		}
+			err = s.client.Backup.Restore(ctx, remote, lapi.BackupRestoreRequest{
+				LastBackup:    info.Latest,
+				SrcRscName:    info.Rsc,
+				SrcSnapName:   info.Snap,
+				NodeName:      node,
+				DownloadOnly:  true,
+				StorPoolMap:   rename,
+				TargetRscName: info.Rsc,
+			})
+			if err == nil {
+				break outer
+			}
 
-		logger.WithError(err).WithField("node", node).Info("failed to restore backup to node")
+			logger.WithError(err).WithField("node", node).Info("failed to restore backup to node")
+		}
 	}
 
 	if err != nil {
