@@ -321,7 +321,7 @@ func (b BalanceScheduler) deploy(ctx context.Context, volId string, params *volu
 }
 
 func (b BalanceScheduler) Create(ctx context.Context, volId string, params *volume.Parameters, topologies *csi.TopologyRequirement) error {
-	if params.StoragePool != "" {
+	if len(params.StoragePools) > 0 {
 		return fmt.Errorf("placementPolicyBalance does not support choosing StoragePool, it should be picked automatically")
 	}
 

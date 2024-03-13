@@ -116,16 +116,14 @@ func TestParameters_ToResourceGroupModify(t *testing.T) {
 		},
 		{
 			name:     "wrong-select-filters",
-			params:   volume.Parameters{LayerList: []devicelayerkind.DeviceLayerKind{devicelayerkind.Writecache, devicelayerkind.Drbd, devicelayerkind.Storage}, PlacementCount: 3, ResourceGroup: "wrong-select-filters", StoragePool: "pool"},
+			params:   volume.Parameters{LayerList: []devicelayerkind.DeviceLayerKind{devicelayerkind.Writecache, devicelayerkind.Drbd, devicelayerkind.Storage}, PlacementCount: 3, ResourceGroup: "wrong-select-filters", StoragePools: []string{"pool1", "pool2"}},
 			existing: lapi.ResourceGroup{Name: "wrong-select-filters", SelectFilter: lapi.AutoSelectFilter{LayerStack: []string{string(devicelayerkind.Drbd)}, PlaceCount: 2}},
 			expectedModify: lapi.ResourceGroupModify{
-				OverrideProps: map[string]string{
-					lc.KeyStorPoolName: "pool",
-				},
+				OverrideProps: make(map[string]string),
 				SelectFilter: lapi.AutoSelectFilter{
-					LayerStack:  []string{string(devicelayerkind.Writecache), string(devicelayerkind.Drbd), string(devicelayerkind.Storage)},
-					PlaceCount:  3,
-					StoragePool: "pool",
+					LayerStack:      []string{string(devicelayerkind.Writecache), string(devicelayerkind.Drbd), string(devicelayerkind.Storage)},
+					PlaceCount:      3,
+					StoragePoolList: []string{"pool1", "pool2"},
 				},
 			},
 			expectedChanged: true,

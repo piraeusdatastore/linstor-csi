@@ -70,7 +70,7 @@ type Parameters struct {
 	// separated like in /etc/fstab.
 	MountOpts string
 	// StoragePool is the storage pool to use for diskful assignments.
-	StoragePool string
+	StoragePools []string
 	// PlacementCount is the number of replicas of the volume in total.
 	PlacementCount int32
 	// Disklessonremaining corresponds to the `linstor resource create`
@@ -168,7 +168,7 @@ func NewParameters(params map[string]string, topologyPrefix string) (Parameters,
 		case replicasondifferent:
 			p.ReplicasOnDifferent = maybeAddTopologyPrefix(topologyPrefix, strings.Split(v, " ")...)
 		case storagepool:
-			p.StoragePool = v
+			p.StoragePools = strings.Split(v, " ")
 		case disklessstoragepool:
 			p.DisklessStoragePool = v
 		case autoplace, placementcount:
@@ -292,19 +292,9 @@ func (params *Parameters) ToResourceGroupModify(rg *lapi.ResourceGroup) (lapi.Re
 		rgModify.SelectFilter.PlaceCount = params.PlacementCount
 	}
 
-	// LINSTOR does not accept "" as a placeholder for an absent storage pool, so we must take care to never try to
-	// set it in such cases.
-	if params.StoragePool != "" {
-		if rg.SelectFilter.StoragePool != params.StoragePool {
-			changed = true
-			rgModify.SelectFilter.StoragePool = params.StoragePool
-		}
-
-		existingPool, ok := rg.Props[lc.KeyStorPoolName]
-		if !ok || existingPool != params.StoragePool {
-			changed = true
-			rgModify.OverrideProps[lc.KeyStorPoolName] = params.StoragePool
-		}
+	if !slices.Equal(rg.SelectFilter.StoragePoolList, params.StoragePools) {
+		changed = true
+		rgModify.SelectFilter.StoragePoolList = params.StoragePools
 	}
 
 	if !stringSlicesEqual(rg.SelectFilter.ReplicasOnSame, params.ReplicasOnSame) {
