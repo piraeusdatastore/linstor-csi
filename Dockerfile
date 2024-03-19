@@ -23,7 +23,7 @@ ARG TARGETARCH
 ARG LINSTOR_WAIT_UNTIL_VERSION=v0.2.1
 RUN curl -fsSL https://github.com/LINBIT/linstor-wait-until/releases/download/$LINSTOR_WAIT_UNTIL_VERSION/linstor-wait-until-$LINSTOR_WAIT_UNTIL_VERSION-$TARGETOS-$TARGETARCH.tar.gz | tar xvzC /
 
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 ARG LINSTOR_WAIT_UNTIL
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
