@@ -6,9 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2024-03-19
+
 ### Added
 
 - Support specifying multiple storage pools in the parameters, separated by spaces.
+
+### Changed
+
+- Update base image to Debian 12.
 
 ## [1.4.0] - 2024-02-01
 
@@ -528,7 +534,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.2.3...v1.3.0
