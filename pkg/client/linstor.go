@@ -372,13 +372,6 @@ func (s *Linstor) Delete(ctx context.Context, volId string) error {
 		"volume": volId,
 	}).Info("deleting volume")
 
-	// Delete the volume definition. This marks a resources as being in the process of deletion.
-	err := s.client.ResourceDefinitions.DeleteVolumeDefinition(ctx, volId, 0)
-	if nil404(err) != nil {
-		// We continue with the cleanup on 404, maybe the previous cleanup was interrupted
-		return err
-	}
-
 	resources, err := s.client.Resources.GetAll(ctx, volId)
 	if err != nil {
 		return nil404(err)
@@ -396,6 +389,13 @@ func (s *Linstor) Delete(ctx context.Context, volId string) error {
 			// If two deletions run in parallel, one could get a 404 message, which we treat as "everything finished"
 			return nil404(err)
 		}
+	}
+
+	// Delete the volume definition. This indicates the normal deletion is complete.
+	err = s.client.ResourceDefinitions.DeleteVolumeDefinition(ctx, volId, 0)
+	if nil404(err) != nil {
+		// We continue with the cleanup on 404, maybe the previous cleanup was interrupted
+		return err
 	}
 
 	err = s.deleteResourceDefinitionAndGroupIfUnused(ctx, volId)
