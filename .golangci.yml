@@ -1,12 +1,13 @@
 # options for analysis running
 run:
-  # timeout for analysis, e.g. 30s, 5m, default is 1m
-  deadline: 15m
+  timeout: 15m
 
 # output configuration options
 output:
   # colored-line-number|line-number|json|tab|checkstyle|code-climate, default is "colored-line-number"
-  format: line-number
+  formats:
+    - path: stdout
+      format: line-number
 
 # all available settings of specific linters
 linters-settings:
@@ -14,7 +15,10 @@ linters-settings:
   exhaustive:
     default-signifies-exhaustive: true
   gci:
-    local-prefixes: github.com/piraeusdatastore/linstor-csi
+    sections:
+    - standard
+    - default
+    - prefix(github.com/piraeusdatastore/linstor-csi)
   gocritic:
     # Which checks should be enabled; can't be combined with 'disabled-checks';
     # See https://go-critic.github.io/overview#checks-overview
@@ -27,13 +31,11 @@ linters-settings:
       - emptyStringTest
       - nestingReduce
       - paramTypeCombine
-      - singleCaseSwitch
       - stringXbytes
       - typeAssertChain
       - typeUnparen
       - unlabelStmt
       - unnecessaryBlock
-      - valSwap
       - yodaStyleExpr
       - appendCombine
       - equalFold
