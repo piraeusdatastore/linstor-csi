@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Support for creating backups with LINSTOR-to-LINSTOR shipping.
+
 ## [1.5.0] - 2024-03-19
 
 ### Added

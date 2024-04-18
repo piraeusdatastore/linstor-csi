@@ -967,6 +967,15 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 				return nil, status.Errorf(codes.Internal, "failed to delete local snapshot: %s", err)
 			}
 
+			if existingSnap.ReadyToUse {
+				d.log.WithField("snapshot id", id).Debug("snapshot ready, delete temporary ID mapping if it exists")
+
+				err := d.Snapshots.DeleteTemporarySnapshotID(ctx, id)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to delete temporary snapshot ID: %v", err)
+				}
+			}
+
 			return &csi.CreateSnapshotResponse{Snapshot: &existingSnap.Snapshot}, nil
 		}
 
@@ -982,6 +991,15 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 	err = d.maybeDeleteLocalSnapshot(ctx, snap, params)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to delete local snapshot: %s", err)
+	}
+
+	if snap.ReadyToUse {
+		d.log.WithField("snapshot id", id).Debug("snapshot ready, delete temporary ID mapping if it exists")
+
+		err := d.Snapshots.DeleteTemporarySnapshotID(ctx, id)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to delete temporary snapshot ID: %v", err)
+		}
 	}
 
 	return &csi.CreateSnapshotResponse{Snapshot: &snap.Snapshot}, nil

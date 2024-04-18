@@ -148,6 +148,10 @@ func (s *MockStorage) SnapDelete(ctx context.Context, snap *volume.Snapshot) err
 	return nil
 }
 
+func (s *MockStorage) DeleteTemporarySnapshotID(ctx context.Context, id string) error {
+	return nil
+}
+
 func (s *MockStorage) ListSnaps(ctx context.Context, start, limit int) ([]*volume.Snapshot, error) {
 	if limit == 0 {
 		limit = len(s.snapshots) - start
