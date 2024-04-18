@@ -854,7 +854,48 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id, sourceVolId string, p
 
 		return &snap, nil
 	case volume.SnapshotTypeLinstor:
-		return nil, fmt.Errorf("linstor-to-linstor snapshots not implemented")
+		kv, err := s.client.KeyValueStore.Get(ctx, linstor.LinstorBackupKVName)
+		if nil404(err) != nil {
+			return nil, fmt.Errorf("error checking for existing LINSTOR backup: %w", err)
+		}
+
+		var snapName string
+
+		if kv == nil || kv.Props[id] == "" {
+			yes := true
+
+			snapName, err = s.client.Backup.Ship(ctx, params.RemoteName, lapi.BackupShipRequest{
+				SrcRscName:   sourceVolId,
+				DstRscName:   "backup-" + sourceVolId,
+				DstStorPool:  params.LinstorTargetStoragePool,
+				DownloadOnly: &yes,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("error creating LINSTOR backup: %w", err)
+			}
+
+			// Store the name of the created snapshot in the LINSTOR KV. We need this because if some later stage fails,
+			// for example because the snapshot did not get ready in time, we do not want to create a second backup.
+			// Instead, we check the KV for the provided snapshot ID, which maps to the hopefully existing local
+			// snapshot name.
+			err = s.client.KeyValueStore.CreateOrModify(ctx, linstor.LinstorBackupKVName, lapi.GenericPropsModify{
+				OverrideProps: map[string]string{
+					id: fmt.Sprintf("%s/%s", sourceVolId, snapName),
+				},
+			})
+			if err != nil {
+				return nil, fmt.Errorf("error storing LINSTOR backup name property: %w", err)
+			}
+		} else {
+			snapName = kv.Props[id]
+		}
+
+		snap, err := s.client.Resources.GetSnapshot(ctx, sourceVolId, snapName)
+		if err != nil {
+			return nil, fmt.Errorf("error fetching snapshot for backup: %w", err)
+		}
+
+		return &snap, nil
 	default:
 		return nil, fmt.Errorf("unsupported snapshot type '%s', don't know how to create a backup", params.Type)
 	}
@@ -896,7 +937,32 @@ func (s *Linstor) reconcileRemote(ctx context.Context, params *volume.SnapshotPa
 
 		return nil
 	case volume.SnapshotTypeLinstor:
-		return fmt.Errorf("Linstor-to-Linstor snapshots not implemented")
+		log.Debug("search for LINSTOR remote with matching name")
+
+		remotes, err := s.client.Remote.GetAllLinstor(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list existing remotes: %w", err)
+		}
+
+		for _, r := range remotes {
+			if r.RemoteName == params.RemoteName {
+				log.WithField("remote", r).Debug("found existing LINSTOR remote with matching name")
+				return nil
+			}
+		}
+
+		log.Debug("No existing remote found, creating a new one")
+
+		err = s.client.Remote.CreateLinstor(ctx, lapi.LinstorRemote{
+			RemoteName: params.RemoteName,
+			Url:        params.LinstorTargetUrl,
+			ClusterId:  params.LinstorTargetClusterID,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create new LINSTOR remote: %w", err)
+		}
+
+		return nil
 	default:
 		return fmt.Errorf("unsupported snapshot type '%s', don't know how to configure remote", params.Type)
 	}
@@ -910,8 +976,12 @@ func (s *Linstor) SnapDelete(ctx context.Context, snap *volume.Snapshot) error {
 		log.WithField("remote", snap.Remote).Debug("deleting backup from remote")
 
 		backups, err := s.client.Backup.GetAll(ctx, snap.Remote, snap.GetSourceVolumeId(), snap.GetSnapshotId())
-		if nil404(err) != nil {
-			return fmt.Errorf("failed to list backups for snapshot %s: %w", snap.GetSnapshotId(), err)
+		if err != nil {
+			var apiErrors lapi.ApiCallError
+			// Make sure this is actually an S3 backup
+			if !errors.As(err, &apiErrors) || !apiErrors.Is(lapiconsts.FailInvldRemoteName) {
+				return fmt.Errorf("failed to list backups for snapshot %s: %w", snap.GetSnapshotId(), err)
+			}
 		}
 
 		if backups != nil {
@@ -940,8 +1010,19 @@ func (s *Linstor) SnapDelete(ctx context.Context, snap *volume.Snapshot) error {
 	}
 
 	err = s.deleteResourceDefinitionAndGroupIfUnused(ctx, snap.GetSourceVolumeId())
+	if nil404(err) != nil {
+		return fmt.Errorf("failed to remove resource definition: %w", err)
+	}
 
 	return nil
+}
+
+func (s *Linstor) DeleteTemporarySnapshotID(ctx context.Context, id string) error {
+	err := s.client.KeyValueStore.CreateOrModify(ctx, linstor.LinstorBackupKVName, lapi.GenericPropsModify{
+		DeleteProps: []string{id},
+	})
+
+	return nil404(err)
 }
 
 // VolFromSnap creates the volume using the data contained within the snapshot.
@@ -1483,7 +1564,30 @@ func (s *Linstor) snapOrBackupById(ctx context.Context, id string) (*lapi.Snapsh
 		}
 	}
 
-	log.Debug("no snapshot matching id found, trying backups")
+	log.Debug("no snapshot matching id found, trying LINSTOR backups")
+
+	kv, err := s.client.KeyValueStore.Get(ctx, linstor.LinstorBackupKVName)
+	if nil404(err) != nil {
+		return nil, nil, fmt.Errorf("failed to list snapshot properties: %w", err)
+	}
+
+	if kv != nil && kv.Props[id] != "" {
+		log.WithField("snapshot property", kv.Props[id]).Debug("found snapshot property")
+
+		parts := strings.SplitN(kv.Props[id], "/", 2)
+		if len(parts) != 2 {
+			return nil, nil, fmt.Errorf("failed to parse snapshot property: %s", kv.Props[id])
+		}
+
+		snap, err := s.client.Resources.GetSnapshot(ctx, parts[0], parts[1])
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to find snapshot: %w", err)
+		}
+
+		return &snap, nil, nil
+	}
+
+	log.Debug("no snapshot matching id found, trying S3 backups")
 
 	s3remotes, err := s.client.Remote.GetAllS3(ctx)
 	if err != nil {

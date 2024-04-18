@@ -5,7 +5,7 @@ go 1.21
 toolchain go1.21.5
 
 require (
-	github.com/LINBIT/golinstor v0.50.0
+	github.com/LINBIT/golinstor v0.51.0
 	github.com/container-storage-interface/spec v1.9.0
 	github.com/haySwim/data v0.2.0
 	github.com/kubernetes-csi/csi-test/v5 v5.2.0

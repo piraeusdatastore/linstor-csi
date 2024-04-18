@@ -21,16 +21,19 @@ const (
 )
 
 type SnapshotParameters struct {
-	Type             SnapshotType `json:"type,omitempty"`
-	AllowIncremental bool         `json:"allow-incremental"`
-	RemoteName       string       `json:"remote-name,omitempty"`
-	DeleteLocal      bool         `json:"delete-local,omitempty"`
-	S3Endpoint       string       `json:"s3-endpoint,omitempty"`
-	S3Bucket         string       `json:"s3-bucket,omitempty"`
-	S3SigningRegion  string       `json:"s3-signing-region,omitempty"`
-	S3UsePathStyle   bool         `json:"s3-use-path-style"`
-	S3AccessKey      string       `json:"-"`
-	S3SecretKey      string       `json:"-"`
+	Type                     SnapshotType `json:"type,omitempty"`
+	AllowIncremental         bool         `json:"allow-incremental"`
+	RemoteName               string       `json:"remote-name,omitempty"`
+	DeleteLocal              bool         `json:"delete-local,omitempty"`
+	S3Endpoint               string       `json:"s3-endpoint,omitempty"`
+	S3Bucket                 string       `json:"s3-bucket,omitempty"`
+	S3SigningRegion          string       `json:"s3-signing-region,omitempty"`
+	S3UsePathStyle           bool         `json:"s3-use-path-style"`
+	S3AccessKey              string       `json:"-"`
+	S3SecretKey              string       `json:"-"`
+	LinstorTargetUrl         string       `json:"linstor-target-url,omitempty"`
+	LinstorTargetClusterID   string       `json:"linstor-target-cluster-id,omitempty"`
+	LinstorTargetStoragePool string       `json:"linstor-target-storage-pool,omitempty"`
 }
 
 func NewSnapshotParameters(params, secrets map[string]string) (*SnapshotParameters, error) {
@@ -81,6 +84,12 @@ func NewSnapshotParameters(params, secrets map[string]string) (*SnapshotParamete
 			}
 
 			p.S3UsePathStyle = b
+		case "/linstor-target-url":
+			p.LinstorTargetUrl = v
+		case "/linstor-target-cluster-id":
+			p.LinstorTargetClusterID = v
+		case "/linstor-target-storage-pool":
+			p.LinstorTargetStoragePool = v
 		default:
 			log.WithField("key", k).Warn("ignoring unknown snapshot parameter key")
 		}
@@ -103,14 +112,17 @@ func NewSnapshotParameters(params, secrets map[string]string) (*SnapshotParamete
 func (s *SnapshotParameters) String() string {
 	// NB: we use a value here instead of a pointer, so we don't recurse endlessly.
 	return fmt.Sprint(SnapshotParameters{
-		Type:             s.Type,
-		AllowIncremental: s.AllowIncremental,
-		RemoteName:       s.RemoteName,
-		S3Endpoint:       s.S3Endpoint,
-		S3Bucket:         s.S3Bucket,
-		S3SigningRegion:  s.S3SigningRegion,
-		S3UsePathStyle:   s.S3UsePathStyle,
-		S3AccessKey:      "***",
-		S3SecretKey:      "***",
+		Type:                     s.Type,
+		AllowIncremental:         s.AllowIncremental,
+		RemoteName:               s.RemoteName,
+		S3Endpoint:               s.S3Endpoint,
+		S3Bucket:                 s.S3Bucket,
+		S3SigningRegion:          s.S3SigningRegion,
+		S3UsePathStyle:           s.S3UsePathStyle,
+		S3AccessKey:              "***",
+		S3SecretKey:              "***",
+		LinstorTargetUrl:         s.LinstorTargetUrl,
+		LinstorTargetClusterID:   s.LinstorTargetClusterID,
+		LinstorTargetStoragePool: s.LinstorTargetStoragePool,
 	})
 }

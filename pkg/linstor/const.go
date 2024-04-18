@@ -26,6 +26,9 @@ const (
 	// DriverName is the name used in CSI calls for this driver.
 	DriverName = "linstor.csi.linbit.com"
 
+	// LinstorBackupKVName is the name of the KV store used to map L2L backups to local snapshot names
+	LinstorBackupKVName = "csi-backup-mapping"
+
 	// LegacyParameterPassKey is the Aux props key in linstor where serialized CSI parameters
 	// are stored.
 	LegacyParameterPassKey = lc.NamespcAuxiliary + "/csi-volume-annotations"
