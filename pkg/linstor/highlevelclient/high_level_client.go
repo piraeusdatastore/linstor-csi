@@ -22,10 +22,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
-	"time"
 
-	lc "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 
@@ -46,16 +43,6 @@ func NewHighLevelClient(options ...lapi.Option) (*HighLevelClient, error) {
 	c, err := lapi.NewClient(options...)
 	if err != nil {
 		return nil, err
-	}
-
-	c.Nodes = &NodeCacheProvider{
-		NodeProvider: c.Nodes,
-		timeout:      1 * time.Minute,
-	}
-
-	c.Resources = &ResourceCacheProvider{
-		ResourceProvider: c.Resources,
-		timeout:          1 * time.Minute,
 	}
 
 	return &HighLevelClient{Client: c}, nil
@@ -200,141 +187,4 @@ func (c *HighLevelClient) ReservedCapacity(ctx context.Context, node, pool strin
 	}
 
 	return reserved, nil
-}
-
-type NodeCacheProvider struct {
-	lapi.NodeProvider
-	timeout      time.Duration
-	nodesMu      sync.Mutex
-	nodesUpdated time.Time
-	nodes        []lapi.Node
-	poolsMu      sync.Mutex
-	poolsUpdated time.Time
-	pools        []lapi.StoragePool
-}
-
-func (n *NodeCacheProvider) GetAll(ctx context.Context, opts ...*lapi.ListOpts) ([]lapi.Node, error) {
-	n.nodesMu.Lock()
-	defer n.nodesMu.Unlock()
-
-	now := time.Now()
-
-	if n.nodesUpdated.Add(n.timeout).After(now) {
-		return filter(n.nodes, func(node lapi.Node) string {
-			return node.Name
-		}, nil, opts...), nil
-	}
-
-	nodes, err := n.NodeProvider.GetAll(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	n.nodes = nodes
-	n.nodesUpdated = now
-
-	return filter(n.nodes, func(node lapi.Node) string {
-		return node.Name
-	}, nil, opts...), nil
-}
-
-func (n *NodeCacheProvider) GetStoragePoolView(ctx context.Context, opts ...*lapi.ListOpts) ([]lapi.StoragePool, error) {
-	n.poolsMu.Lock()
-	defer n.poolsMu.Unlock()
-
-	now := time.Now()
-
-	if n.poolsUpdated.Add(n.timeout).After(now) {
-		return filter(n.pools,
-			func(pool lapi.StoragePool) string { return pool.NodeName },
-			func(pool lapi.StoragePool) string { return pool.StoragePoolName },
-			opts...,
-		), nil
-	}
-
-	pools, err := n.NodeProvider.GetStoragePoolView(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	n.pools = pools
-	n.poolsUpdated = now
-
-	return filter(n.pools,
-		func(pool lapi.StoragePool) string { return pool.NodeName },
-		func(pool lapi.StoragePool) string { return pool.StoragePoolName },
-		opts...,
-	), nil
-}
-
-type ResourceCacheProvider struct {
-	lapi.ResourceProvider
-	timeout             time.Duration
-	resourceViewMu      sync.Mutex
-	resourceViewUpdated time.Time
-	resourceView        []lapi.ResourceWithVolumes
-}
-
-func (r *ResourceCacheProvider) GetResourceView(ctx context.Context, opts ...*lapi.ListOpts) ([]lapi.ResourceWithVolumes, error) {
-	r.resourceViewMu.Lock()
-	defer r.resourceViewMu.Unlock()
-
-	now := time.Now()
-
-	if r.resourceViewUpdated.Add(r.timeout).After(now) {
-		return filter(r.resourceView,
-			func(res lapi.ResourceWithVolumes) string { return res.NodeName },
-			func(res lapi.ResourceWithVolumes) string { return res.Props[lc.KeyStorPoolName] },
-			opts...,
-		), nil
-	}
-
-	view, err := r.ResourceProvider.GetResourceView(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	r.resourceView = view
-	r.resourceViewUpdated = now
-
-	return filter(r.resourceView,
-		func(res lapi.ResourceWithVolumes) string { return res.NodeName },
-		func(res lapi.ResourceWithVolumes) string { return res.Props[lc.KeyStorPoolName] },
-		opts...,
-	), nil
-}
-
-func filter[T any](items []T, getNodeName, getPoolName func(T) string, opts ...*lapi.ListOpts) []T {
-	filterNames := make(map[string]struct{})
-	filterPools := make(map[string]struct{})
-
-	for _, o := range opts {
-		for _, n := range o.Node {
-			filterNames[n] = struct{}{}
-		}
-
-		for _, sp := range o.StoragePool {
-			filterPools[sp] = struct{}{}
-		}
-	}
-
-	var result []T
-
-	for _, item := range items {
-		if len(filterNames) > 0 {
-			if _, ok := filterNames[getNodeName(item)]; !ok {
-				continue
-			}
-		}
-
-		if len(filterPools) > 0 {
-			if _, ok := filterPools[getPoolName(item)]; !ok {
-				continue
-			}
-		}
-
-		result = append(result, item)
-	}
-
-	return result
 }

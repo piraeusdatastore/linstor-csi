@@ -24,8 +24,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	linstor "github.com/LINBIT/golinstor"
+	lapicache "github.com/LINBIT/golinstor/cache"
 	lapi "github.com/LINBIT/golinstor/client"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
@@ -48,6 +50,8 @@ func main() {
 		bearerTokenFile       = flag.String("bearer-token", "", "Read the bearer token from the given file and use it for authentication.")
 		propNs                = flag.String("property-namespace", linstor.NamespcAuxiliary, "Limit the reported topology keys to properties from the given namespace.")
 		labelBySP             = flag.Bool("label-by-storage-pool", true, "Set to false to disable labeling of nodes based on their configured storage pools.")
+		nodeCacheTimeout      = flag.Duration("node-cache-timeout", 1*time.Minute, "Duration for which the results of node and storage pool related API responses should be cached.")
+		resourceCacheTimeout  = flag.Duration("resource-cache-timeout", 1*time.Minute, "Duration for which the results of resource related API responses should be cached.")
 	)
 
 	flag.Var(&volume.DefaultRemoteAccessPolicy, "default-remote-access-policy", "")
@@ -78,9 +82,13 @@ func main() {
 	}
 
 	linstorOpts := []lapi.Option{
-		lapi.Limit(r, *burst),
+		lapi.Limiter(rate.NewLimiter(r, *burst)),
 		lapi.UserAgent("linstor-csi/" + driver.Version),
 		lapi.Log(logger),
+		lapicache.WithCaches(
+			&lapicache.NodeCache{Timeout: *nodeCacheTimeout},
+			&lapicache.ResourceCache{Timeout: *resourceCacheTimeout},
+		),
 	}
 
 	if *lsEndpoint != "" {
