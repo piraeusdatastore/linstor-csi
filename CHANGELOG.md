@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2024-05-02
+
 ### Added
 
 - Support for creating backups with LINSTOR-to-LINSTOR shipping.
@@ -538,7 +540,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.3.0...v1.3.1
