@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2024-05-16
+
 ### Added
 
 - Pass device paths down from CSI Controller on publish, reducing LINSTOR API requests from the CSI Node.
@@ -544,7 +546,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.3.1...v1.4.0
