@@ -20,6 +20,7 @@ package driver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -356,18 +357,25 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		volCtx.MountOptions = append(volCtx.MountOptions, "nouuid")
 	}
 
-	assignment, err := d.Assignments.FindAssignmentOnNode(ctx, req.GetVolumeId(), d.nodeID)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
-	}
+	publishCtx := PublishContextFromMap(req.GetPublishContext())
+	if publishCtx == nil {
+		assignment, err := d.Assignments.FindAssignmentOnNode(ctx, req.GetVolumeId(), d.nodeID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
+		}
 
-	if assignment == nil {
-		return nil, status.Errorf(codes.NotFound, "NodePublishVolume failed for %s: assignment not found", req.GetVolumeId())
+		if assignment == nil {
+			return nil, status.Errorf(codes.NotFound, "NodePublishVolume failed for %s: assignment not found", req.GetVolumeId())
+		}
+
+		publishCtx = &PublishContext{
+			DevicePath: assignment.Path,
+		}
 	}
 
 	ro := req.GetReadonly() || req.GetVolumeCapability().GetAccessMode().GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
 
-	err = d.Mounter.Mount(ctx, assignment.Path, req.GetTargetPath(), fsType, ro, volCtx.MountOptions)
+	err = d.Mounter.Mount(ctx, publishCtx.DevicePath, req.GetTargetPath(), fsType, ro, volCtx.MountOptions)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
 	}
@@ -657,13 +665,17 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 	// ReadWriteMany block volume
 	rwxBlock := req.VolumeCapability.AccessMode.GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER && req.VolumeCapability.GetBlock() != nil
 
-	err = d.Assignments.Attach(ctx, req.GetVolumeId(), req.GetNodeId(), rwxBlock)
+	devPath, err := d.Assignments.Attach(ctx, req.GetVolumeId(), req.GetNodeId(), rwxBlock)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err)
 	}
 
-	return &csi.ControllerPublishVolumeResponse{}, nil
+	return &csi.ControllerPublishVolumeResponse{
+		PublishContext: (&PublishContext{
+			DevicePath: devPath,
+		}).ToMap(),
+	}, nil
 }
 
 // ControllerUnpublishVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#controllerunpublishvolume
@@ -1112,19 +1124,13 @@ func (d Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeR
 		return nil, missingAttr("NodeExpandVolume", req.GetVolumeId(), "TargetPath")
 	}
 
-	assignment, err := d.Assignments.FindAssignmentOnNode(ctx, req.GetVolumeId(), d.nodeID)
+	err := d.Expander.NodeExpand(req.GetVolumePath())
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "NodeExpandVolume - get assignment failed for volume %s node: %s: %v", req.GetVolumeId(), d.nodeID, err)
-	}
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, status.Errorf(codes.NotFound, "NodePublishVolume failed for %s: mount not found", req.GetVolumeId())
+		}
 
-	if assignment == nil {
-		return nil, status.Errorf(codes.NotFound, "NodeExpandVolume - resource-definitions %s not found", req.GetVolumeId())
-	}
-
-	err = d.Expander.NodeExpand(assignment.Path, req.GetVolumePath())
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "NodeExpandVolume - expand volume fail source %s target %s, err: %v.",
-			assignment.Path, req.GetVolumePath(), err)
+		return nil, status.Errorf(codes.Internal, "NodeExpandVolume - expand volume failed for target %s, err: %v", req.GetVolumePath(), err)
 	}
 
 	return &csi.NodeExpandVolumeResponse{}, nil

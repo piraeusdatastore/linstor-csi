@@ -88,7 +88,7 @@ type SnapshotCreateDeleter interface {
 // AttacherDettacher handles operations relating to volume accessiblity on nodes.
 type AttacherDettacher interface {
 	Querier
-	Attach(ctx context.Context, volId, node string, rwxBlock bool) error
+	Attach(ctx context.Context, volId, node string, rwxBlock bool) (string, error)
 	Detach(ctx context.Context, volId, node string) error
 	NodeAvailable(ctx context.Context, node string) error
 	FindAssignmentOnNode(ctx context.Context, volId, node string) (*Assignment, error)
@@ -143,7 +143,9 @@ type NodeInformer interface {
 
 // Expander handles the resizing operations for volumes.
 type Expander interface {
-	NodeExpand(source, target string) error
+	// NodeExpand runs the appropriate resize operation on the target path.
+	// Must return os.ErrNotExist if the path does not exist or is not a valid mount point.
+	NodeExpand(target string) error
 	ControllerExpand(ctx context.Context, vol *Info) error
 }
 

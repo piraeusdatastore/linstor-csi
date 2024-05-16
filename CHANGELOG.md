@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Pass device paths down from CSI Controller on publish, reducing LINSTOR API requests from the CSI Node.
+
 ## [1.6.0] - 2024-05-02
 
 ### Added

@@ -204,9 +204,9 @@ func (s *MockStorage) VolFromVol(ctx context.Context, sourceVol, vol *volume.Inf
 	return nil
 }
 
-func (s *MockStorage) Attach(ctx context.Context, volId, node string, rwxBlock bool) error {
+func (s *MockStorage) Attach(ctx context.Context, volId, node string, rwxBlock bool) (string, error) {
 	s.assignedVolumes[volId] = append(s.assignedVolumes[volId], volume.Assignment{Node: node, Path: "/dev/" + volId})
-	return nil
+	return "/dev/" + volId, nil
 }
 
 func (s *MockStorage) Detach(ctx context.Context, volId, node string) error {
@@ -285,7 +285,7 @@ func (s *MockStorage) GetVolumeStats(path string) (volume.VolumeStats, error) {
 	return volume.VolumeStats{}, nil
 }
 
-func (s *MockStorage) NodeExpand(source, target string) error {
+func (s *MockStorage) NodeExpand(target string) error {
 	_, err := os.Stat(target)
 	if err != nil {
 		return err

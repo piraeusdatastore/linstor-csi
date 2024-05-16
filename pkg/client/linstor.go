@@ -463,7 +463,7 @@ func (s *Linstor) GetLegacyVolumeParameters(ctx context.Context, volId string) (
 }
 
 // Attach idempotently creates a resource on the given node.
-func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool) error {
+func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool) (string, error) {
 	s.log.WithFields(logrus.Fields{
 		"volume":     volId,
 		"targetNode": node,
@@ -471,11 +471,11 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 
 	ress, err := s.client.Resources.GetAll(ctx, volId)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if len(ress) == 0 {
-		return fmt.Errorf("failed to attach resource with no deployed replica")
+		return "", fmt.Errorf("failed to attach resource with no deployed replica")
 	}
 
 	var existingRes *lapi.Resource
@@ -497,7 +497,7 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 	}
 
 	if otherResInUse >= 2 {
-		return fmt.Errorf("two other resources already InUse")
+		return "", fmt.Errorf("two other resources already InUse")
 	}
 
 	if otherResInUse > 0 && rwxBlock {
@@ -507,11 +507,11 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 
 		err = s.client.ResourceDefinitions.Modify(ctx, volId, rdPropsModify)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 
-	propsModify := lapi.GenericPropsModify{OverrideProps: map[string]string{}}
+	overrideProps := map[string]string{}
 
 	// If the resource is already on the node, don't worry about attaching, unless we also need to activate it.
 	if existingRes == nil || slice.ContainsString(existingRes.Flags, lapiconsts.FlagRscInactive) {
@@ -523,7 +523,7 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 			s.log.WithError(err).Info("fall back to manual diskless creation after make-available refused")
 
 			if disklessFlag == "" {
-				return fmt.Errorf("resource does not support diskless attachment")
+				return "", fmt.Errorf("resource does not support diskless attachment")
 			}
 
 			rCreate := lapi.ResourceCreate{Resource: lapi.Resource{
@@ -536,35 +536,44 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 		}
 
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		if existingRes == nil {
-			propsModify.OverrideProps[linstor.PropertyCreatedFor] = linstor.CreatedForTemporaryDisklessAttach
+			overrideProps[linstor.PropertyCreatedFor] = linstor.CreatedForTemporaryDisklessAttach
 		}
 
 		newRsc, err := s.client.Resources.Get(ctx, volId, node)
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		existingRes = &newRsc
 	}
 
-	err = s.client.Resources.ModifyVolume(ctx, volId, node, 0, propsModify)
-	if err != nil {
-		return err
+	if len(overrideProps) > 0 {
+		err = s.client.Resources.ModifyVolume(ctx, volId, node, 0, lapi.GenericPropsModify{
+			OverrideProps: overrideProps,
+		})
+		if err != nil {
+			return "", err
+		}
 	}
 
 	if slice.ContainsString(existingRes.Flags, lapiconsts.FlagDelete) {
-		return &DeleteInProgressError{
+		return "", &DeleteInProgressError{
 			Operation: "attach volume",
 			Kind:      "resource",
 			Name:      volId,
 		}
 	}
 
-	return nil
+	vol, err := s.client.Resources.GetVolume(ctx, volId, node, 0)
+	if err != nil {
+		return "", err
+	}
+
+	return vol.DevicePath, nil
 }
 
 // getDisklessFlag inspects a resource to determine the right diskless flag to use.
@@ -2117,9 +2126,22 @@ func (s *Linstor) GetVolumeStats(path string) (volume.VolumeStats, error) {
 	}, nil
 }
 
-func (s *Linstor) NodeExpand(source, target string) error {
+func (s *Linstor) NodeExpand(target string) error {
+	mounts, err := s.mounter.List()
+	if err != nil {
+		return fmt.Errorf("failed to list mount points: %w", err)
+	}
+
+	i := slices.IndexFunc(mounts, func(m mount.MountPoint) bool {
+		return m.Path == target
+	})
+	if i == -1 {
+		// Mark this explicitly as a "NotExist" error so upper layers can pass it to CSI appropriately
+		return fmt.Errorf("mount point '%s' not found: %w", target, os.ErrNotExist)
+	}
+
 	resizer := mount.NewResizeFs(s.mounter.Exec)
-	_, err := resizer.Resize(source, target)
+	_, err = resizer.Resize(mounts[i].Device, target)
 	return err
 }
 

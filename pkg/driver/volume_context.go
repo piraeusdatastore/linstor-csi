@@ -20,6 +20,7 @@ type VolumeContext struct {
 	MountOptions        []string
 	PostMountXfsOptions string
 	RemoteAccessPolicy  volume.RemoteAccessPolicy
+	DevicePath          string
 }
 
 // NewVolumeContext creates a new default volume context, which does not specify any fancy mkfs/mount/post-mount options
@@ -56,6 +57,7 @@ func VolumeContextFromMap(ctx map[string]string) (*VolumeContext, error) {
 		MountOptions:        mountOpts,
 		PostMountXfsOptions: ctx[PostMountXfsOpts],
 		RemoteAccessPolicy:  policy,
+		DevicePath:          ctx[DevicePath],
 	}, nil
 }
 
@@ -70,6 +72,7 @@ func (v *VolumeContext) ToMap() (map[string]string, error) {
 		MountOptions:           encodeMountOpts(v.MountOptions),
 		PostMountXfsOpts:       v.PostMountXfsOptions,
 		RemoteAccessPolicyOpts: string(policy),
+		DevicePath:             v.DevicePath,
 	}, nil
 }
 
