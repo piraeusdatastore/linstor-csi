@@ -671,6 +671,10 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 			"ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err)
 	}
 
+	if devPath == "" {
+		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume failed for %s: could not determine device path", req.GetVolumeId())
+	}
+
 	return &csi.ControllerPublishVolumeResponse{
 		PublishContext: (&PublishContext{
 			DevicePath: devPath,

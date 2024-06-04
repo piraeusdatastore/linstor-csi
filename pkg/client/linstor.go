@@ -621,14 +621,14 @@ func (s *Linstor) Detach(ctx context.Context, volId, node string) error {
 		}
 	}
 
-	if resInUse <= 1 {
+	if resInUse == 1 {
 		rdPropsModify := lapi.GenericPropsModify{DeleteProps: []string{
 			linstor.PropertyAllowTwoPrimaries,
 		}}
 
 		err = s.client.ResourceDefinitions.Modify(ctx, volId, rdPropsModify)
 		if err != nil {
-			return err
+			return nil404(err)
 		}
 	}
 
@@ -2102,7 +2102,7 @@ func linstorifyResourceName(name string) (string, error) {
 }
 
 func nil404(e error) error {
-	if e == lapi.NotFoundError {
+	if errors.Is(e, lapi.NotFoundError) {
 		return nil
 	}
 	return e
