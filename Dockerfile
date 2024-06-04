@@ -20,7 +20,7 @@ FROM --platform=$BUILDPLATFORM golang:1 as downloader
 
 ARG TARGETOS
 ARG TARGETARCH
-ARG LINSTOR_WAIT_UNTIL_VERSION=v0.2.1
+ARG LINSTOR_WAIT_UNTIL_VERSION=v0.2.2
 RUN curl -fsSL https://github.com/LINBIT/linstor-wait-until/releases/download/$LINSTOR_WAIT_UNTIL_VERSION/linstor-wait-until-$LINSTOR_WAIT_UNTIL_VERSION-$TARGETOS-$TARGETARCH.tar.gz | tar xvzC /
 
 FROM debian:bookworm-slim
