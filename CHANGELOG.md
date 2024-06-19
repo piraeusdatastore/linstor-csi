@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.2] - 2024-06-19
+
+### Fixed
+
+- Fix device path passdown when LINSTOR does not report a device path.
+
 ## [1.6.1] - 2024-05-16
 
 ### Added
@@ -546,7 +552,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.6.1...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.6.2...HEAD
+[1.6.2]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.4.0...v1.5.0
