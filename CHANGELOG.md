@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed node filtering when initial placement was not possible. This now takes the remoteAccessPolicy into account like
+  intended.
+
 ## [1.6.2] - 2024-06-19
 
 ### Fixed
