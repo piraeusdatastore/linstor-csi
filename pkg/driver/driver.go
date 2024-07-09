@@ -76,6 +76,11 @@ type Driver struct {
 	nodeID string
 	// topologyPrefix is the name
 	topologyPrefix string
+
+	// Embed for forward compatibility.
+	csi.UnimplementedIdentityServer
+	csi.UnimplementedControllerServer
+	csi.UnimplementedNodeServer
 }
 
 // NewDriver builds up a driver.
