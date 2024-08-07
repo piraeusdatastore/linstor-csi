@@ -1,0 +1,18 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: linstor-csi-controller
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: linstor-wait-api-online
+        env:
+        - name: LS_CONTROLLERS
+          value: LINSTOR_CONTROLLER_URL
+      containers:
+      - name: linstor-csi
+        env:
+        - name: LS_CONTROLLERS
+          value: LINSTOR_CONTROLLER_URL
