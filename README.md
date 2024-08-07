@@ -9,8 +9,7 @@ that implement CSI, such as Kubernetes.
 
 # Building
 
-If you wish to create a docker image for a local registry
-run `make staticrelease`.
+If you wish to create a docker image for a local registry run `make upload REGISTRY=local.example.com`.
 
 # Deployment
 
@@ -18,18 +17,16 @@ If you are looking to deploy a full LINSTOR setup with LINSTOR controller and sa
 take a look at [our operator](https://github.com/piraeusdatastore/piraeus-operator).
 
 This project _ONLY_ deploys the CSI components, a working LINSTOR cluster is required.
+Use our example deployment in `examples/k8s/deploy` as base to deploy only the LINSTOR CSI
+components. You will need to update every occurence of `LINSTOR_CONTROLLER_URL` with the actual
+URL of your LINSTOR Controller, for example like this:
 
-## Kubernetes
-
-The yaml file in `examples/k8s/deploy` shows an example configuration which
-will deploy the LINSTOR csi plugin along with the needed k8s sidecar containers.
-You will need to change all instances of `LINSTOR_IP` to point to the controller(s)
-of the LINSTOR cluster that you wish this plugin to interact with.
-
-You will need to enable the following feature gates on both the kube-apiserver
-and all kubelets for this plugin to be operational: `CSINodeInfo=true`,
-`CSIDriverRegistry=true,VolumeSnapshotDataSource=true`. Please ensure that your
-version of Kubernetes is recent enough to enable these gates.
+```
+$ LINSTOR_CONTROLLER_URL=http://linstor-controller.example.com:3370
+$ kubectl kustomize http://github.com/piraeusdatastore/linstor-csi/examples/k8s/deploy \
+  | sed "s#LINSTOR_CONTROLLER_URL#$LINSTOR_CONTROLLER_URL#" \
+  | kubectl apply --server-side -f -
+```
 
 # Usage
 
