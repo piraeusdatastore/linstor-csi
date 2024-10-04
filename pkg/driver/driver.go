@@ -430,12 +430,12 @@ func (d Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeSt
 		return nil, missingAttr("NodeGetVolumeStats", req.GetVolumeId(), "VolumeId")
 	}
 
-	notMounted, err := d.Mounter.IsNotMountPoint(req.GetVolumePath())
+	mounted, err := d.Mounter.IsMountPoint(req.GetVolumePath())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodeGetVolumeStats failed for %s: failed to check if path %v is mounted: %v", req.GetVolumeId(), req.GetVolumePath(), err)
 	}
 
-	if notMounted {
+	if !mounted {
 		return nil, status.Errorf(codes.NotFound, "NodeGetVolumeStats failed for %s: path %v is not mounted", req.GetVolumeId(), req.GetVolumePath())
 	}
 

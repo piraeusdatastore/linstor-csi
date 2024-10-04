@@ -1975,28 +1975,30 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 		}
 	}
 
-	needsMount, err := mount.IsNotMountPoint(s.mounter, target)
+	isMounted, err := s.mounter.IsMountPoint(target)
 	if err != nil {
 		return fmt.Errorf("unable to determine mount status of %s %v", target, err)
 	}
 
-	if !needsMount {
-		return nil
+	if !isMounted {
+		err = s.mounter.Mount(source, target, fsType, mntOpts)
+		if err != nil {
+			return err
+		}
 	}
 
-	err = s.mounter.Mount(source, target, fsType, mntOpts)
-	if err != nil {
-		return err
+	if block {
+		return nil
 	}
 
 	resizerFs := mount.NewResizeFs(s.mounter.Exec)
 
-	resize, err := resizerFs.NeedResize(source, target)
+	needResize, err := resizerFs.NeedResize(source, target)
 	if err != nil {
 		return fmt.Errorf("unable to determine if resize required: %w", err)
 	}
 
-	if !block && resize {
+	if needResize {
 		_, err := resizerFs.Resize(source, target)
 		if err != nil {
 			unmountErr := s.Unmount(target)
@@ -2021,20 +2023,20 @@ func (s *Linstor) setDevReadWrite(ctx context.Context, srcPath string) error {
 	return err
 }
 
-// IsNotMountPoint determines if a directory is a mountpoint.
+// IsMountPoint determines if a directory is a mountpoint.
 //
-// Non-existent paths return (true, nil).
-func (s *Linstor) IsNotMountPoint(target string) (bool, error) {
-	notMounted, err := mount.IsNotMountPoint(s.mounter, target)
+// Non-existent paths return (false, nil).
+func (s *Linstor) IsMountPoint(target string) (bool, error) {
+	mounted, err := s.mounter.IsMountPoint(target)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return true, nil
+			return false, nil
 		}
 
 		return false, err
 	}
 
-	return notMounted, nil
+	return mounted, nil
 }
 
 // Unmount unmounts the target. Operates locally on the machines where it is called.

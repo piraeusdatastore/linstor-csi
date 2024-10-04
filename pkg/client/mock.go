@@ -258,27 +258,30 @@ func (s *MockStorage) Mount(ctx context.Context, source, target, fsType string, 
 	return nil
 }
 
-func (s *MockStorage) IsNotMountPoint(target string) (bool, error) {
+func (s *MockStorage) IsMountPoint(target string) (bool, error) {
 	_, err := os.Stat(target)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return true, nil
+			return false, nil
 		}
+
 		return false, err
 	}
-	return false, nil
+
+	return true, nil
 }
 
 func (s *MockStorage) Unmount(target string) error {
-	notMounted, err := s.IsNotMountPoint(target)
+	mounted, err := s.IsMountPoint(target)
 	if err != nil {
 		return err
 	}
-	if notMounted {
-		return nil
+
+	if mounted {
+		return os.RemoveAll(target)
 	}
 
-	return os.RemoveAll(target)
+	return nil
 }
 
 func (s *MockStorage) GetVolumeStats(path string) (volume.VolumeStats, error) {
