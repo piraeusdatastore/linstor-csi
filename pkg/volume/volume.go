@@ -112,7 +112,7 @@ type Querier interface {
 type Mounter interface {
 	Mount(ctx context.Context, source, target, fsType string, readonly bool, mntOpts []string) error
 	Unmount(target string) error
-	IsNotMountPoint(target string) (bool, error)
+	IsMountPoint(target string) (bool, error)
 }
 
 // VolumeStats provides details about filesystem usage.
