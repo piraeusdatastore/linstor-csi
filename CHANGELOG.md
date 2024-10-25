@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed an issue that caused the node publish call to attempt to resize a block volume: block volumes are now never
   attempted to be resized.
+- Ensure that snapshot restore requests are tried on nodes that are actually available.
 
 ## [1.6.3] - 2024-06-28
 
