@@ -1317,13 +1317,25 @@ func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *volu
 
 	// Optimize the node we use to restore. It should be one of the preferred nodes, or just the first with a snapshot
 	// if no preferred nodes match.
-	selectedNode := snap.Nodes[0]
-
+	var selectedNode string
 	for _, snapNode := range snap.Nodes {
+		if err := s.NodeAvailable(ctx, snapNode); err != nil {
+			logger.WithField("selected node candidate", snapNode).WithError(err).Debug("node is not available")
+			continue
+		}
+
 		if slice.ContainsString(preferredNodes, snapNode) {
+			// We found a perfect candidate.
 			selectedNode = snapNode
 			break
+		} else if selectedNode == "" {
+			// Set a fallback if we have no candidate yet.
+			selectedNode = snapNode
 		}
+	}
+
+	if selectedNode == "" {
+		return fmt.Errorf("no node [%s] available for snapshot '%s'", strings.Join(snap.Nodes, ","), snap.Name)
 	}
 
 	logger.WithField("selected node", selectedNode).Debug("restoring snapshot on one node")
