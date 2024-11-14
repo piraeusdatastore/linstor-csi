@@ -1,7 +1,8 @@
 module github.com/piraeusdatastore/linstor-csi
 
-go 1.22.0
-toolchain go1.22.9
+go 1.22.7
+
+toolchain go1.23.2
 
 require (
 	github.com/LINBIT/golinstor v0.52.2
