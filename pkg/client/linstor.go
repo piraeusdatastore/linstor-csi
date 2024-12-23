@@ -1963,6 +1963,9 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 			return fmt.Errorf("failed to set source device readonly: %w", err)
 		}
 	} else {
+		// Explicitly set rw option: otherwise mount may fall back to RO mount on promotion errors
+		mntOpts = append(mntOpts, "rw")
+
 		// We might be re-using an existing device that was set RO previously
 		err = s.setDevReadWrite(ctx, source)
 		if err != nil {
