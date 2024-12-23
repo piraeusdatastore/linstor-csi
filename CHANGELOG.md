@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Disable `mount` fallback to mount a volume RO even if a RW mount was requested.
+
 ## [1.6.4] - 2024-11-08
 
 ### Fixed
