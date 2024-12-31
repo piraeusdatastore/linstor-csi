@@ -27,6 +27,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"os/exec"
 	"regexp"
 	"sort"
 	"strings"
@@ -64,7 +65,8 @@ type Linstor struct {
 	log            *logrus.Entry
 	fallbackPrefix string
 	client         *lc.HighLevelClient
-	mounter        *mount.SafeFormatAndMount
+	mounter        mount.Interface
+	resizer        *mount.ResizeFs
 	labelBySP      bool
 }
 
@@ -98,10 +100,8 @@ func NewLinstor(options ...func(*Linstor) error) (*Linstor, error) {
 		"linstorCSIComponent": "client",
 	})
 
-	l.mounter = &mount.SafeFormatAndMount{
-		Interface: mount.New("/bin/mount"),
-		Exec:      utilexec.New(),
-	}
+	l.mounter = mount.New("")
+	l.resizer = mount.NewResizeFs(utilexec.New())
 
 	l.log.WithFields(logrus.Fields{
 		"APIClient":       fmt.Sprintf("%+v", l.client),
@@ -1954,8 +1954,10 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 		return fmt.Errorf("path %s is not a device", source) //nolint:goerr113
 	}
 
+	var mntFlags []string
 	if readonly {
-		mntOpts = append(mntOpts, "ro")
+		// xfs will try to write even on passing the "ro" option without the "norecovery" option
+		mntOpts = append(mntOpts, "ro", "norecovery")
 
 		// This requires DRBD 9.0.26+, older versions ignore this flag
 		err := s.setDevReadOnly(ctx, source)
@@ -1963,8 +1965,8 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 			return fmt.Errorf("failed to set source device readonly: %w", err)
 		}
 	} else {
-		// Explicitly set rw option: otherwise mount may fall back to RO mount on promotion errors
-		mntOpts = append(mntOpts, "rw")
+		// Explicitly set -w option: otherwise mount may fall back to RO mount on promotion errors
+		mntFlags = append(mntFlags, "-w")
 
 		// We might be re-using an existing device that was set RO previously
 		err = s.setDevReadWrite(ctx, source)
@@ -1996,7 +1998,7 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 	}
 
 	if !isMounted {
-		err = s.mounter.Mount(source, target, fsType, mntOpts)
+		err = s.mounter.MountSensitiveWithoutSystemdWithMountFlags(source, target, fsType, mntOpts, nil, mntFlags)
 		if err != nil {
 			return err
 		}
@@ -2006,15 +2008,13 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 		return nil
 	}
 
-	resizerFs := mount.NewResizeFs(s.mounter.Exec)
-
-	needResize, err := resizerFs.NeedResize(source, target)
+	needResize, err := s.resizer.NeedResize(source, target)
 	if err != nil {
 		return fmt.Errorf("unable to determine if resize required: %w", err)
 	}
 
 	if needResize {
-		_, err := resizerFs.Resize(source, target)
+		_, err := s.resizer.Resize(source, target)
 		if err != nil {
 			unmountErr := s.Unmount(target)
 			if unmountErr != nil {
@@ -2029,12 +2029,12 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 }
 
 func (s *Linstor) setDevReadOnly(ctx context.Context, srcPath string) error {
-	_, err := s.mounter.Exec.CommandContext(ctx, "blockdev", "--setro", srcPath).CombinedOutput()
+	_, err := exec.CommandContext(ctx, "blockdev", "--setro", srcPath).CombinedOutput()
 	return err
 }
 
 func (s *Linstor) setDevReadWrite(ctx context.Context, srcPath string) error {
-	_, err := s.mounter.Exec.CommandContext(ctx, "blockdev", "--setrw", srcPath).CombinedOutput()
+	_, err := exec.CommandContext(ctx, "blockdev", "--setrw", srcPath).CombinedOutput()
 	return err
 }
 
@@ -2157,8 +2157,7 @@ func (s *Linstor) NodeExpand(target string) error {
 		return fmt.Errorf("mount point '%s' not found: %w", target, os.ErrNotExist)
 	}
 
-	resizer := mount.NewResizeFs(s.mounter.Exec)
-	_, err = resizer.Resize(mounts[i].Device, target)
+	_, err = s.resizer.Resize(mounts[i].Device, target)
 	return err
 }
 
