@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.5] - 2025-02-10
+
 ### Fixed
 
 - Disable `mount` fallback to mount a volume RO even if a RW mount was requested.
@@ -571,7 +573,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.6.4...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.6.5...HEAD
+[1.6.5]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.6.4...v1.6.5
 [1.6.4]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.6.3...v1.6.4
 [1.6.3]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.6.1...v1.6.2
