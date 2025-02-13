@@ -1,5 +1,5 @@
-github.com/LINBIT/golinstor v0.53.0 h1:bm5Uso+hYiYldFrje0RilRZpXjrLG8u94dshJR0fEUc=
-github.com/LINBIT/golinstor v0.53.0/go.mod h1:45re6T0ds+G7JCaCnxsigncnlDUs8GwULjYrdunYkE4=
+github.com/LINBIT/golinstor v0.54.0 h1:SEXv+QIM41VXOeXOfxvJBHHq1TrF0Z+5WD/UCxT7ux0=
+github.com/LINBIT/golinstor v0.54.0/go.mod h1:CWTGY62Y14gHKXBmI3g8qUL15La5Og2o/g6mSxbugwo=
 github.com/container-storage-interface/spec v1.11.0 h1:H/YKTOeUZwHtyPOr9raR+HgFmGluGCklulxDYxSdVNM=
 github.com/container-storage-interface/spec v1.11.0/go.mod h1:DtUvaQszPml1YJfIK7c00mlv6/g4wNMLanLgiUbKFRI=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

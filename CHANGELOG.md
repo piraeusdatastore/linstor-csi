@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## Added
+
+- Add `XReplicasOnDifferent` parameter.
+
 ## [1.6.5] - 2025-02-10
 
 ### Fixed
