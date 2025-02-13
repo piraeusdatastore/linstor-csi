@@ -44,7 +44,7 @@ linters:
   enable:
     - errorlint
     - gci
-    - exportloopref
+    - copyloopvar
     - exhaustive
     - gocritic
     - gofumpt

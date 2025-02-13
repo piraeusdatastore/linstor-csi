@@ -11,7 +11,9 @@ import (
 	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/pborman/uuid"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
+	"gopkg.in/yaml.v3"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
@@ -42,6 +44,7 @@ const (
 	resourcegroup
 	usepvcname
 	overprovision
+	xreplicasondifferent
 )
 
 // Parameters configuration for linstor volumes.
@@ -59,6 +62,9 @@ type Parameters struct {
 	// ReplicasOnSame is a list that corresponds to the `linstor resource create`
 	// option of the same name.
 	ReplicasOnSame []string
+	// XReplicasOnDifferent is a map that corresponds to the `linstor resource create`
+	// option of the same name.
+	XReplicasOnDifferent map[string]int
 	// DisklessStoragePool is the diskless storage pool to use for diskless assignments.
 	DisklessStoragePool string
 	// DoNotPlaceWithRegex corresponds to the `linstor resource create`
@@ -167,6 +173,13 @@ func NewParameters(params map[string]string, topologyPrefix string) (Parameters,
 			p.ReplicasOnSame = maybeAddTopologyPrefix(topologyPrefix, strings.Split(v, " ")...)
 		case replicasondifferent:
 			p.ReplicasOnDifferent = maybeAddTopologyPrefix(topologyPrefix, strings.Split(v, " ")...)
+		case xreplicasondifferent:
+			v, err := ParseXReplicasOnDifferent(topologyPrefix, v)
+			if err != nil {
+				return p, err
+			}
+
+			p.XReplicasOnDifferent = v
 		case storagepool:
 			p.StoragePools = strings.Split(v, " ")
 		case disklessstoragepool:
@@ -307,6 +320,11 @@ func (params *Parameters) ToResourceGroupModify(rg *lapi.ResourceGroup) (lapi.Re
 		rgModify.SelectFilter.ReplicasOnDifferent = params.ReplicasOnDifferent
 	}
 
+	if !maps.Equal(rg.SelectFilter.XReplicasOnDifferent, params.XReplicasOnDifferent) {
+		changed = true
+		rgModify.SelectFilter.XReplicasOnDifferent = params.XReplicasOnDifferent
+	}
+
 	stringLayers := make([]string, len(params.LayerList))
 	for i, layer := range params.LayerList {
 		stringLayers[i] = string(layer)
@@ -359,6 +377,24 @@ func (params *Parameters) DisklessFlag() (string, error) {
 	}
 
 	return "", fmt.Errorf("could not determine diskless flag for layers: %v", params.LayerList)
+}
+
+func ParseXReplicasOnDifferent(prefix, s string) (map[string]int, error) {
+	m := make(map[string]int)
+
+	err := yaml.Unmarshal([]byte(s), &m)
+	if err != nil {
+		return nil, err
+	}
+
+	expanded := make(map[string]int)
+
+	for k, v := range m {
+		ks := maybeAddTopologyPrefix(prefix, k)
+		expanded[ks[0]] = v
+	}
+
+	return expanded, nil
 }
 
 // ParseLayerList returns a slice of LayerType from a string of space-separated layers.
