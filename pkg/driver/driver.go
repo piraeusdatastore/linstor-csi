@@ -342,26 +342,6 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 
 	volCtx.MountOptions = append(volCtx.MountOptions, "_netdev")
 
-	var fsType string
-
-	if block := req.GetVolumeCapability().GetBlock(); block != nil {
-		volCtx.MountOptions = []string{"bind"}
-	}
-
-	if mnt := req.GetVolumeCapability().GetMount(); mnt != nil {
-		volCtx.MountOptions = append(volCtx.MountOptions, mnt.GetMountFlags()...)
-		fsType = "ext4"
-		if mnt.FsType != "" {
-			fsType = mnt.FsType
-		}
-	}
-
-	if fsType == "xfs" {
-		// Restored snapshots inherit the XFS UUID of the original source. If mounted on the same node as the original
-		// without this option, XFS will complain about a duplicate UUID and refuse to mount.
-		volCtx.MountOptions = append(volCtx.MountOptions, "nouuid")
-	}
-
 	publishCtx := PublishContextFromMap(req.GetPublishContext())
 	if publishCtx == nil {
 		assignment, err := d.Assignments.FindAssignmentOnNode(ctx, req.GetVolumeId(), d.nodeID)
@@ -376,6 +356,31 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		publishCtx = &PublishContext{
 			DevicePath: assignment.Path,
 		}
+	}
+
+	if block := req.GetVolumeCapability().GetBlock(); block != nil {
+		volCtx.MountOptions = []string{"bind"}
+	}
+
+	var fsType string
+
+	if mnt := req.GetVolumeCapability().GetMount(); mnt != nil {
+		switch {
+		case publishCtx.FsType != "":
+			fsType = publishCtx.FsType
+		case mnt.FsType != "":
+			fsType = mnt.FsType
+		default:
+			fsType = "ext4"
+		}
+
+		volCtx.MountOptions = append(volCtx.MountOptions, mnt.GetMountFlags()...)
+	}
+
+	if fsType == "xfs" {
+		// Restored snapshots inherit the XFS UUID of the original source. If mounted on the same node as the original
+		// without this option, XFS will complain about a duplicate UUID and refuse to mount.
+		volCtx.MountOptions = append(volCtx.MountOptions, "nouuid")
 	}
 
 	ro := req.GetReadonly() || req.GetVolumeCapability().GetAccessMode().GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
@@ -683,6 +688,7 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 	return &csi.ControllerPublishVolumeResponse{
 		PublishContext: (&PublishContext{
 			DevicePath: devPath,
+			FsType:     existingVolume.FsType,
 		}).ToMap(),
 	}, nil
 }
