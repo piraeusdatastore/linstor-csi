@@ -45,7 +45,7 @@ func createNode(clientSet kubernetes.Interface, labels map[string]string, nodeNa
 	)
 }
 
-func TestretrieveRackId(t *testing.T) {
+func TestRetrieveRackId(t *testing.T) {
 	clientSet := fake.NewSimpleClientset()
 	nodeName := "storage1"
 	rackName := "Rack7"
@@ -59,7 +59,7 @@ func TestretrieveRackId(t *testing.T) {
 	}
 }
 
-func TestretrieveRackIdNoLabel(t *testing.T) {
+func TestRetrieveRackIdNoLabel(t *testing.T) {
 	clientSet := fake.NewSimpleClientset()
 	nodeName := "storage1"
 	labels := map[string]string{}
@@ -70,7 +70,7 @@ func TestretrieveRackIdNoLabel(t *testing.T) {
 	}
 }
 
-func TestretrieveRackIdNoNode(t *testing.T) {
+func TestRetrieveRackIdNoNode(t *testing.T) {
 	clientSet := fake.NewSimpleClientset()
 	nodeName := "storage1"
 	_, err := retrieveRackId(context.Background(), clientSet, nodeName)
