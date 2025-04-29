@@ -23,7 +23,6 @@ package client
 import (
 	"context"
 	"encoding/json"
-	"math/rand"
 	"testing"
 
 	lapiconsts "github.com/LINBIT/golinstor"
@@ -373,20 +372,24 @@ func TestLinstor_SortByPreferred(t *testing.T) {
 		nodes             []string
 		policy            volume.RemoteAccessPolicy
 		preferredTopology []*csi.Topology
-		expected          []string
+		assertion         func(t *testing.T, actual []string)
 	}{
 		{
 			name:              "no-preferred",
 			nodes:             []string{"node-a", "node-b", "node-c"},
 			preferredTopology: nil,
-			expected:          []string{"node-a", "node-c", "node-b"},
+			assertion: func(t *testing.T, actual []string) {
+				assert.ElementsMatch(t, []string{"node-a", "node-c", "node-b"}, actual)
+			},
 		},
 		{
 			name:              "one-preferred",
 			nodes:             []string{"node-a", "node-b", "node-c"},
 			policy:            volume.RemoteAccessPolicyLocalOnly,
 			preferredTopology: []*csi.Topology{{Segments: map[string]string{topology.LinstorNodeKey: "node-c"}}},
-			expected:          []string{"node-c", "node-a", "node-b"},
+			assertion: func(t *testing.T, actual []string) {
+				assert.Equal(t, []string{"node-c", "node-a", "node-b"}, actual)
+			},
 		},
 		{
 			name:  "all-have-preference",
@@ -396,24 +399,27 @@ func TestLinstor_SortByPreferred(t *testing.T) {
 				{Segments: map[string]string{topology.LinstorNodeKey: "node-b"}},
 				{Segments: map[string]string{topology.LinstorNodeKey: "node-a"}},
 			},
-			expected: []string{"node-c", "node-b", "node-a"},
+			assertion: func(t *testing.T, actual []string) {
+				assert.Equal(t, []string{"node-c", "node-b", "node-a"}, actual)
+			},
 		},
 		{
 			name:              "preference-with-remote-policy",
 			nodes:             []string{"node-a", "node-b", "node-c"},
 			policy:            []volume.RemoteAccessPolicyRule{{FromSame: []string{"zone"}}},
 			preferredTopology: []*csi.Topology{{Segments: map[string]string{topology.LinstorNodeKey: "node-c", "zone": "1"}}},
-			expected:          []string{"node-c", "node-b", "node-a"},
+			assertion: func(t *testing.T, actual []string) {
+				assert.Equal(t, []string{"node-c", "node-b", "node-a"}, actual)
+			},
 		},
 	}
 
 	for i := range testcases {
 		tcase := &testcases[i]
 		t.Run(tcase.name, func(t *testing.T) {
-			rand.Seed(1) // nolint:staticcheck // Deprecated but useful in this case, as we don't want to seed our own RNG just for this one function
 			actual, err := cl.SortByPreferred(context.Background(), tcase.nodes, tcase.policy, tcase.preferredTopology)
 			assert.NoError(t, err)
-			assert.Equal(t, tcase.expected, actual)
+			tcase.assertion(t, actual)
 		})
 	}
 }
