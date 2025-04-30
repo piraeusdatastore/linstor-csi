@@ -512,7 +512,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 		return nil, missingAttr("ValidateVolumeCapabilities", req.GetName(), "VolumeCapabilities")
 	}
 
-	fsType, err := fsTypeForCapabilities(req.GetVolumeCapabilities())
+	fsType, err := validateCapabilities(req.GetVolumeCapabilities())
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "CreateVolume failed for %s: %v", req.Name, err)
 	}
@@ -733,51 +733,26 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 		"existingVolume": fmt.Sprintf("%+v", existingVolume),
 	}).Debug("found existing volume")
 
-	for _, requested := range req.VolumeCapabilities {
-		requestedMode := requested.GetAccessMode().GetMode()
-		if requestedMode != csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER && requestedMode != csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
-			return nil, status.Errorf(codes.InvalidArgument, "ValidateVolumeCapabilities failed for %s: volumes support only RWO and ROX mode", req.GetVolumeId())
-		}
+	_, err = validateCapabilities(req.GetVolumeCapabilities())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "ValidateVolumeCapabilities failed to validate capabilities for %s: %v", req.GetVolumeId(), err)
+	}
+
+	_, err = volume.NewParameters(req.GetParameters(), d.topologyPrefix)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "ValidateVolumeCapabilities failed to validate parameters for %s: %v", req.GetVolumeId(), err)
+	}
+
+	_, err = VolumeContextFromMap(req.GetVolumeContext())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "ValidateVolumeCapabilities failed to validate volume context for %s: %v", req.GetVolumeId(), err)
 	}
 
 	return &csi.ValidateVolumeCapabilitiesResponse{
 		Confirmed: &csi.ValidateVolumeCapabilitiesResponse_Confirmed{
-			VolumeCapabilities: []*csi.VolumeCapability{
-				// Tell CO we can provision RWO and ROX mount volumes.
-				{
-					AccessType: &csi.VolumeCapability_Mount{
-						Mount: &csi.VolumeCapability_MountVolume{},
-					},
-					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-					},
-				},
-				{
-					AccessType: &csi.VolumeCapability_Mount{
-						Mount: &csi.VolumeCapability_MountVolume{},
-					},
-					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY,
-					},
-				},
-				// Tell CO we can provision RWO and ROX block volumes.
-				{
-					AccessType: &csi.VolumeCapability_Block{
-						Block: &csi.VolumeCapability_BlockVolume{},
-					},
-					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-					},
-				},
-				{
-					AccessType: &csi.VolumeCapability_Block{
-						Block: &csi.VolumeCapability_BlockVolume{},
-					},
-					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY,
-					},
-				},
-			},
+			VolumeCapabilities: req.GetVolumeCapabilities(),
+			Parameters:         req.GetParameters(),
+			VolumeContext:      req.GetVolumeContext(),
 		},
 	}, nil
 }
@@ -933,6 +908,11 @@ func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Controll
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_VOLUME_CONDITION,
+				},
+			}},
+			{Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER,
 				},
 			}},
 		},
@@ -1526,30 +1506,64 @@ func (d Driver) failpathDelete(ctx context.Context, volId string) {
 	}
 }
 
-func fsTypeForCapabilities(caps []*csi.VolumeCapability) (string, error) {
-	fsType := ""
+func validateCapabilities(caps []*csi.VolumeCapability) (string, error) {
+	var mountCaps, blockCaps []*csi.VolumeCapability
 
-	for _, cap := range caps {
-		m := cap.GetMount()
-
-		if m == nil {
-			continue
+	for _, capability := range caps {
+		if capability.GetMount() != nil {
+			mountCaps = append(mountCaps, capability)
+		} else {
+			blockCaps = append(blockCaps, capability)
 		}
-
-		t := m.GetFsType()
-		if t == "" {
-			// Set default if non was given (sanity tests might complain otherwise)
-			t = "ext4"
-		}
-
-		if fsType != "" && t != fsType {
-			return "", fmt.Errorf("conflicting fs types: '%s' vs '%s'", fsType, t)
-		}
-
-		fsType = t
 	}
 
-	return fsType, nil
+	if len(mountCaps) > 0 && len(blockCaps) > 0 {
+		return "", fmt.Errorf("unsupported FileSystem and Block mode on the same volume")
+	}
+
+	if len(mountCaps) > 0 {
+		fsType := ""
+
+		for _, c := range mountCaps {
+			fs := c.GetMount().GetFsType()
+			if fs == "" {
+				// Set default if non was given (sanity tests might complain otherwise)
+				fs = "ext4"
+			}
+
+			if fsType == "" {
+				fsType = fs
+			}
+
+			if fsType != fs {
+				return "", fmt.Errorf("unsupported conflicting FS types: '%s' != '%s'", fsType, fs)
+			}
+
+			mode := c.GetAccessMode().GetMode()
+			switch mode {
+			case
+				csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+				csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY,
+				csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY,
+				csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER,
+				csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER:
+			// These are all fine
+			case csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER, csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER:
+				return "", fmt.Errorf("unsupported access mode '%s' for FileSystem volumes", mode.String())
+			default:
+				return "", fmt.Errorf("unsupported access mode: '%s'", mode.String())
+			}
+		}
+
+		return fsType, nil
+	}
+
+	if len(blockCaps) > 0 {
+		// Nothing to check in this case, for block volumes we support all access modes
+		return "", nil
+	}
+
+	return "", fmt.Errorf("unsupported volume without any capabilities")
 }
 
 const (
