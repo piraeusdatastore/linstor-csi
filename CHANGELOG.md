@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Update validation of volume creation and registration requests, providing better validation of volumes.
+
 ## [1.7.1] - 2025-03-12
 
 ### Changed
