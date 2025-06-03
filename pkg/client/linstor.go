@@ -830,7 +830,7 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id, sourceVolId string, p
 
 	log.Debug("reconcile remote")
 
-	err := s.reconcileRemote(ctx, params)
+	err := s.ReconcileRemote(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -910,10 +910,13 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id, sourceVolId string, p
 	}
 }
 
-func (s *Linstor) reconcileRemote(ctx context.Context, params *volume.SnapshotParameters) error {
+func (s *Linstor) ReconcileRemote(ctx context.Context, params *volume.SnapshotParameters) error {
 	log := s.log.WithField("remote-name", params.RemoteName)
 
 	switch params.Type {
+	case volume.SnapshotTypeInCluster:
+		log.Debug("nothing to do for in-cluster snapshot")
+		return nil
 	case volume.SnapshotTypeS3:
 		log.Debug("search for S3 remote with matching name")
 

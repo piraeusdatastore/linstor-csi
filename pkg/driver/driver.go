@@ -32,6 +32,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	lc "github.com/LINBIT/golinstor"
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -64,6 +65,7 @@ type Driver struct {
 	Expander      volume.Expander
 	NodeInformer  volume.NodeInformer
 	kubeClient    dynamic.Interface
+	cancel        context.CancelFunc
 	srv           *grpc.Server
 	log           *logrus.Entry
 	version       string
@@ -76,6 +78,8 @@ type Driver struct {
 	nodeID string
 	// topologyPrefix is the name
 	topologyPrefix string
+	// resyncAfter is the interval after which reconciliations should be retried
+	resyncAfter time.Duration
 
 	// Embed for forward compatibility.
 	csi.UnimplementedIdentityServer
@@ -101,6 +105,7 @@ func NewDriver(options ...func(*Driver) error) (*Driver, error) {
 		NodeInformer:   mockStorage,
 		log:            logrus.NewEntry(logrus.New()),
 		topologyPrefix: lc.NamespcAuxiliary,
+		resyncAfter:    5 * time.Minute,
 	}
 
 	d.log.Logger.SetOutput(ioutil.Discard)
@@ -259,6 +264,17 @@ func ConfigureKubernetesIfAvailable() func(*Driver) error {
 		d.kubeClient, err = dynamic.NewForConfig(cfg)
 
 		return err
+	}
+}
+
+// ResyncAfter sets the interval in which certain resources should be synced.
+//
+// Currently, this only applies to VolumeSnapshotClassses.
+// Set to 0 to disable syncing.
+func ResyncAfter(resyncAfter time.Duration) func(*Driver) error {
+	return func(d *Driver) error {
+		d.resyncAfter = resyncAfter
+		return nil
 	}
 }
 
@@ -1256,6 +1272,16 @@ func (d Driver) Run() error {
 		return resp, err
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	d.cancel = cancel
+
+	if d.kubeClient != nil && d.resyncAfter > 0 {
+		err := ReconcileVolumeSnapshotClass(ctx, d.kubeClient, d.Snapshots, d.log, d.resyncAfter)
+		if err != nil {
+			return fmt.Errorf("failed to start volume snapshot class reconciler")
+		}
+	}
+
 	d.srv = grpc.NewServer(grpc.UnaryInterceptor(errHandler))
 	csi.RegisterIdentityServer(d.srv, d)
 	csi.RegisterControllerServer(d.srv, d)
@@ -1270,6 +1296,7 @@ func (d Driver) Run() error {
 // Stop the server.
 func (d Driver) Stop() error {
 	d.srv.GracefulStop()
+	d.cancel()
 	return nil
 }
 

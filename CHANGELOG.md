@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Automatic addition of remotes configured in VolumeSnapshotClasses without the need to create snapshots first.
+
 ### Changed
 
 - Update validation of volume creation and registration requests, providing better validation of volumes.

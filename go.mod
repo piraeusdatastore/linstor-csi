@@ -9,6 +9,7 @@ require (
 	github.com/container-storage-interface/spec v1.11.0
 	github.com/haySwim/data v0.2.0
 	github.com/kubernetes-csi/csi-test/v5 v5.3.1
+	github.com/kubernetes-csi/external-snapshotter/v8 v8.2.1
 	github.com/pborman/uuid v1.2.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
@@ -44,6 +45,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.2.0 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/moby/sys/mountinfo v0.7.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
