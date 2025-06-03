@@ -152,6 +152,10 @@ func (s *MockStorage) DeleteTemporarySnapshotID(ctx context.Context, id string) 
 	return nil
 }
 
+func (s *MockStorage) ReconcileRemote(ctx context.Context, params *volume.SnapshotParameters) error {
+	return nil
+}
+
 func (s *MockStorage) ListSnaps(ctx context.Context, start, limit int) ([]*volume.Snapshot, error) {
 	if limit == 0 {
 		limit = len(s.snapshots) - start

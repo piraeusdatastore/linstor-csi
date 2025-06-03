@@ -83,6 +83,8 @@ type SnapshotCreateDeleter interface {
 	VolFromSnap(ctx context.Context, snap *Snapshot, vol *Info, params *Parameters, snapParams *SnapshotParameters, topologies *csi.TopologyRequirement) error
 	// DeleteTemporarySnapshotID deletes the temporary snapshot ID.
 	DeleteTemporarySnapshotID(ctx context.Context, id string) error
+	// ReconcileRemote creates or updates a remote based on the given snapshot parameters.
+	ReconcileRemote(ctx context.Context, params *SnapshotParameters) error
 }
 
 // AttacherDettacher handles operations relating to volume accessiblity on nodes.

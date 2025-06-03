@@ -52,6 +52,7 @@ func main() {
 		labelBySP             = flag.Bool("label-by-storage-pool", true, "Set to false to disable labeling of nodes based on their configured storage pools.")
 		nodeCacheTimeout      = flag.Duration("node-cache-timeout", 1*time.Minute, "Duration for which the results of node and storage pool related API responses should be cached.")
 		resourceCacheTimeout  = flag.Duration("resource-cache-timeout", 30*time.Second, "Duration for which the results of resource related API responses should be cached.")
+		resyncAfter           = flag.Duration("resync-after", 5*time.Minute, "Duration after which reconciliations (such as for VolumeSnapshotClasses) should be rerun. Set to 0 to disable.")
 	)
 
 	flag.Var(&volume.DefaultRemoteAccessPolicy, "default-remote-access-policy", "")
@@ -148,6 +149,7 @@ func main() {
 		driver.NodeInformer(linstorClient),
 		driver.TopologyPrefix(*propNs),
 		driver.ConfigureKubernetesIfAvailable(),
+		driver.ResyncAfter(*resyncAfter),
 	)
 	if err != nil {
 		log.Fatal(err)
