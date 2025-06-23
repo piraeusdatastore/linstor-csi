@@ -9,7 +9,7 @@ require (
 	github.com/container-storage-interface/spec v1.11.0
 	github.com/haySwim/data v0.2.0
 	github.com/kubernetes-csi/csi-test/v5 v5.3.1
-	github.com/kubernetes-csi/external-snapshotter/v8 v8.2.1
+	github.com/kubernetes-csi/external-snapshotter/v8 v8.3.0
 	github.com/pborman/uuid v1.2.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
@@ -19,10 +19,10 @@ require (
 	google.golang.org/grpc v1.73.0
 	google.golang.org/protobuf v1.36.6
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.33.1
-	k8s.io/apimachinery v0.33.1
-	k8s.io/client-go v0.33.1
-	k8s.io/mount-utils v0.33.1
+	k8s.io/api v0.33.2
+	k8s.io/apimachinery v0.33.2
+	k8s.io/client-go v0.33.2
+	k8s.io/mount-utils v0.33.2
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 )
 
