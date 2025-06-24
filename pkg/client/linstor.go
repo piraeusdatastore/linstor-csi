@@ -372,6 +372,14 @@ func (s *Linstor) Delete(ctx context.Context, volId string) error {
 		"volume": volId,
 	}).Info("deleting volume")
 
+	// Disable the BalanceResourceTask for this resource during deletion.
+	err := s.client.ResourceDefinitions.Modify(ctx, volId, lapi.GenericPropsModify{
+		OverrideProps: map[string]string{lapiconsts.KeyBalanceResourcesEnabled: lapiconsts.ValFalse},
+	})
+	if err != nil {
+		return nil404(err)
+	}
+
 	resources, err := s.client.Resources.GetAll(ctx, volId)
 	if err != nil {
 		return nil404(err)
@@ -396,6 +404,14 @@ func (s *Linstor) Delete(ctx context.Context, volId string) error {
 	if nil404(err) != nil {
 		// We continue with the cleanup on 404, maybe the previous cleanup was interrupted
 		return err
+	}
+
+	// Reset BalanceResourceTask for the case the resource definition is in use by a snapshot.
+	err = s.client.ResourceDefinitions.Modify(ctx, volId, lapi.GenericPropsModify{
+		DeleteProps: []string{lapiconsts.KeyBalanceResourcesEnabled},
+	})
+	if err != nil {
+		return nil404(err)
 	}
 
 	err = s.deleteResourceDefinitionAndGroupIfUnused(ctx, volId)

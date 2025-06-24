@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Ensure the BalanceResourceTask is disabled for resources in the process of being deleted.
+
 ## [1.8.0] - 2025-06-17
 
 ### Added
