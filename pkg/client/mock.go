@@ -60,7 +60,7 @@ func (s *MockStorage) ListAllWithStatus(ctx context.Context) ([]volume.VolumeSta
 	return vols, nil
 }
 
-func (s *MockStorage) AllocationSizeKiB(requiredBytes, limitBytes int64) (int64, error) {
+func (s *MockStorage) AllocationSizeKiB(requiredBytes, limitBytes int64, fsType string) (int64, error) {
 	return requiredBytes / 1024, nil
 }
 

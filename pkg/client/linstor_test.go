@@ -42,32 +42,35 @@ import (
 func TestAllocationSizeKiB(t *testing.T) {
 	l := &Linstor{}
 	tableTests := []struct {
-		req int64
-		lim int64
-		out int64
+		req    int64
+		lim    int64
+		fsType string
+		out    int64
 	}{
-		{1024, 0, 4},
-		{4096, 4096, 4},
-		{4097, 0, 5},
+		{1024, 0, "", 4},
+		{4096, 4096, "", 4},
+		{4097, 0, "", 5},
+		{10 * 1024, 0, "ext4", 2 * 1024},
+		{1024 * 1024 * 1024, 0, "ext4", 1024 * 1024},
+		{10 * 1024, 0, "xfs", 300 * 1024},
+		{1024 * 1024 * 1024, 0, "xfs", 1024 * 1024},
 	}
 
 	for _, tt := range tableTests {
-		actual, _ := l.AllocationSizeKiB(tt.req, tt.lim)
-		if tt.out != actual {
-			t.Errorf("Expected: %d, Got: %d, from %+v", tt.out, actual, tt)
-		}
+		actual, _ := l.AllocationSizeKiB(tt.req, tt.lim, tt.fsType)
+		assert.Equal(t, tt.out, actual)
 	}
 
 	// We'd have to allocate more bytes than the limit since we allocate at KiB
 	// Increments.
-	_, err := l.AllocationSizeKiB(4097, 40)
-	if err == nil {
-		t.Errorf("Expected limitBytes to be respected!")
-	}
-	_, err = l.AllocationSizeKiB(4097, 4096)
-	if err == nil {
-		t.Errorf("Expected limitBytes to be respected!")
-	}
+	_, err := l.AllocationSizeKiB(4097, 40, "")
+	assert.Error(t, err)
+	_, err = l.AllocationSizeKiB(4097, 4096, "")
+	assert.Error(t, err)
+	_, err = l.AllocationSizeKiB(10*1024, 1*1024*1024, "ext4")
+	assert.Error(t, err)
+	_, err = l.AllocationSizeKiB(10*1024, 299*1024*1024, "xfs")
+	assert.Error(t, err)
 }
 
 func TestValidResourceName(t *testing.T) {

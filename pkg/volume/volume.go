@@ -105,7 +105,7 @@ type Querier interface {
 	// FindByID returns nil when volume is not found.
 	FindByID(ctx context.Context, ID string) (*Info, error)
 	// AllocationSizeKiB returns the number of KiB required to provision required bytes.
-	AllocationSizeKiB(requiredBytes, limitBytes int64) (int64, error)
+	AllocationSizeKiB(requiredBytes, limitBytes int64, fsType string) (int64, error)
 	// CapacityBytes returns the amount of free space, in bytes, in the storage pool specified by the params and topology.
 	CapacityBytes(ctx context.Context, pools []string, overProvision *float64, segments map[string]string) (int64, error)
 }

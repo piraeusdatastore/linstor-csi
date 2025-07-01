@@ -214,13 +214,23 @@ func (s *Linstor) ListAllWithStatus(ctx context.Context) ([]volume.VolumeStatus,
 
 // AllocationSizeKiB returns LINSTOR's smallest possible number of KiB that can
 // satisfy the requiredBytes.
-func (s *Linstor) AllocationSizeKiB(requiredBytes, limitBytes int64) (int64, error) {
+func (s *Linstor) AllocationSizeKiB(requiredBytes, limitBytes int64, fsType string) (int64, error) {
 	requestedSize := data.ByteSize(requiredBytes)
 	minVolumeSize := data.ByteSize(4096)
 	maxVolumeSize := data.ByteSize(limitBytes)
 	unlimited := maxVolumeSize == 0
+
+	switch fsType {
+	case "ext4":
+		// mkfs.ext4 will not create a journal for smaller volumes, which makes them unsuitable for fail over.
+		minVolumeSize = 2 * data.MiB
+	case "xfs":
+		// mkfs.xfs refuses to create volumes smaller than 300MiB
+		minVolumeSize = 300 * data.MiB
+	}
+
 	if minVolumeSize > maxVolumeSize && !unlimited {
-		return 0, fmt.Errorf("LINSTOR's minimum volume size exceeds the maximum size limit of the requested volume")
+		return 0, fmt.Errorf("LINSTOR's minimum volume size (%d) exceeds the maximum size limit (%d) of the requested volume", minVolumeSize, maxVolumeSize)
 	}
 	if requestedSize < minVolumeSize {
 		requestedSize = minVolumeSize
