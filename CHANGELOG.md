@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Enforce larger minimum volume size for filesystem volumes.
+
 ## [1.8.1] - 2025-06-24
 
 ### Changed
