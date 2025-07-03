@@ -1014,12 +1014,9 @@ func (s *Linstor) SnapDelete(ctx context.Context, snap *volume.Snapshot) error {
 		log.WithField("remote", snap.Remote).Debug("deleting backup from remote")
 
 		backups, err := s.client.Backup.GetAll(ctx, snap.Remote, snap.GetSourceVolumeId(), snap.GetSnapshotId())
-		if err != nil {
-			var apiErrors lapi.ApiCallError
-			// Make sure this is actually an S3 backup
-			if !errors.As(err, &apiErrors) || !apiErrors.Is(lapiconsts.FailInvldRemoteName) {
-				return fmt.Errorf("failed to list backups for snapshot %s: %w", snap.GetSnapshotId(), err)
-			}
+		if err != nil && !lapi.IsApiCallError(err, lapiconsts.FailInvldRemoteName) {
+			// Ignore errors caused by missing remotes: no remote -> no snapshots to delete.
+			return fmt.Errorf("failed to list backups for snapshot %s: %w", snap.GetSnapshotId(), err)
 		}
 
 		if backups != nil {
