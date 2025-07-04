@@ -1052,7 +1052,11 @@ func (s *Linstor) SnapDelete(ctx context.Context, snap *volume.Snapshot) error {
 	return nil
 }
 
-func (s *Linstor) DeleteTemporarySnapshotID(ctx context.Context, id string) error {
+func (s *Linstor) DeleteTemporarySnapshotID(ctx context.Context, id string, snapParams *volume.SnapshotParameters) error {
+	if snapParams.Type != volume.SnapshotTypeLinstor {
+		return nil
+	}
+
 	err := s.client.KeyValueStore.CreateOrModify(ctx, linstor.LinstorBackupKVName, lapi.GenericPropsModify{
 		DeleteProps: []string{id},
 	})

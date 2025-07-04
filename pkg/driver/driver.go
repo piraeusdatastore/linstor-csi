@@ -993,7 +993,7 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 			if existingSnap.ReadyToUse {
 				d.log.WithField("snapshot id", id).Debug("snapshot ready, delete temporary ID mapping if it exists")
 
-				err := d.Snapshots.DeleteTemporarySnapshotID(ctx, id)
+				err := d.Snapshots.DeleteTemporarySnapshotID(ctx, id, params)
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "failed to delete temporary snapshot ID: %v", err)
 				}
@@ -1019,7 +1019,7 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 	if snap.ReadyToUse {
 		d.log.WithField("snapshot id", id).Debug("snapshot ready, delete temporary ID mapping if it exists")
 
-		err := d.Snapshots.DeleteTemporarySnapshotID(ctx, id)
+		err := d.Snapshots.DeleteTemporarySnapshotID(ctx, id, params)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to delete temporary snapshot ID: %v", err)
 		}

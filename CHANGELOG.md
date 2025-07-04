@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Enforce larger minimum volume size for filesystem volumes.
+- Skip LINSTOR-KV interaction for local and S3 snapshots.
 
 ## [1.8.1] - 2025-06-24
 
