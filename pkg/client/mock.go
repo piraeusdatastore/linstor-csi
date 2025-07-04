@@ -148,7 +148,7 @@ func (s *MockStorage) SnapDelete(ctx context.Context, snap *volume.Snapshot) err
 	return nil
 }
 
-func (s *MockStorage) DeleteTemporarySnapshotID(ctx context.Context, id string) error {
+func (s *MockStorage) DeleteTemporarySnapshotID(ctx context.Context, id string, snapParams *volume.SnapshotParameters) error {
 	return nil
 }
 
