@@ -1349,7 +1349,8 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 				return nil, status.Errorf(codes.InvalidArgument,
 					"CreateVolume failed for %s: empty volumeId", req.GetName())
 			}
-			logger.Debugf("pre-populate volume from snapshot: %+v", volumeId)
+
+			logger.Debugf("pre-populate volume from volume: %+v", volumeId)
 
 			sourceVol, err := d.Storage.FindByID(ctx, volumeId)
 			if err != nil {
@@ -1361,30 +1362,10 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 					"CreateVolume failed for %s: source volume not found in storage backend", req.GetName())
 			}
 
-			createdSnap, err := d.CreateSnapshot(ctx, &csi.CreateSnapshotRequest{Name: snapshotForVolumeName(req.GetName()), SourceVolumeId: sourceVol.ID})
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: failed to create snapshot for source volume: %v", req.GetName(), err)
-			}
-
-			if !createdSnap.Snapshot.ReadyToUse {
-				return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: snapshot not ready", req.GetName())
-			}
-
-			snap := &volume.Snapshot{Snapshot: *createdSnap.Snapshot}
-
-			defer func() {
-				err := d.Snapshots.SnapDelete(ctx, snap)
-				if err != nil {
-					logger.WithError(err).Errorf("failed to delete temporary snapshot %s for clone", snap.GetSnapshotId())
-				}
-			}()
-
-			err = d.Snapshots.VolFromSnap(ctx, snap, info, params, nil, req.GetAccessibilityRequirements())
+			err = d.Storage.Clone(ctx, info, sourceVol, params, req.GetAccessibilityRequirements())
 			if err != nil {
 				d.failpathDelete(ctx, info.ID)
-
-				return nil, status.Errorf(codes.Internal,
-					"CreateVolume failed for %s: %v", info.ID, err)
+				return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", info.ID, err)
 			}
 		default:
 			return nil, status.Errorf(codes.InvalidArgument,

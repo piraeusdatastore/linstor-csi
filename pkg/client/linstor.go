@@ -35,6 +35,7 @@ import (
 
 	lapiconsts "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
+	"github.com/LINBIT/golinstor/clonestatus"
 	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/haySwim/data"
@@ -258,6 +259,11 @@ func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinitionWithV
 		return nil
 	}
 
+	if slices.Contains(resDef.Flags, lapiconsts.FlagCloning) {
+		// Volume is not yet ready
+		return nil
+	}
+
 	fsType := resDef.Props[lapiconsts.NamespcFilesystem+"/"+lapiconsts.KeyFsType]
 	props := make(map[string]string)
 
@@ -343,6 +349,101 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, params *volume.P
 	if err != nil {
 		logger.Debugf("reconcile resource definition failed: %v", err)
 		return err
+	}
+
+	logger.Debug("reconcile volume definition for volume")
+
+	_, err = s.reconcileVolumeDefinition(ctx, vol)
+	if err != nil {
+		logger.Debugf("reconcile volume definition failed: %v", err)
+		return err
+	}
+
+	logger.Debug("reconcile volume placement")
+
+	err = s.reconcileResourcePlacement(ctx, vol, params, topologies)
+	if err != nil {
+		logger.Debugf("reconcile volume placement failed: %v", err)
+		return err
+	}
+
+	logger.Debug("reconcile extra properties")
+
+	err = s.client.ResourceDefinitions.Modify(ctx, vol.ID, lapi.GenericPropsModify{OverrideProps: vol.Properties})
+	if err != nil {
+		logger.Debugf("reconcile extra properties failed: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volume.Parameters, topologies *csi.TopologyRequirement) error {
+	logger := s.log.WithFields(logrus.Fields{
+		"source": fmt.Sprintf("%+v", src),
+		"volume": fmt.Sprintf("%+v", vol),
+	})
+
+	logger.Debug("reconcile resource group from storage class")
+
+	rGroup, err := s.reconcileResourceGroup(ctx, params)
+	if err != nil {
+		logger.Debugf("reconcile resource group failed: %v", err)
+		return err
+	}
+
+	logger.Debugf("check for clone status")
+
+	status, err := s.client.ResourceDefinitions.CloneStatus(ctx, src.ID, vol.ID)
+	if err != nil {
+		if errors.Is(err, lapi.NotFoundError) {
+			logger.Debugf("create new cloned volume")
+
+			_, err := s.client.ResourceDefinitions.Clone(ctx, src.ID, lapi.ResourceDefinitionCloneRequest{
+				Name:          vol.ID,
+				LayerList:     params.LayerList,
+				ResourceGroup: rGroup.Name,
+			})
+			if err != nil {
+				logger.Debugf("clone failed: %v", err)
+				return err
+			}
+
+			status, err = s.client.ResourceDefinitions.CloneStatus(ctx, src.ID, vol.ID)
+			if err != nil {
+				logger.Debugf("clone status failed: %v", err)
+				return err
+			}
+		} else {
+			logger.Debugf("clone status failed: %v", err)
+			return err
+		}
+	}
+
+	// This is not perfect: if we fail to delete the ProvisioningCompletedBy property, the volume creation will be
+	// retried. If LINSTOR has already finished cloning the volume, we could think that the volume is already "done"
+	// with provisioning.
+	//
+	// Mitigating factors: it is extremely unlikely that we fail exactly at the step below and that cloning
+	// completes faster than the CSI retry.
+	logger.Debugf("Reset ProvisioningCompletedBy for new resource definition")
+
+	err = s.client.ResourceDefinitions.Modify(ctx, vol.ID, lapi.GenericPropsModify{DeleteProps: []string{linstor.PropertyProvisioningCompletedBy}})
+	if err != nil {
+		logger.Debugf("failed resetting cloned resource definition property: %v", err)
+		return err
+	}
+
+	for status.Status != clonestatus.Complete {
+		logger.Debug("clone in progress, wait 5 seconds")
+
+		time.Sleep(5 * time.Second)
+
+		status, err = s.client.ResourceDefinitions.CloneStatus(ctx, src.ID, vol.ID)
+		if err != nil {
+			logger.Debugf("clone status failed: %v", err)
+			return err
+		}
 	}
 
 	logger.Debug("reconcile volume definition for volume")
