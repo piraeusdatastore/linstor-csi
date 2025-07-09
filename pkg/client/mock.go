@@ -82,6 +82,11 @@ func (s *MockStorage) Create(ctx context.Context, vol *volume.Info, params *volu
 	return nil
 }
 
+func (s *MockStorage) Clone(ctx context.Context, vol, src *volume.Info, params *volume.Parameters, topologies *csi.TopologyRequirement) error {
+	s.createdVolumes = append(s.createdVolumes, vol)
+	return nil
+}
+
 func (s *MockStorage) Delete(ctx context.Context, volId string) error {
 	for i, v := range s.createdVolumes {
 		if v != nil && (v.ID == volId) {

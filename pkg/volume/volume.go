@@ -54,6 +54,7 @@ type CreateDeleter interface {
 	Querier
 	CompatibleVolumeId(name, pvcNamespace, pvcName string) string
 	Create(ctx context.Context, vol *Info, params *Parameters, topologies *csi.TopologyRequirement) error
+	Clone(ctx context.Context, vol, src *Info, params *Parameters, topologies *csi.TopologyRequirement) error
 	Delete(ctx context.Context, volId string) error
 
 	// AccessibleTopologies returns the list of key value pairs volume topologies
