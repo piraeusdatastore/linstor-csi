@@ -26,10 +26,12 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 )
 
-// Info provides the everything need to manipulate volumes.
+// Info provides everything needed to manipulate volumes.
 type Info struct {
-	ID            string
-	SizeBytes     int64
+	ID string
+	// The device sizes in bytes associated with this volume.
+	// A valid Info always has at least a 0th volume.
+	DeviceSizes   map[int]int64
 	ResourceGroup string
 	FsType        string
 	Properties    map[string]string
