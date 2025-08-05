@@ -19,6 +19,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 package client
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -46,6 +47,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/mount-utils"
 	utilexec "k8s.io/utils/exec"
+	"k8s.io/utils/ptr"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
@@ -254,11 +256,6 @@ func (s *Linstor) AllocationSizeKiB(requiredBytes, limitBytes int64, fsType stri
 // resourceDefinitionToVolume reads the serialized volume info on the lapi.ResourceDefinitionWithVolumeDefinition
 // and constructs a pointer to a volume.Info from it.
 func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinitionWithVolumeDefinition) *volume.Info {
-	if len(resDef.VolumeDefinitions) != 1 {
-		// Not a CSI enabled volume
-		return nil
-	}
-
 	if slices.Contains(resDef.Flags, lapiconsts.FlagCloning) {
 		// Volume is not yet ready
 		return nil
@@ -273,9 +270,20 @@ func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinitionWithV
 		}
 	}
 
+	deviceSizes := map[int]int64{}
+	for i := range resDef.VolumeDefinitions {
+		vd := &resDef.VolumeDefinitions[i]
+		deviceSizes[int(*vd.VolumeNumber)] = int64(vd.SizeKib << 10)
+	}
+
+	if _, ok := deviceSizes[0]; !ok {
+		// Not a CSI enabled volume
+		return nil
+	}
+
 	return &volume.Info{
 		ID:            resDef.Name,
-		SizeBytes:     int64(resDef.VolumeDefinitions[0].SizeKib << 10),
+		DeviceSizes:   deviceSizes,
 		ResourceGroup: resDef.ResourceGroupName,
 		FsType:        fsType,
 		Properties:    props,
@@ -353,7 +361,7 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, params *volume.P
 
 	logger.Debug("reconcile volume definition for volume")
 
-	_, err = s.reconcileVolumeDefinition(ctx, vol)
+	err = s.reconcileVolumeDefinition(ctx, vol)
 	if err != nil {
 		logger.Debugf("reconcile volume definition failed: %v", err)
 		return err
@@ -448,7 +456,7 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 
 	logger.Debug("reconcile volume definition for volume")
 
-	_, err = s.reconcileVolumeDefinition(ctx, vol)
+	err = s.reconcileVolumeDefinition(ctx, vol)
 	if err != nil {
 		logger.Debugf("reconcile volume definition failed: %v", err)
 		return err
@@ -510,11 +518,23 @@ func (s *Linstor) Delete(ctx context.Context, volId string) error {
 		}
 	}
 
-	// Delete the volume definition. This indicates the normal deletion is complete.
-	err = s.client.ResourceDefinitions.DeleteVolumeDefinition(ctx, volId, 0)
-	if nil404(err) != nil {
-		// We continue with the cleanup on 404, maybe the previous cleanup was interrupted
-		return err
+	vds, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, volId)
+	if err != nil {
+		return nil404(err)
+	}
+
+	// Sort descending, volume 0 should be the last to be removed
+	slices.SortFunc(vds, func(a, b lapi.VolumeDefinition) int {
+		return cmp.Compare(*b.VolumeNumber, *a.VolumeNumber)
+	})
+
+	for _, vd := range vds {
+		// Delete the volume definition. This indicates the normal deletion is complete.
+		err = s.client.ResourceDefinitions.DeleteVolumeDefinition(ctx, volId, int(*vd.VolumeNumber))
+		if nil404(err) != nil {
+			// We continue with the cleanup on 404, maybe the previous cleanup was interrupted
+			return err
+		}
 	}
 
 	// Reset BalanceResourceTask for the case the resource definition is in use by a snapshot.
@@ -1223,7 +1243,7 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *v
 
 	logger.Debug("reconcile volume definition from request (may expand volume)")
 
-	_, err = s.reconcileVolumeDefinition(ctx, vol)
+	err = s.reconcileVolumeDefinition(ctx, vol)
 	if err != nil {
 		return err
 	}
@@ -1499,7 +1519,7 @@ func (s *Linstor) reconcileResourceGroup(ctx context.Context, params *volume.Par
 
 	// does the RG already exist?
 	rg, err := s.client.ResourceGroups.Get(ctx, rgName)
-	if err == lapi.NotFoundError {
+	if errors.Is(err, lapi.NotFoundError) {
 		// just create the minimal RG/VG, we sync all the props then anyways.
 		resourceGroup := lapi.ResourceGroup{
 			Name:         rgName,
@@ -1588,49 +1608,50 @@ func (s *Linstor) reconcileResourceDefinition(ctx context.Context, volId, rgName
 	return &rd, nil
 }
 
-func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.Info) (*lapi.VolumeDefinition, error) {
+func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.Info) error {
 	logger := s.log.WithFields(logrus.Fields{
 		"volume": info.ID,
 	})
 	logger.Info("reconcile volume definition for volume")
 
-	expectedSizeKiB := uint64(data.NewKibiByte(data.ByteSize(info.SizeBytes)).Value())
+	for vn, size := range info.DeviceSizes {
+		expectedSizeKiB := uint64(data.NewKibiByte(data.ByteSize(size)).Value())
 
-	logger.Debug("check if volume definition already exists")
-	vDef, err := s.client.Client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ID, 0)
-	if err == lapi.NotFoundError {
-		zero := int32(0)
-		vdCreate := lapi.VolumeDefinitionCreate{
-			VolumeDefinition: lapi.VolumeDefinition{
-				VolumeNumber: &zero,
-				SizeKib:      expectedSizeKiB,
-			},
+		logger.Debug("check if volume definition already exists")
+		vDef, err := s.client.Client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ID, vn)
+		if errors.Is(err, lapi.NotFoundError) {
+			vdCreate := lapi.VolumeDefinitionCreate{
+				VolumeDefinition: lapi.VolumeDefinition{
+					VolumeNumber: ptr.To(int32(vn)),
+					SizeKib:      expectedSizeKiB,
+				},
+			}
+
+			err = s.client.ResourceDefinitions.CreateVolumeDefinition(ctx, info.ID, vdCreate)
+			if err != nil {
+				return err
+			}
+
+			vDef, err = s.client.Client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ID, vn)
 		}
 
-		err = s.client.ResourceDefinitions.CreateVolumeDefinition(ctx, info.ID, vdCreate)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		vDef, err = s.client.Client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ID, 0)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	// We don't support shrinking. This is mostly covered by the provisioner, but with backups there may be
-	// edge cases where the "no shrinking" rule cannot be enforced. So we only allow volume growth here.
-	if vDef.SizeKib < expectedSizeKiB {
-		err := s.client.Client.ResourceDefinitions.ModifyVolumeDefinition(ctx, info.ID, 0, lapi.VolumeDefinitionModify{
-			SizeKib: expectedSizeKiB,
-		})
-		if err != nil {
-			return nil, err
+		// We don't support shrinking. This is mostly covered by the provisioner, but with backups there may be
+		// edge cases where the "no shrinking" rule cannot be enforced. So we only allow volume growth here.
+		if vDef.SizeKib < expectedSizeKiB {
+			err := s.client.Client.ResourceDefinitions.ModifyVolumeDefinition(ctx, info.ID, vn, lapi.VolumeDefinitionModify{
+				SizeKib: expectedSizeKiB,
+			})
+			if err != nil {
+				return err
+			}
 		}
 	}
 
-	return &vDef, nil
+	return nil
 }
 
 func (s *Linstor) reconcileResourcePlacement(ctx context.Context, vol *volume.Info, params *volume.Parameters, topologies *csi.TopologyRequirement) error {
@@ -2298,7 +2319,7 @@ func (s *Linstor) ControllerExpand(ctx context.Context, vol *volume.Info) error 
 	}).Info("controller expand volume")
 
 	volumeDefinitionModify := lapi.VolumeDefinitionModify{
-		SizeKib: uint64(data.NewKibiByte(data.ByteSize(vol.SizeBytes)).Value()),
+		SizeKib: uint64(data.NewKibiByte(data.ByteSize(vol.DeviceSizes[0])).Value()),
 	}
 
 	volumeDefinitions, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, vol.ID)
@@ -2314,7 +2335,7 @@ func (s *Linstor) ControllerExpand(ctx context.Context, vol *volume.Info) error 
 		return fmt.Errorf("storage only support expand does not support reduce.volumeInfo: %v old: %d, new: %d", vol, volumeDefinitions[0].SizeKib, volumeDefinitionModify.SizeKib)
 	}
 
-	err = s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, vol.ID, int(*volumeDefinitions[0].VolumeNumber), volumeDefinitionModify)
+	err = s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, vol.ID, 0, volumeDefinitionModify)
 	if err != nil {
 		return err
 	}
