@@ -39,7 +39,6 @@ import (
 	"github.com/LINBIT/golinstor/clonestatus"
 	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/haySwim/data"
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/slices"
@@ -215,21 +214,24 @@ func (s *Linstor) ListAllWithStatus(ctx context.Context) ([]volume.VolumeStatus,
 	return vols, nil
 }
 
-// AllocationSizeKiB returns LINSTOR's smallest possible number of KiB that can
-// satisfy the requiredBytes.
-func (s *Linstor) AllocationSizeKiB(requiredBytes, limitBytes int64, fsType string) (int64, error) {
-	requestedSize := data.ByteSize(requiredBytes)
-	minVolumeSize := data.ByteSize(4096)
-	maxVolumeSize := data.ByteSize(limitBytes)
+const (
+	KiB int64 = 1 << 10
+	MiB int64 = 1 << 20
+)
+
+func (s *Linstor) AllocationSize(requiredBytes, limitBytes int64, fsType string) (int64, error) {
+	requestedSize := requiredBytes
+	minVolumeSize := int64(4096)
+	maxVolumeSize := limitBytes
 	unlimited := maxVolumeSize == 0
 
 	switch fsType {
 	case "ext4":
 		// mkfs.ext4 will not create a journal for smaller volumes, which makes them unsuitable for fail over.
-		minVolumeSize = 2 * data.MiB
+		minVolumeSize = 2 * MiB
 	case "xfs":
 		// mkfs.xfs refuses to create volumes smaller than 300MiB
-		minVolumeSize = 300 * data.MiB
+		minVolumeSize = 300 * MiB
 	}
 
 	if minVolumeSize > maxVolumeSize && !unlimited {
@@ -239,18 +241,18 @@ func (s *Linstor) AllocationSizeKiB(requiredBytes, limitBytes int64, fsType stri
 		requestedSize = minVolumeSize
 	}
 
-	// make sure there are enough KiBs to fit the required number of bytes,
-	// e.g. 1025 bytes require 2 KiB worth of space to be allocated.
-	volumeSize := data.NewKibiByte(data.NewKibiByte(requestedSize).InclusiveBytes())
-
-	limit := data.NewByte(maxVolumeSize)
-
-	if volumeSize.InclusiveBytes() > limit.InclusiveBytes() && !unlimited {
-		return int64(volumeSize.Value()),
-			fmt.Errorf("got request for %d bytes of storage, but needed to allocate %d more bytes than the %d byte limit",
-				requiredBytes, int64(volumeSize.To(data.B)-limit.To(data.B)), int64(limit.To(data.B)))
+	// LINSTOR works on KiB, so ensure our bytes are KiB aligned
+	volumeSizeKiB := requestedSize / KiB
+	if (requestedSize % KiB) != 0 {
+		volumeSizeKiB++
 	}
-	return int64(volumeSize.Value()), nil
+
+	if !unlimited && volumeSizeKiB*KiB > maxVolumeSize {
+		return 0, fmt.Errorf("got request for %d bytes of storage, but needed to allocate %d bytes, violating the %d byte limit",
+			requiredBytes, volumeSizeKiB*KiB, maxVolumeSize)
+	}
+
+	return volumeSizeKiB * KiB, nil
 }
 
 // resourceDefinitionToVolume reads the serialized volume info on the lapi.ResourceDefinitionWithVolumeDefinition
@@ -273,7 +275,7 @@ func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinitionWithV
 	deviceSizes := map[int]int64{}
 	for i := range resDef.VolumeDefinitions {
 		vd := &resDef.VolumeDefinitions[i]
-		deviceSizes[int(*vd.VolumeNumber)] = int64(vd.SizeKib << 10)
+		deviceSizes[int(*vd.VolumeNumber)] = int64(vd.SizeKib) * KiB
 	}
 
 	if _, ok := deviceSizes[0]; !ok {
@@ -855,7 +857,7 @@ func (s *Linstor) CapacityBytes(ctx context.Context, storagePools []string, over
 
 	requestedNodes = filteredNodes
 
-	var total int64
+	var totalKiB int64
 	for _, sp := range pools {
 		log := log.WithField("pool-to-check", sp.StoragePoolName).WithField("node", sp.NodeName)
 
@@ -893,14 +895,14 @@ func (s *Linstor) CapacityBytes(ctx context.Context, storagePools []string, over
 			}
 
 			log.WithField("add-capacity", int64(virtualCapacity)-reservedCapacity).Trace("adding storage pool capacity")
-			total += int64(virtualCapacity) - reservedCapacity
+			totalKiB += int64(virtualCapacity) - reservedCapacity
 		} else {
 			log.WithField("add-capacity", sp.FreeCapacity).Trace("adding storage pool capacity")
-			total += sp.FreeCapacity
+			totalKiB += sp.FreeCapacity
 		}
 	}
 
-	return int64(data.NewKibiByte(data.KiB * data.ByteSize(total)).To(data.B)), nil
+	return totalKiB * KiB, nil
 }
 
 func (s *Linstor) CompatibleSnapshotId(name string) string {
@@ -1615,7 +1617,7 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 	logger.Info("reconcile volume definition for volume")
 
 	for vn, size := range info.DeviceSizes {
-		expectedSizeKiB := uint64(data.NewKibiByte(data.ByteSize(size)).Value())
+		expectedSizeKiB := uint64(size / KiB)
 
 		logger.Debug("check if volume definition already exists")
 		vDef, err := s.client.Client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ID, vn)
@@ -1960,7 +1962,7 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*volume.Snapshot, error) {
 		}
 	}
 
-	snapSizeBytes := lsnap.VolumeDefinitions[0].SizeKib * uint64(data.KiB)
+	snapSizeBytes := int64(lsnap.VolumeDefinitions[0].SizeKib) * KiB
 	creationTimeMicroSecs := lsnap.Snapshots[0].CreateTimestamp
 
 	ready := slice.ContainsString(lsnap.Flags, lapiconsts.FlagSuccessful)
@@ -1979,7 +1981,7 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*volume.Snapshot, error) {
 		Snapshot: csi.Snapshot{
 			SnapshotId:     lsnap.Name,
 			SourceVolumeId: lsnap.ResourceName,
-			SizeBytes:      int64(snapSizeBytes),
+			SizeBytes:      snapSizeBytes,
 			CreationTime:   timestamppb.New(creationTimeMicroSecs.Time),
 			ReadyToUse:     ready,
 		},
@@ -2319,7 +2321,7 @@ func (s *Linstor) ControllerExpand(ctx context.Context, vol *volume.Info) error 
 	}).Info("controller expand volume")
 
 	volumeDefinitionModify := lapi.VolumeDefinitionModify{
-		SizeKib: uint64(data.NewKibiByte(data.ByteSize(vol.DeviceSizes[0])).Value()),
+		SizeKib: uint64(vol.DeviceSizes[0] / KiB),
 	}
 
 	volumeDefinitions, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, vol.ID)
