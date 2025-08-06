@@ -27,7 +27,7 @@ FROM debian:bookworm-slim
 ARG LINSTOR_WAIT_UNTIL
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      xfsprogs e2fsprogs \
+      xfsprogs e2fsprogs nfs-common \
       && apt-get clean && rm -rf /var/lib/apt/lists/* \
       && ln -sf /proc/mounts /etc/mtab
 

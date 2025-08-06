@@ -73,6 +73,10 @@ func (s *MockStorage) FindByID(ctx context.Context, id string) (*volume.Info, er
 	return nil, nil
 }
 
+func (s *MockStorage) AllocatedPort(ctx context.Context, ID string) (uint16, error) {
+	return 0, fmt.Errorf("not implemented")
+}
+
 func (s *MockStorage) CompatibleVolumeId(name, pvcNamespace, pvcName string) string {
 	return name
 }

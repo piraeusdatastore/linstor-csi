@@ -111,6 +111,8 @@ type Querier interface {
 	AllocationSize(requiredBytes, limitBytes int64, fsType string) (int64, error)
 	// CapacityBytes returns the amount of free space, in bytes, in the storage pool specified by the params and topology.
 	CapacityBytes(ctx context.Context, pools []string, overProvision *float64, segments map[string]string) (int64, error)
+	// AllocatedPort returns the Port allocated for the DRBD resource.
+	AllocatedPort(ctx context.Context, ID string) (uint16, error)
 }
 
 // Mounter handles the filesystems located on volumes.
