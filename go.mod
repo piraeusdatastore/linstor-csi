@@ -7,7 +7,6 @@ toolchain go1.24.2
 require (
 	github.com/LINBIT/golinstor v0.56.2
 	github.com/container-storage-interface/spec v1.11.0
-	github.com/haySwim/data v0.2.0
 	github.com/kubernetes-csi/csi-test/v5 v5.3.1
 	github.com/kubernetes-csi/external-snapshotter/v8 v8.3.0
 	github.com/pborman/uuid v1.2.1
