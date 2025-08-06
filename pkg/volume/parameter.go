@@ -14,6 +14,7 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
@@ -103,6 +104,12 @@ type Parameters struct {
 	// If set, free capacity is calculated by (TotalCapacity * OverProvision) - ReservedCapacity.
 	// If not set, the free capacity is taken directly from LINSTOR.
 	OverProvision *float64
+
+	NfsConfigTemplatePath string
+
+	NfsServiceName string
+
+	NfsServiceType corev1.ServiceType
 }
 
 const DefaultDisklessStoragePoolName = "DfltDisklessStorPool"
@@ -115,12 +122,15 @@ var DefaultRemoteAccessPolicy = RemoteAccessPolicyAnywhere
 func NewParameters(params map[string]string, topologyPrefix string) (Parameters, error) {
 	// set zero values
 	p := Parameters{
-		LayerList:           []devicelayerkind.DeviceLayerKind{devicelayerkind.Drbd, devicelayerkind.Storage},
-		PlacementCount:      1,
-		DisklessStoragePool: DefaultDisklessStoragePoolName,
-		Encryption:          false,
-		PlacementPolicy:     topology.AutoPlaceTopology,
-		Properties:          make(map[string]string),
+		LayerList:             []devicelayerkind.DeviceLayerKind{devicelayerkind.Drbd, devicelayerkind.Storage},
+		PlacementCount:        1,
+		DisklessStoragePool:   DefaultDisklessStoragePoolName,
+		Encryption:            false,
+		PlacementPolicy:       topology.AutoPlaceTopology,
+		Properties:            make(map[string]string),
+		NfsConfigTemplatePath: "/etc/linstor-csi-rwx-addon/default-config.tmpl",
+		NfsServiceName:        "linstor-csi-nfs",
+		NfsServiceType:        corev1.ServiceTypeClusterIP,
 	}
 
 	for k, v := range params {
