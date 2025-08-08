@@ -273,6 +273,7 @@ func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinitionWithV
 	}
 
 	deviceSizes := map[int]int64{}
+
 	for i := range resDef.VolumeDefinitions {
 		vd := &resDef.VolumeDefinitions[i]
 		deviceSizes[int(*vd.VolumeNumber)] = int64(vd.SizeKib) * KiB
@@ -1620,7 +1621,8 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 		expectedSizeKiB := uint64(size / KiB)
 
 		logger.Debug("check if volume definition already exists")
-		vDef, err := s.client.Client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ID, vn)
+
+		vDef, err := s.client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ID, vn)
 		if errors.Is(err, lapi.NotFoundError) {
 			vdCreate := lapi.VolumeDefinitionCreate{
 				VolumeDefinition: lapi.VolumeDefinition{
@@ -1634,7 +1636,7 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 				return err
 			}
 
-			vDef, err = s.client.Client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ID, vn)
+			vDef, err = s.client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ID, vn)
 		}
 
 		if err != nil {
@@ -1644,7 +1646,7 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 		// We don't support shrinking. This is mostly covered by the provisioner, but with backups there may be
 		// edge cases where the "no shrinking" rule cannot be enforced. So we only allow volume growth here.
 		if vDef.SizeKib < expectedSizeKiB {
-			err := s.client.Client.ResourceDefinitions.ModifyVolumeDefinition(ctx, info.ID, vn, lapi.VolumeDefinitionModify{
+			err := s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, info.ID, vn, lapi.VolumeDefinitionModify{
 				SizeKib: expectedSizeKiB,
 			})
 			if err != nil {
@@ -2105,7 +2107,7 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 	}
 
 	if (info.Mode() & os.ModeDevice) != os.ModeDevice {
-		return fmt.Errorf("path %s is not a device", source) //nolint:goerr113
+		return fmt.Errorf("path %s is not a device", source)
 	}
 
 	var mntFlags []string
