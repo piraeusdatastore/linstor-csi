@@ -1,0 +1,29 @@
+[Unit]
+Description=Clean stale Kubernetes Endpoint for NFS resource
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/bin/nfs-helper advertise clean %I
+PassEnvironment=POD_NAMESPACE KUBERNETES_SERVICE_HOST KUBERNETES_SERVICE_PORT
+
+RestrictNamespaces=yes
+LockPersonality=yes
+
+ProtectSystem=strict
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProtectHome=yes
+ProtectHostname=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+
+PrivateDevices=yes
+ProcSubset=pid
+
+SystemCallArchitectures=native
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
