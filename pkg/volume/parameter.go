@@ -128,7 +128,7 @@ func NewParameters(params map[string]string, topologyPrefix string) (Parameters,
 		Encryption:            false,
 		PlacementPolicy:       topology.AutoPlaceTopology,
 		Properties:            make(map[string]string),
-		NfsConfigTemplatePath: "/etc/linstor-csi-rwx-addon/default-config.tmpl",
+		NfsConfigTemplatePath: "/etc/nfs-helper/default-config.tmpl",
 		NfsServiceName:        "linstor-csi-nfs",
 		NfsServiceType:        corev1.ServiceTypeClusterIP,
 	}

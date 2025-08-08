@@ -1,0 +1,35 @@
+[Unit]
+Description=NFS-Ganesha file server - Instance %I
+Documentation=http://github.com/nfs-ganesha/nfs-ganesha/wiki
+Conflicts=nfs.target
+
+[Service]
+Type=forking
+RuntimeDirectory=ganesha/%I
+StateDirectory=nfs/ganesha/%I
+ExecStartPre=/usr/bin/nfs-helper generate-ganesha-config %I ${RUNTIME_DIRECTORY}/ganesha.conf
+ExecStart=/usr/bin/ganesha.nfsd -I %f -f ${RUNTIME_DIRECTORY}/ganesha.conf -N NIV_EVENT -p ${RUNTIME_DIRECTORY}/ganesha.pid
+
+RestrictNamespaces=yes
+LockPersonality=yes
+
+ProtectSystem=strict
+ReadWritePaths=/srv/exports
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProtectHome=yes
+ProtectHostname=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+
+PrivateTmp=yes
+PrivateDevices=yes
+
+SystemCallArchitectures=native
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+

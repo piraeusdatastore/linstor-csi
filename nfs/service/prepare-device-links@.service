@@ -1,0 +1,26 @@
+[Unit]
+Description=Prepare device links in the expected locations
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/bin/nfs-helper prepare-device-links %I
+PassEnvironment=HOST_DEV_PREFIX
+
+RestrictNamespaces=yes
+LockPersonality=yes
+
+ProtectSystem=strict
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProtectHome=yes
+ProtectHostname=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+
+SystemCallArchitectures=native
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
