@@ -39,6 +39,7 @@ func generateGaneshaConfig(ctx context.Context, args []string) error {
 		"Resource":   resource,
 		"ExportID":   config.ExportId,
 		"Port":       config.Port,
+		"Squash":     config.Squash,
 		"DbusPrefix": strings.ReplaceAll(resource, "-", "_"),
 	})
 	if err != nil {
