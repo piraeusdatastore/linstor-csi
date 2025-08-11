@@ -6,7 +6,7 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
@@ -21,6 +21,6 @@ jobs:
       # These hooks will run separately in github actions
       SKIP: golangci-lint
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
       - uses: pre-commit/action@v3.0.1
