@@ -1,7 +1,7 @@
 group "default" {
   targets = [
     "linstor-csi",
-    "nfs-helper",
+    "nfs-server",
   ]
 }
 
@@ -47,9 +47,9 @@ target "linstor-csi" {
   }
 }
 
-target "nfs-helper" {
+target "nfs-server" {
   inherits = ["docker-metadata-action"]
-  tags = tags("nfs-helper", target.docker-metadata-action.tags)
+  tags = tags("nfs-server", target.docker-metadata-action.tags)
   context    = "./"
   dockerfile = "nfs/Dockerfile"
   platforms = split(",", PLATFORMS)

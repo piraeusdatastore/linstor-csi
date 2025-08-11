@@ -26,6 +26,10 @@ func main() {
 		err = prepareDeviceLinks(ctx, os.Args[2:])
 	case "start-stop-reactor":
 		err = startStopReactor(ctx, os.Args[2:])
+	case "mount":
+		err = mount(ctx, os.Args[2:])
+	case "growfs":
+		err = growfs(ctx, os.Args[2:])
 	default:
 		_, _ = fmt.Fprintf(os.Stderr, "Unknown command '%s'\n", os.Args[1])
 		os.Exit(1)
