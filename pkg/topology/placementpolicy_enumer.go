@@ -4,11 +4,14 @@ package topology
 
 import (
 	"fmt"
+	"strings"
 )
 
 const _PlacementPolicyName = "UnknownManualAutoPlaceFollowTopologyBalancedAutoPlaceTopology"
 
 var _PlacementPolicyIndex = [...]uint8{0, 7, 13, 22, 36, 44, 61}
+
+const _PlacementPolicyLowerName = "unknownmanualautoplacefollowtopologybalancedautoplacetopology"
 
 func (i PlacementPolicy) String() string {
 	if i < 0 || i >= PlacementPolicy(len(_PlacementPolicyIndex)-1) {
@@ -17,15 +20,42 @@ func (i PlacementPolicy) String() string {
 	return _PlacementPolicyName[_PlacementPolicyIndex[i]:_PlacementPolicyIndex[i+1]]
 }
 
-var _PlacementPolicyValues = []PlacementPolicy{0, 1, 2, 3, 4, 5}
+// An "invalid array index" compiler error signifies that the constant values have changed.
+// Re-run the stringer command to generate them again.
+func _PlacementPolicyNoOp() {
+	var x [1]struct{}
+	_ = x[Unknown-(0)]
+	_ = x[Manual-(1)]
+	_ = x[AutoPlace-(2)]
+	_ = x[FollowTopology-(3)]
+	_ = x[Balanced-(4)]
+	_ = x[AutoPlaceTopology-(5)]
+}
+
+var _PlacementPolicyValues = []PlacementPolicy{Unknown, Manual, AutoPlace, FollowTopology, Balanced, AutoPlaceTopology}
 
 var _PlacementPolicyNameToValueMap = map[string]PlacementPolicy{
-	_PlacementPolicyName[0:7]:   0,
-	_PlacementPolicyName[7:13]:  1,
-	_PlacementPolicyName[13:22]: 2,
-	_PlacementPolicyName[22:36]: 3,
-	_PlacementPolicyName[36:44]: 4,
-	_PlacementPolicyName[44:61]: 5,
+	_PlacementPolicyName[0:7]:        Unknown,
+	_PlacementPolicyLowerName[0:7]:   Unknown,
+	_PlacementPolicyName[7:13]:       Manual,
+	_PlacementPolicyLowerName[7:13]:  Manual,
+	_PlacementPolicyName[13:22]:      AutoPlace,
+	_PlacementPolicyLowerName[13:22]: AutoPlace,
+	_PlacementPolicyName[22:36]:      FollowTopology,
+	_PlacementPolicyLowerName[22:36]: FollowTopology,
+	_PlacementPolicyName[36:44]:      Balanced,
+	_PlacementPolicyLowerName[36:44]: Balanced,
+	_PlacementPolicyName[44:61]:      AutoPlaceTopology,
+	_PlacementPolicyLowerName[44:61]: AutoPlaceTopology,
+}
+
+var _PlacementPolicyNames = []string{
+	_PlacementPolicyName[0:7],
+	_PlacementPolicyName[7:13],
+	_PlacementPolicyName[13:22],
+	_PlacementPolicyName[22:36],
+	_PlacementPolicyName[36:44],
+	_PlacementPolicyName[44:61],
 }
 
 // PlacementPolicyString retrieves an enum value from the enum constants string name.
@@ -34,12 +64,23 @@ func PlacementPolicyString(s string) (PlacementPolicy, error) {
 	if val, ok := _PlacementPolicyNameToValueMap[s]; ok {
 		return val, nil
 	}
+
+	if val, ok := _PlacementPolicyNameToValueMap[strings.ToLower(s)]; ok {
+		return val, nil
+	}
 	return 0, fmt.Errorf("%s does not belong to PlacementPolicy values", s)
 }
 
 // PlacementPolicyValues returns all values of the enum
 func PlacementPolicyValues() []PlacementPolicy {
 	return _PlacementPolicyValues
+}
+
+// PlacementPolicyStrings returns a slice of all String values of the enum
+func PlacementPolicyStrings() []string {
+	strs := make([]string, len(_PlacementPolicyNames))
+	copy(strs, _PlacementPolicyNames)
+	return strs
 }
 
 // IsAPlacementPolicy returns "true" if the value is listed in the enum definition. "false" otherwise
