@@ -35,6 +35,7 @@ type NfsMetadata struct {
 	ServiceName        string `toml:"service-name"`
 	Port               uint16 `toml:"port"`
 	ExportId           uint16 `toml:"export-id"`
+	Squash             string `toml:"squash"`
 	ConfigTemplatePath string `toml:"config-template-path"`
 }
 
@@ -70,6 +71,7 @@ func (n *NfsExporter) Export(ctx context.Context, info *volume.Info, minor uint1
 					ConfigTemplatePath: params.NfsConfigTemplatePath,
 					Port:               minor,
 					ExportId:           minor,
+					Squash:             params.NfsSquash,
 				},
 				Runner:             "systemd",
 				StopServicesOnExit: true,
@@ -81,6 +83,7 @@ func (n *NfsExporter) Export(ctx context.Context, info *volume.Info, minor uint1
 					fmt.Sprintf("ocf:heartbeat:Filesystem fs_%s_data device=/dev/drbd/by-res/%s/0 directory=/srv/exports/%s fstype=%s run_fsck=no", info.ID, info.ID, info.ID, info.FsType),
 					fmt.Sprintf("systemd-growfs@%s.service", unit.UnitNamePathEscape(fmt.Sprintf("/var/lib/nfs/ganesha/%s", info.ID))),
 					fmt.Sprintf("systemd-growfs@%s.service", unit.UnitNamePathEscape(fmt.Sprintf("/srv/exports/%s", info.ID))),
+					fmt.Sprintf("chmod@%s.service", unit.UnitNamePathEscape(fmt.Sprintf("/srv/exports/%s", info.ID))),
 					fmt.Sprintf("nfs-ganesha@%s.service", unit.UnitNameEscape(info.ID)),
 					fmt.Sprintf("advertise-nfs-endpoint@%s.service", unit.UnitNameEscape(info.ID)),
 				},

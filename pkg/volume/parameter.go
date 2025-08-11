@@ -46,6 +46,10 @@ const (
 	usepvcname
 	overprovision
 	xreplicasondifferent
+	nfsconfigtemplate
+	nfsservicename
+	nfsservicetype
+	nfssquash
 )
 
 // Parameters configuration for linstor volumes.
@@ -104,12 +108,15 @@ type Parameters struct {
 	// If set, free capacity is calculated by (TotalCapacity * OverProvision) - ReservedCapacity.
 	// If not set, the free capacity is taken directly from LINSTOR.
 	OverProvision *float64
-
+	// NfsConfigTemplatePath sets the template used by the ganesha-config-generator. A default template is provided.
 	NfsConfigTemplatePath string
-
+	// NfsServiceName is the name of the Kubernetes service the NFS export should be made available on. Defaults to
+	// "linstor-csi-nfs".
 	NfsServiceName string
-
+	// NfsServiceType is the Kubernetes service type used by the NFS export. Defaults to "ClusterIP".
 	NfsServiceType corev1.ServiceType
+	// NfsSquash determine the UID and GID squash policy of the export. Defaults to "no_root_squash".
+	NfsSquash string
 }
 
 const DefaultDisklessStoragePoolName = "DfltDisklessStorPool"
@@ -131,6 +138,7 @@ func NewParameters(params map[string]string, topologyPrefix string) (Parameters,
 		NfsConfigTemplatePath: "/etc/nfs-helper/default-config.tmpl",
 		NfsServiceName:        "linstor-csi-nfs",
 		NfsServiceType:        corev1.ServiceTypeClusterIP,
+		NfsSquash:             "no_root_squash",
 	}
 
 	for k, v := range params {
@@ -265,6 +273,24 @@ func NewParameters(params map[string]string, topologyPrefix string) (Parameters,
 			}
 
 			p.OverProvision = &f
+		case nfsconfigtemplate:
+			p.NfsConfigTemplatePath = v
+		case nfsservicename:
+			p.NfsServiceName = v
+		case nfsservicetype:
+			v := corev1.ServiceType(v)
+			validServiceTypes := []corev1.ServiceType{
+				corev1.ServiceTypeClusterIP,
+				corev1.ServiceTypeLoadBalancer,
+				corev1.ServiceTypeNodePort,
+				// corev1.ServiceTypeExternalName not supported
+			}
+			if !slices.Contains(validServiceTypes, v) {
+				return p, fmt.Errorf("invalid service type: %s", v)
+			}
+			p.NfsServiceType = v
+		case nfssquash:
+			p.NfsSquash = v
 		}
 	}
 

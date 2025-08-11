@@ -525,9 +525,22 @@ func (s *Linstor) Delete(ctx context.Context, volId string) error {
 		return nil404(err)
 	}
 
-	resources, err := s.client.Resources.GetAll(ctx, volId)
-	if err != nil {
-		return nil404(err)
+	var resources []lapi.Resource
+
+	for {
+		resources, err = s.client.Resources.GetAll(ctx, volId)
+		if err != nil {
+			return nil404(err)
+		}
+
+		// Wait until all resources are gone. This may take some time in the case of NFS controlled volumes
+		if !slices.ContainsFunc(resources, func(r lapi.Resource) bool {
+			return r.State != nil && r.State.InUse != nil && *r.State.InUse
+		}) {
+			break
+		}
+
+		time.Sleep(5 * time.Second)
 	}
 
 	// Need to ensure that diskless resources are always deleted first, otherwise the last diskfull resource won't be
