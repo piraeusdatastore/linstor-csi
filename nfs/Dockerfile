@@ -39,7 +39,7 @@ RUN --mount=type=cache,target=/var/cache,sharing=private \
     sed -e 's/usage-count yes;/usage-count no;/' -i /etc/drbd.d/global_common.conf
 
 COPY --from=builder --link /nfs-helper /usr/bin/nfs-helper
-COPY --link nfs/service/nfs-ganesha@.service nfs/service/systemd-growfs@.service nfs/service/prepare-device-links@.service nfs/service/advertise-nfs-endpoint@.service nfs/service/clean-nfs-endpoint@.service nfs/service/start-stop-reactor.service /usr/lib/systemd/system/
+COPY --link nfs/service/nfs-ganesha@.service nfs/service/systemd-growfs@.service nfs/service/chmod@.service nfs/service/prepare-device-links@.service nfs/service/advertise-nfs-endpoint@.service nfs/service/clean-nfs-endpoint@.service nfs/service/start-stop-reactor.service /usr/lib/systemd/system/
 COPY --link nfs/service/drbd@.service.override.conf /usr/lib/systemd/system/drbd@.service.d/container.conf
 COPY --link nfs/service/drbd-demote-or-escalate@.service.override.conf /usr/lib/systemd/system/drbd-demote-or-escalate@.service.d/container.conf
 COPY --link nfs/service/default-config.tmpl /etc/nfs-helper/default-config.tmpl

@@ -13,19 +13,9 @@ ExecStart=/usr/bin/ganesha.nfsd -I %f -f ${RUNTIME_DIRECTORY}/ganesha.conf -N NI
 RestrictNamespaces=yes
 LockPersonality=yes
 
-ProtectSystem=strict
-ReadWritePaths=/srv/exports
-ProtectKernelLogs=yes
-ProtectKernelModules=yes
-ProtectKernelTunables=yes
-ProtectProc=invisible
-ProtectHome=yes
-ProtectHostname=yes
-ProtectControlGroups=yes
-ProtectClock=yes
-
-PrivateTmp=yes
-PrivateDevices=yes
+# Using additional protections sadly makes systemd keep all currently mounted volumes
+# open through the use of overlay FS. This means that the shutdown of another ganesha
+# instance can fail in the demote stage, as this instance is keeping the mount open.
 
 SystemCallArchitectures=native
 MemoryDenyWriteExecute=yes

@@ -4,11 +4,14 @@ package volume
 
 import (
 	"fmt"
+	"strings"
 )
 
 const _SnapshotTypeName = "InClusterS3Linstor"
 
 var _SnapshotTypeIndex = [...]uint8{0, 9, 11, 18}
+
+const _SnapshotTypeLowerName = "inclusters3linstor"
 
 func (i SnapshotType) String() string {
 	if i < 0 || i >= SnapshotType(len(_SnapshotTypeIndex)-1) {
@@ -17,12 +20,30 @@ func (i SnapshotType) String() string {
 	return _SnapshotTypeName[_SnapshotTypeIndex[i]:_SnapshotTypeIndex[i+1]]
 }
 
-var _SnapshotTypeValues = []SnapshotType{0, 1, 2}
+// An "invalid array index" compiler error signifies that the constant values have changed.
+// Re-run the stringer command to generate them again.
+func _SnapshotTypeNoOp() {
+	var x [1]struct{}
+	_ = x[SnapshotTypeInCluster-(0)]
+	_ = x[SnapshotTypeS3-(1)]
+	_ = x[SnapshotTypeLinstor-(2)]
+}
+
+var _SnapshotTypeValues = []SnapshotType{SnapshotTypeInCluster, SnapshotTypeS3, SnapshotTypeLinstor}
 
 var _SnapshotTypeNameToValueMap = map[string]SnapshotType{
-	_SnapshotTypeName[0:9]:   0,
-	_SnapshotTypeName[9:11]:  1,
-	_SnapshotTypeName[11:18]: 2,
+	_SnapshotTypeName[0:9]:        SnapshotTypeInCluster,
+	_SnapshotTypeLowerName[0:9]:   SnapshotTypeInCluster,
+	_SnapshotTypeName[9:11]:       SnapshotTypeS3,
+	_SnapshotTypeLowerName[9:11]:  SnapshotTypeS3,
+	_SnapshotTypeName[11:18]:      SnapshotTypeLinstor,
+	_SnapshotTypeLowerName[11:18]: SnapshotTypeLinstor,
+}
+
+var _SnapshotTypeNames = []string{
+	_SnapshotTypeName[0:9],
+	_SnapshotTypeName[9:11],
+	_SnapshotTypeName[11:18],
 }
 
 // SnapshotTypeString retrieves an enum value from the enum constants string name.
@@ -31,12 +52,23 @@ func SnapshotTypeString(s string) (SnapshotType, error) {
 	if val, ok := _SnapshotTypeNameToValueMap[s]; ok {
 		return val, nil
 	}
+
+	if val, ok := _SnapshotTypeNameToValueMap[strings.ToLower(s)]; ok {
+		return val, nil
+	}
 	return 0, fmt.Errorf("%s does not belong to SnapshotType values", s)
 }
 
 // SnapshotTypeValues returns all values of the enum
 func SnapshotTypeValues() []SnapshotType {
 	return _SnapshotTypeValues
+}
+
+// SnapshotTypeStrings returns a slice of all String values of the enum
+func SnapshotTypeStrings() []string {
+	strs := make([]string, len(_SnapshotTypeNames))
+	copy(strs, _SnapshotTypeNames)
+	return strs
 }
 
 // IsASnapshotType returns "true" if the value is listed in the enum definition. "false" otherwise
