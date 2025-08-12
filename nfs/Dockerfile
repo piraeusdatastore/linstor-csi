@@ -35,7 +35,6 @@ RUN --mount=type=cache,target=/var/cache,sharing=private \
     --mount=type=tmpfs,target=/var/log \
     apt-get update && \
     apt-get install -y --no-install-recommends drbd-reactor nfs-ganesha nfs-ganesha-vfs systemd psmisc procps e2fsprogs xfsprogs && \
-    cp /usr/share/doc/drbd-reactor/examples/drbd-reactor-reload.path /usr/share/doc/drbd-reactor/examples/drbd-reactor-reload.service /etc/systemd/system/ && \
     sed -e 's/usage-count yes;/usage-count no;/' -i /etc/drbd.d/global_common.conf
 
 COPY --from=builder --link /nfs-helper /usr/bin/nfs-helper
@@ -43,6 +42,7 @@ COPY --link nfs/service/nfs-ganesha@.service nfs/service/growfs@.service nfs/ser
 COPY --link nfs/service/drbd@.service.override.conf /usr/lib/systemd/system/drbd@.service.d/container.conf
 COPY --link nfs/service/drbd-demote-or-escalate@.service.override.conf /usr/lib/systemd/system/drbd-demote-or-escalate@.service.d/container.conf
 COPY --link nfs/service/default-config.tmpl /etc/nfs-helper/default-config.tmpl
+COPY --link nfs/service/journald.conf /etc/systemd/journald.conf
 
 RUN \
     # Random stuff we don't need in the container.
