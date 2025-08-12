@@ -36,7 +36,6 @@ import (
 
 	lc "github.com/LINBIT/golinstor"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/haySwim/data"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -533,14 +532,12 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 		return nil, status.Errorf(codes.InvalidArgument, "CreateVolume failed for %s: %v", req.Name, err)
 	}
 
-	// Determine how much storage we need to actually allocate for a given number
-	// of bytes.
-	requiredKiB, err := d.Storage.AllocationSizeKiB(req.GetCapacityRange().GetRequiredBytes(), req.GetCapacityRange().GetLimitBytes(), fsType)
+	// Determine how much storage we need to actually allocate for a given number of bytes.
+	requiredBytes, err := d.Storage.AllocationSize(req.GetCapacityRange().GetRequiredBytes(), req.GetCapacityRange().GetLimitBytes(), fsType)
 	if err != nil {
 		return nil, status.Errorf(
 			codes.Internal, "CreateVolume failed for %s: %v", req.Name, err)
 	}
-	volumeSize := data.NewKibiByte(data.KiB * data.ByteSize(requiredKiB))
 
 	params, err := volume.NewParameters(req.GetParameters(), d.topologyPrefix)
 	if err != nil {
@@ -574,10 +571,10 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 	if existingVolume != nil && strings.HasPrefix(existingVolume.Properties[linstor.PropertyProvisioningCompletedBy], "linstor-csi") {
 		log.WithField("existingVolume", existingVolume).Info("volume already present")
 
-		if existingVolume.SizeBytes != int64(volumeSize.InclusiveBytes()) {
+		if existingVolume.DeviceSizes[0] != requiredBytes {
 			return nil, status.Errorf(codes.AlreadyExists,
 				"CreateVolume failed for %s: volume already present, but size differs (existing: %d, wanted: %d)",
-				volId, existingVolume.SizeBytes, int64(volumeSize.InclusiveBytes()))
+				volId, existingVolume.DeviceSizes[0], requiredBytes)
 		}
 
 		if existingVolume.ResourceGroup != params.ResourceGroup {
@@ -620,7 +617,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
 				VolumeId:           existingVolume.ID,
-				CapacityBytes:      existingVolume.SizeBytes,
+				CapacityBytes:      existingVolume.DeviceSizes[0],
 				ContentSource:      req.GetVolumeContentSource(),
 				AccessibleTopology: topos,
 				VolumeContext:      volCtx,
@@ -631,8 +628,10 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 	return d.createNewVolume(
 		ctx,
 		&volume.Info{
-			ID:            volId,
-			SizeBytes:     int64(volumeSize.InclusiveBytes()),
+			ID: volId,
+			DeviceSizes: map[int]int64{
+				0: requiredBytes,
+			},
 			ResourceGroup: params.ResourceGroup,
 			FsType:        fsType,
 			Properties:    map[string]string{linstor.PropertyProvisioningCompletedBy: "linstor-csi/" + Version},
@@ -810,7 +809,7 @@ func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*
 		entries[i] = &csi.ListVolumesResponse_Entry{
 			Volume: &csi.Volume{
 				VolumeId:      vol.ID,
-				CapacityBytes: vol.SizeBytes,
+				CapacityBytes: vol.DeviceSizes[0],
 				// NB: Topology is specifically excluded here. For topology we would need the volume context, which
 				// we don't have here. This might not be strictly to spec, but current consumers don't do anything with
 				// the information, so it should be fine.
@@ -1166,16 +1165,16 @@ func (d Driver) ControllerExpandVolume(ctx context.Context, req *csi.ControllerE
 		"existingVolume": fmt.Sprintf("%+v", existingVolume),
 	}).Debug("found existing volume")
 
-	requiredKiB, err := d.Storage.AllocationSizeKiB(req.CapacityRange.GetRequiredBytes(), req.CapacityRange.GetLimitBytes(), existingVolume.FsType)
+	requiredBytes, err := d.Storage.AllocationSize(req.CapacityRange.GetRequiredBytes(), req.CapacityRange.GetLimitBytes(), existingVolume.FsType)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "ControllerExpandVolume - expand volume failed for volume id %s: %v", req.GetVolumeId(), err)
 	}
-	volumeSize := data.NewKibiByte(data.KiB * data.ByteSize(requiredKiB))
-	existingVolume.SizeBytes = int64(volumeSize.InclusiveBytes())
+
+	existingVolume.DeviceSizes[0] = requiredBytes
 
 	d.log.WithFields(logrus.Fields{
 		"ControllerExpandVolume": fmt.Sprintf("%+v", req),
-		"Size":                   volumeSize,
+		"Size":                   requiredBytes,
 	}).Debug("controller expand volume")
 
 	err = d.Expander.ControllerExpand(ctx, existingVolume)
@@ -1187,7 +1186,7 @@ func (d Driver) ControllerExpandVolume(ctx context.Context, req *csi.ControllerE
 	isBlockMode := req.GetVolumeCapability().GetBlock() != nil
 
 	return &csi.ControllerExpandVolumeResponse{
-		CapacityBytes: existingVolume.SizeBytes, NodeExpansionRequired: !isBlockMode,
+		CapacityBytes: existingVolume.DeviceSizes[0], NodeExpansionRequired: !isBlockMode,
 	}, nil
 }
 
@@ -1210,7 +1209,7 @@ func (d Driver) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetV
 	return &csi.ControllerGetVolumeResponse{
 		Volume: &csi.Volume{
 			VolumeId:      vol.ID,
-			CapacityBytes: vol.SizeBytes,
+			CapacityBytes: vol.DeviceSizes[0],
 		},
 		Status: &csi.ControllerGetVolumeResponse_VolumeStatus{
 			PublishedNodeIds: nodes,
@@ -1306,7 +1305,7 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 	})
 
 	logger.WithFields(logrus.Fields{
-		"size": info.SizeBytes,
+		"size": info.DeviceSizes[0],
 	}).Debug("creating new volume")
 
 	// We're cloning from a volume or snapshot.
@@ -1397,7 +1396,7 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 		Volume: &csi.Volume{
 			VolumeId:           info.ID,
 			ContentSource:      req.GetVolumeContentSource(),
-			CapacityBytes:      info.SizeBytes,
+			CapacityBytes:      info.DeviceSizes[0],
 			AccessibleTopology: topos,
 			VolumeContext:      volCtx,
 		},

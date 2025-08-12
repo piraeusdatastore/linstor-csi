@@ -11,7 +11,7 @@ linters:
     - exhaustive
     - gocritic
     - whitespace
-    - wsl
+    - wsl_v5
   settings:
     exhaustive:
       default-signifies-exhaustive: true

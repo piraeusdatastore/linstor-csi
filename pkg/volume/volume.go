@@ -26,10 +26,12 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 )
 
-// Info provides the everything need to manipulate volumes.
+// Info provides everything needed to manipulate volumes.
 type Info struct {
-	ID            string
-	SizeBytes     int64
+	ID string
+	// The device sizes in bytes associated with this volume.
+	// A valid Info always has at least a 0th volume.
+	DeviceSizes   map[int]int64
 	ResourceGroup string
 	FsType        string
 	Properties    map[string]string
@@ -105,8 +107,8 @@ type Querier interface {
 	ListAllWithStatus(ctx context.Context) ([]VolumeStatus, error)
 	// FindByID returns nil when volume is not found.
 	FindByID(ctx context.Context, ID string) (*Info, error)
-	// AllocationSizeKiB returns the number of KiB required to provision required bytes.
-	AllocationSizeKiB(requiredBytes, limitBytes int64, fsType string) (int64, error)
+	// AllocationSize returns the allocation size in bytes required to provision required bytes, keeping within the limit.
+	AllocationSize(requiredBytes, limitBytes int64, fsType string) (int64, error)
 	// CapacityBytes returns the amount of free space, in bytes, in the storage pool specified by the params and topology.
 	CapacityBytes(ctx context.Context, pools []string, overProvision *float64, segments map[string]string) (int64, error)
 }
