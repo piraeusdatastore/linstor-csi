@@ -19,17 +19,18 @@ require (
 	google.golang.org/grpc v1.74.2
 	google.golang.org/protobuf v1.36.7
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.33.3
-	k8s.io/apimachinery v0.33.3
-	k8s.io/client-go v0.33.3
-	k8s.io/mount-utils v0.33.3
+	k8s.io/api v0.33.4
+	k8s.io/apimachinery v0.33.4
+	k8s.io/client-go v0.33.4
+	k8s.io/mount-utils v0.33.4
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 )
 
 require (
+	github.com/Masterminds/semver/v3 v3.3.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/donovanhide/eventsource v0.0.0-20210830082556-c59027999da0 // indirect
-	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
+	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-openapi/jsonpointer v0.21.2 // indirect
@@ -51,7 +52,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/onsi/ginkgo/v2 v2.23.4 // indirect
+	github.com/onsi/ginkgo/v2 v2.24.0 // indirect
 	github.com/onsi/gomega v1.38.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
