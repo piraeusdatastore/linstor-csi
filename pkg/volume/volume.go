@@ -31,7 +31,7 @@ type Info struct {
 	ID string
 	// The device sizes in bytes associated with this volume.
 	// A valid Info always has at least a 0th volume.
-	DeviceSizes   map[int]int64
+	DeviceBytes   map[int]int64
 	ResourceGroup string
 	FsType        string
 	Properties    map[string]string

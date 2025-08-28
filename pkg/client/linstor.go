@@ -272,21 +272,21 @@ func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinitionWithV
 		}
 	}
 
-	deviceSizes := map[int]int64{}
+	deviceBytes := map[int]int64{}
 
 	for i := range resDef.VolumeDefinitions {
 		vd := &resDef.VolumeDefinitions[i]
-		deviceSizes[int(*vd.VolumeNumber)] = int64(vd.SizeKib) * KiB
+		deviceBytes[int(*vd.VolumeNumber)] = int64(vd.SizeKib) * KiB
 	}
 
-	if _, ok := deviceSizes[0]; !ok {
+	if _, ok := deviceBytes[0]; !ok {
 		// Not a CSI enabled volume
 		return nil
 	}
 
 	return &volume.Info{
 		ID:            resDef.Name,
-		DeviceSizes:   deviceSizes,
+		DeviceBytes:   deviceBytes,
 		ResourceGroup: resDef.ResourceGroupName,
 		FsType:        fsType,
 		Properties:    props,
@@ -1617,7 +1617,7 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 	})
 	logger.Info("reconcile volume definition for volume")
 
-	for vn, size := range info.DeviceSizes {
+	for vn, size := range info.DeviceBytes {
 		expectedSizeKiB := uint64(size / KiB)
 
 		logger.Debug("check if volume definition already exists")
@@ -2323,7 +2323,7 @@ func (s *Linstor) ControllerExpand(ctx context.Context, vol *volume.Info) error 
 	}).Info("controller expand volume")
 
 	volumeDefinitionModify := lapi.VolumeDefinitionModify{
-		SizeKib: uint64(vol.DeviceSizes[0] / KiB),
+		SizeKib: uint64(vol.DeviceBytes[0] / KiB),
 	}
 
 	volumeDefinitions, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, vol.ID)

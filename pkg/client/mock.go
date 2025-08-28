@@ -122,7 +122,7 @@ func (s *MockStorage) SnapCreate(ctx context.Context, id, sourceVolId string, pa
 
 	for i := range s.createdVolumes {
 		if s.createdVolumes[i].ID == id {
-			size = s.createdVolumes[i].DeviceSizes[0]
+			size = s.createdVolumes[i].DeviceBytes[0]
 		}
 	}
 
