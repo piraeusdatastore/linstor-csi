@@ -2153,6 +2153,27 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 		return fmt.Errorf("unable to determine mount status of %s %v", target, err)
 	}
 
+	if block {
+		// Sanity check for block volumes: we want to prevent "mount" from succeeding if the device is not usable.
+		// For block volumes, we only do a bind mount, which in particular will not try to read or write to the device,
+		// So we have to implement this sanity check here.
+		var file *os.File
+		if readonly {
+			file, err = os.OpenFile(source, os.O_RDONLY, 0)
+		} else {
+			file, err = os.OpenFile(source, os.O_RDWR, 0)
+		}
+
+		if err != nil {
+			return fmt.Errorf("could not open block device %s: %w", source, err)
+		}
+
+		err := file.Close()
+		if err != nil {
+			return fmt.Errorf("could not close block device %s: %w", source, err)
+		}
+	}
+
 	if !isMounted {
 		err = s.mounter.MountSensitiveWithoutSystemdWithMountFlags(source, target, fsType, mntOpts, nil, mntFlags)
 		if err != nil {
