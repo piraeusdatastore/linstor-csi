@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enforce larger minimum volume size for filesystem volumes.
 - Skip LINSTOR-KV interaction for local and S3 snapshots.
 - Switch to using LINSTOR clones instead of temporary snapshots.
+- Ensure block volumes are usable on mount.
 
 ## [1.8.1] - 2025-06-24
 
