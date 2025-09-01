@@ -4,11 +4,14 @@ package volume
 
 import (
 	"fmt"
+	"strings"
 )
 
 const _paramKeyName = "allowremotevolumeaccessautoplaceclientlistdisklessonremainingdisklessstoragepooldonotplacewithregexencryptionfsoptslayerlistmountoptsnodelistplacementcountplacementpolicyreplicasondifferentreplicasonsamesizekibstoragepoolpostmountxfsoptsresourcegroupusepvcnameoverprovisionxreplicasondifferent"
 
 var _paramKeyIndex = [...]uint16{0, 23, 32, 42, 61, 80, 99, 109, 115, 124, 133, 141, 155, 170, 189, 203, 210, 221, 237, 250, 260, 273, 293}
+
+const _paramKeyLowerName = "allowremotevolumeaccessautoplaceclientlistdisklessonremainingdisklessstoragepooldonotplacewithregexencryptionfsoptslayerlistmountoptsnodelistplacementcountplacementpolicyreplicasondifferentreplicasonsamesizekibstoragepoolpostmountxfsoptsresourcegroupusepvcnameoverprovisionxreplicasondifferent"
 
 func (i paramKey) String() string {
 	if i < 0 || i >= paramKey(len(_paramKeyIndex)-1) {
@@ -17,31 +20,106 @@ func (i paramKey) String() string {
 	return _paramKeyName[_paramKeyIndex[i]:_paramKeyIndex[i+1]]
 }
 
-var _paramKeyValues = []paramKey{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21}
+// An "invalid array index" compiler error signifies that the constant values have changed.
+// Re-run the stringer command to generate them again.
+func _paramKeyNoOp() {
+	var x [1]struct{}
+	_ = x[allowremotevolumeaccess-(0)]
+	_ = x[autoplace-(1)]
+	_ = x[clientlist-(2)]
+	_ = x[disklessonremaining-(3)]
+	_ = x[disklessstoragepool-(4)]
+	_ = x[donotplacewithregex-(5)]
+	_ = x[encryption-(6)]
+	_ = x[fsopts-(7)]
+	_ = x[layerlist-(8)]
+	_ = x[mountopts-(9)]
+	_ = x[nodelist-(10)]
+	_ = x[placementcount-(11)]
+	_ = x[placementpolicy-(12)]
+	_ = x[replicasondifferent-(13)]
+	_ = x[replicasonsame-(14)]
+	_ = x[sizekib-(15)]
+	_ = x[storagepool-(16)]
+	_ = x[postmountxfsopts-(17)]
+	_ = x[resourcegroup-(18)]
+	_ = x[usepvcname-(19)]
+	_ = x[overprovision-(20)]
+	_ = x[xreplicasondifferent-(21)]
+}
+
+var _paramKeyValues = []paramKey{allowremotevolumeaccess, autoplace, clientlist, disklessonremaining, disklessstoragepool, donotplacewithregex, encryption, fsopts, layerlist, mountopts, nodelist, placementcount, placementpolicy, replicasondifferent, replicasonsame, sizekib, storagepool, postmountxfsopts, resourcegroup, usepvcname, overprovision, xreplicasondifferent}
 
 var _paramKeyNameToValueMap = map[string]paramKey{
-	_paramKeyName[0:23]:    0,
-	_paramKeyName[23:32]:   1,
-	_paramKeyName[32:42]:   2,
-	_paramKeyName[42:61]:   3,
-	_paramKeyName[61:80]:   4,
-	_paramKeyName[80:99]:   5,
-	_paramKeyName[99:109]:  6,
-	_paramKeyName[109:115]: 7,
-	_paramKeyName[115:124]: 8,
-	_paramKeyName[124:133]: 9,
-	_paramKeyName[133:141]: 10,
-	_paramKeyName[141:155]: 11,
-	_paramKeyName[155:170]: 12,
-	_paramKeyName[170:189]: 13,
-	_paramKeyName[189:203]: 14,
-	_paramKeyName[203:210]: 15,
-	_paramKeyName[210:221]: 16,
-	_paramKeyName[221:237]: 17,
-	_paramKeyName[237:250]: 18,
-	_paramKeyName[250:260]: 19,
-	_paramKeyName[260:273]: 20,
-	_paramKeyName[273:293]: 21,
+	_paramKeyName[0:23]:         allowremotevolumeaccess,
+	_paramKeyLowerName[0:23]:    allowremotevolumeaccess,
+	_paramKeyName[23:32]:        autoplace,
+	_paramKeyLowerName[23:32]:   autoplace,
+	_paramKeyName[32:42]:        clientlist,
+	_paramKeyLowerName[32:42]:   clientlist,
+	_paramKeyName[42:61]:        disklessonremaining,
+	_paramKeyLowerName[42:61]:   disklessonremaining,
+	_paramKeyName[61:80]:        disklessstoragepool,
+	_paramKeyLowerName[61:80]:   disklessstoragepool,
+	_paramKeyName[80:99]:        donotplacewithregex,
+	_paramKeyLowerName[80:99]:   donotplacewithregex,
+	_paramKeyName[99:109]:       encryption,
+	_paramKeyLowerName[99:109]:  encryption,
+	_paramKeyName[109:115]:      fsopts,
+	_paramKeyLowerName[109:115]: fsopts,
+	_paramKeyName[115:124]:      layerlist,
+	_paramKeyLowerName[115:124]: layerlist,
+	_paramKeyName[124:133]:      mountopts,
+	_paramKeyLowerName[124:133]: mountopts,
+	_paramKeyName[133:141]:      nodelist,
+	_paramKeyLowerName[133:141]: nodelist,
+	_paramKeyName[141:155]:      placementcount,
+	_paramKeyLowerName[141:155]: placementcount,
+	_paramKeyName[155:170]:      placementpolicy,
+	_paramKeyLowerName[155:170]: placementpolicy,
+	_paramKeyName[170:189]:      replicasondifferent,
+	_paramKeyLowerName[170:189]: replicasondifferent,
+	_paramKeyName[189:203]:      replicasonsame,
+	_paramKeyLowerName[189:203]: replicasonsame,
+	_paramKeyName[203:210]:      sizekib,
+	_paramKeyLowerName[203:210]: sizekib,
+	_paramKeyName[210:221]:      storagepool,
+	_paramKeyLowerName[210:221]: storagepool,
+	_paramKeyName[221:237]:      postmountxfsopts,
+	_paramKeyLowerName[221:237]: postmountxfsopts,
+	_paramKeyName[237:250]:      resourcegroup,
+	_paramKeyLowerName[237:250]: resourcegroup,
+	_paramKeyName[250:260]:      usepvcname,
+	_paramKeyLowerName[250:260]: usepvcname,
+	_paramKeyName[260:273]:      overprovision,
+	_paramKeyLowerName[260:273]: overprovision,
+	_paramKeyName[273:293]:      xreplicasondifferent,
+	_paramKeyLowerName[273:293]: xreplicasondifferent,
+}
+
+var _paramKeyNames = []string{
+	_paramKeyName[0:23],
+	_paramKeyName[23:32],
+	_paramKeyName[32:42],
+	_paramKeyName[42:61],
+	_paramKeyName[61:80],
+	_paramKeyName[80:99],
+	_paramKeyName[99:109],
+	_paramKeyName[109:115],
+	_paramKeyName[115:124],
+	_paramKeyName[124:133],
+	_paramKeyName[133:141],
+	_paramKeyName[141:155],
+	_paramKeyName[155:170],
+	_paramKeyName[170:189],
+	_paramKeyName[189:203],
+	_paramKeyName[203:210],
+	_paramKeyName[210:221],
+	_paramKeyName[221:237],
+	_paramKeyName[237:250],
+	_paramKeyName[250:260],
+	_paramKeyName[260:273],
+	_paramKeyName[273:293],
 }
 
 // paramKeyString retrieves an enum value from the enum constants string name.
@@ -50,12 +128,23 @@ func paramKeyString(s string) (paramKey, error) {
 	if val, ok := _paramKeyNameToValueMap[s]; ok {
 		return val, nil
 	}
+
+	if val, ok := _paramKeyNameToValueMap[strings.ToLower(s)]; ok {
+		return val, nil
+	}
 	return 0, fmt.Errorf("%s does not belong to paramKey values", s)
 }
 
 // paramKeyValues returns all values of the enum
 func paramKeyValues() []paramKey {
 	return _paramKeyValues
+}
+
+// paramKeyStrings returns a slice of all String values of the enum
+func paramKeyStrings() []string {
+	strs := make([]string, len(_paramKeyNames))
+	copy(strs, _paramKeyNames)
+	return strs
 }
 
 // IsAparamKey returns "true" if the value is listed in the enum definition. "false" otherwise
