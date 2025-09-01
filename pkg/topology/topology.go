@@ -20,7 +20,7 @@ package topology
 
 import "fmt"
 
-//go:generate go run github.com/alvaroloes/enumer@v1.1.2 -type=PlacementPolicy
+//go:generate go run github.com/dmarkham/enumer@v1.6.1 -type=PlacementPolicy
 
 // PlacementPolicy determines which scheduler will create volumes and report
 // their accessible topology.
