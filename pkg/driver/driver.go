@@ -44,10 +44,10 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
+	"github.com/piraeusdatastore/linstor-csi/pkg/utils"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
@@ -254,15 +254,14 @@ func LogLevel(s string) func(*Driver) error {
 
 func ConfigureKubernetesIfAvailable() func(*Driver) error {
 	return func(d *Driver) error {
-		cfg, err := rest.InClusterConfig()
+		_, dyn, err := utils.KubernetesClient()
 		if err != nil {
 			// Not running in kubernetes
 			return nil
 		}
 
-		d.kubeClient, err = dynamic.NewForConfig(cfg)
-
-		return err
+		d.kubeClient = dyn
+		return nil
 	}
 }
 

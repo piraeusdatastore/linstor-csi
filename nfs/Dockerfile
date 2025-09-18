@@ -38,6 +38,7 @@ RUN --mount=type=cache,target=/var/cache,sharing=private \
     sed -e 's/usage-count yes;/usage-count no;/' -i /etc/drbd.d/global_common.conf
 
 COPY --from=builder --link /nfs-helper /usr/bin/nfs-helper
+COPY --link nfs/service/start-stop-reactor.service /usr/lib/systemd/system/
 COPY --link nfs/service/journald.conf /etc/systemd/journald.conf
 
 RUN \
@@ -45,7 +46,9 @@ RUN \
     systemctl disable nfs-client.target nfs-ganesha.service logd.service apt-daily-upgrade.timer apt-daily.timer dpkg-db-backup.timer e2scrub_all.timer && \
     systemctl mask systemd-tmpfiles-setup.service systemd-tmpfiles-clean.timer systemd-binfmt.service && \
     # Disable drbd-reactor, it is started on demand whenever the node we are running on is schedulable in k8s
-    systemctl disable drbd-reactor.service
+    systemctl disable drbd-reactor.service && \
+    # This starts and stops the reactor, and also writes the necessary configuration files
+    systemctl enable start-stop-reactor.service
 
 STOPSIGNAL SIGRTMIN+3
 ENV container=oci SYSTEMD_GETTY_AUTO=no
