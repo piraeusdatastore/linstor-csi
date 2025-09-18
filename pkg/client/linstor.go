@@ -27,6 +27,7 @@ import (
 	"io"
 	"math"
 	"math/rand"
+	"net/url"
 	"os"
 	"os/exec"
 	"regexp"
@@ -489,9 +490,22 @@ func (s *Linstor) Delete(ctx context.Context, volId string) error {
 		return nil404(err)
 	}
 
-	resources, err := s.client.Resources.GetAll(ctx, volId)
-	if err != nil {
-		return nil404(err)
+	var resources []lapi.Resource
+
+	for {
+		resources, err = s.client.Resources.GetAll(ctx, volId)
+		if err != nil {
+			return nil404(err)
+		}
+
+		// Wait until all resources are gone. This may take some time in the case of NFS controlled volumes
+		if !slices.ContainsFunc(resources, func(r lapi.Resource) bool {
+			return r.State != nil && r.State.InUse != nil && *r.State.InUse
+		}) {
+			break
+		}
+
+		time.Sleep(5 * time.Second)
 	}
 
 	// Need to ensure that diskless resources are always deleted first, otherwise the last diskfull resource won't be
@@ -2088,33 +2102,36 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 		"blockAccessMode": block,
 	}).Info("mounting volume")
 
-	info, err := os.Stat(source)
-	if err != nil {
-		return fmt.Errorf("failed to stat source device: %w", err)
-	}
-
-	if (info.Mode() & os.ModeDevice) != os.ModeDevice {
-		return fmt.Errorf("path %s is not a device", source)
-	}
-
 	var mntFlags []string
-	if readonly {
-		// xfs will try to write even on passing the "ro" option without the "norecovery" option
-		mntOpts = append(mntOpts, "ro", "norecovery")
 
-		// This requires DRBD 9.0.26+, older versions ignore this flag
-		err := s.setDevReadOnly(ctx, source)
+	if fsType != "nfs" {
+		info, err := os.Stat(source)
 		if err != nil {
-			return fmt.Errorf("failed to set source device readonly: %w", err)
+			return fmt.Errorf("failed to stat source device: %w", err)
 		}
-	} else {
-		// Explicitly set -w option: otherwise mount may fall back to RO mount on promotion errors
-		mntFlags = append(mntFlags, "-w")
 
-		// We might be re-using an existing device that was set RO previously
-		err = s.setDevReadWrite(ctx, source)
-		if err != nil {
-			return fmt.Errorf("failed to set source device readwrite: %w", err)
+		if (info.Mode() & os.ModeDevice) != os.ModeDevice {
+			return fmt.Errorf("path %s is not a device", source)
+		}
+
+		if readonly {
+			// xfs will try to write even on passing the "ro" option without the "norecovery" option
+			mntOpts = append(mntOpts, "ro", "norecovery")
+
+			// This requires DRBD 9.0.26+, older versions ignore this flag
+			err := s.setDevReadOnly(ctx, source)
+			if err != nil {
+				return fmt.Errorf("failed to set source device readonly: %w", err)
+			}
+		} else {
+			// Explicitly set -w option: otherwise mount may fall back to RO mount on promotion errors
+			mntFlags = append(mntFlags, "-w")
+
+			// We might be re-using an existing device that was set RO previously
+			err := s.setDevReadWrite(ctx, source)
+			if err != nil {
+				return fmt.Errorf("failed to set source device readwrite: %w", err)
+			}
 		}
 	}
 
@@ -2162,6 +2179,16 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 	}
 
 	if !isMounted {
+		if fsType == "nfs" {
+			u, err := url.Parse(source)
+			if err != nil {
+				return fmt.Errorf("could not parse NFS url: %w", err)
+			}
+
+			source = fmt.Sprintf("%s:%s", u.Hostname(), u.Path)
+			mntOpts = append(mntOpts, fmt.Sprintf("port=%s,vers=4", u.Port()))
+		}
+
 		err = s.mounter.MountSensitiveWithoutSystemdWithMountFlags(source, target, fsType, mntOpts, nil, mntFlags)
 		if err != nil {
 			return err
@@ -2172,20 +2199,22 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 		return nil
 	}
 
-	needResize, err := s.resizer.NeedResize(source, target)
-	if err != nil {
-		return fmt.Errorf("unable to determine if resize required: %w", err)
-	}
-
-	if needResize {
-		_, err := s.resizer.Resize(source, target)
+	if fsType != "nfs" {
+		needResize, err := s.resizer.NeedResize(source, target)
 		if err != nil {
-			unmountErr := s.Unmount(target)
-			if unmountErr != nil {
-				return fmt.Errorf("unable to unmount volume after failed resize (%s): %w", unmountErr, err)
-			}
+			return fmt.Errorf("unable to determine if resize required: %w", err)
+		}
 
-			return fmt.Errorf("unable to resize volume: %w", err)
+		if needResize {
+			_, err := s.resizer.Resize(source, target)
+			if err != nil {
+				unmountErr := s.Unmount(target)
+				if unmountErr != nil {
+					return fmt.Errorf("unable to unmount volume after failed resize (%w): %w", unmountErr, err)
+				}
+
+				return fmt.Errorf("unable to resize volume: %w", err)
+			}
 		}
 	}
 

@@ -86,3 +86,53 @@ the existing workflow with the following additions:
   for NFS exports.
 * `NodePublish()` will use `mount -t nfs` to mount the volume, based on the configured URL from `CreateVolume()`
 * `NodePublish()` and `NodeExpand()` will not try to expand NFS volumes, as that needs to happen on the server side.
+
+## DRBD Reactor configuration
+
+Every NFS volume is controlled by a matching [DRBD Reactor](https://github.com/LINBIT/drbd-reactor) Promoter
+configuration. The configuration for the volume `pvc-12345` looks like this (systemd escaping not applied to template
+parameters for readability):
+
+```toml
+[[promoters]]
+[promoter.resources.vol1]
+runner = "systemd"
+target-as = "BindsTo"
+stop-services-on-exit = true
+start = [
+    "prepare-device-links@pvc-12345.service",
+    "clean-nfs-endpoint@pvc-12345.service",
+    "mount-recovery@pvc-12345.service",
+    "mount-export@pvc-12345.service",
+    "growfs@/srv/exports/pvc-12345.timer",
+    "chmod@/srv/exports/pvc-12345.service",
+    "nfs-ganesha@pvc-12345.service",
+    "advertise-nfs-endpoint@pvc-12345.service",
+]
+[promoter.resources.vol1.metadata]
+service-name = "linstor-csi-nfs"
+port = 2345
+export-id = 2345
+config-template-path = "/etc/nfs-helper/default-config.tmpl"
+squash = "no_root_squash"
+```
+
+The services have the following purpose:
+
+1. `prepare-device-links`: DRBD Reactor runs in a long-running container. The only devices it has access to by default
+  are those that were present when the container started. To work around this, we mount `/dev` from the host to
+  `/host/dev` and create symlinks `/dev/drbd/by-res/<res>/0 -> /host/dev/drbdXXXX`. This also means that this is the
+  only command that needs to "know" the drbd configuration.
+2. `clean-nfs-endpoint`: When the NFS server runs, we "advertise" our container as hosting the NFS server by creating
+  a Kubernetes EndpointSlice resource that links the Service IP and Port to the local container port. In case of fail
+  over, there might not have been a clean shutdown meaning there might be a stale EndpointSlice resource which we remove
+  in this step.
+3. `mount-recover`: Mounts `/dev/drbd/by-res/<res>/1` on `/var/lib/nfs/ganesha/<res>`. This volume contains the client
+  tracking information for NFS.
+4. `mount-export`: Mounts `/dev/drbd/by-res/<res>/0` on `/srv/exports/<res>`. This contains the actual data.
+5. `growfs`: Starts a timer that periodically runs `xfs_growfs` or `resize2fs` on the export in order to properly
+  deal with resized volumes.
+6. `chmod`: Changes the permissions for `/srv/exports/<res>` to 0777, enabling everyone to read and write.
+7. `nfs-ganesha`: Starts the NFS ganesha instance configured to export `/srv/exports/<res>`
+8. `advertise-nfs-endpoint`: Creates the Kubernetes EndpointSlice that connects the Service IP + Port to the NFS Server
+  started in step 7.
