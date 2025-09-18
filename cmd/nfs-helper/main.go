@@ -21,6 +21,8 @@ func run(ctx context.Context, args ...string) error {
 		return mount(ctx, args[1:])
 	case "prepare-device-links":
 		return prepareDeviceLinks(ctx, args[1:])
+	case "growfs":
+		return growfs(ctx, args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
