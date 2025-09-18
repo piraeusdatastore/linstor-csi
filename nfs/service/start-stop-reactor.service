@@ -1,0 +1,18 @@
+[Unit]
+Description=Ensures the expected NFS Units are managed by DRBD Reactor
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/nfs-helper start-stop-reactor
+PassEnvironment=NODE_NAME POD_NAMESPACE REACTOR_CONFIG_MAP KUBERNETES_SERVICE_HOST KUBERNETES_SERVICE_PORT
+
+RestrictNamespaces=yes
+LockPersonality=yes
+
+SystemCallArchitectures=native
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+[Install]
+WantedBy=default.target
