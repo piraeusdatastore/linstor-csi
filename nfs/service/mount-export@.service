@@ -1,0 +1,8 @@
+[Unit]
+Description=Mount DRBD device %I/0 on /srv/exports/%I
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/bin/nfs-helper mount /dev/drbd/by-res/%I/0 /srv/exports/%I
+ExecStop=/usr/bin/umount /srv/exports/%I
