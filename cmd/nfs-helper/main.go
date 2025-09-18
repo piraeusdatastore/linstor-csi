@@ -13,6 +13,8 @@ import (
 
 func run(ctx context.Context, args ...string) error {
 	switch args[0] {
+	case "start-stop-reactor":
+		return startStopReactor(ctx, args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}

@@ -13,6 +13,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394
+	golang.org/x/sync v0.17.0
 	golang.org/x/sys v0.36.0
 	golang.org/x/time v0.13.0
 	google.golang.org/grpc v1.75.1
