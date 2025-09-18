@@ -31,7 +31,6 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            quay.io/piraeusdatastore/piraeus-csi
           tags: |
             type=sha
             type=ref,event=tag
@@ -39,15 +38,8 @@ jobs:
       - name: Set VERSION
         run: echo "VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
       - name: Build
-        uses: docker/build-push-action@v6
+        uses: docker/bake-action@v6
         with:
-          builder: ${{ steps.buildx.outputs.name }}
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          no-cache: ${{ startsWith(github.ref, 'refs/tags/v') }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            VERSION=${{ github.ref_name }}-${{ github.sha }}
+          files: |
+            ./docker-bake.hcl
+            cwd://${{ steps.meta.outputs.bake-file }}
