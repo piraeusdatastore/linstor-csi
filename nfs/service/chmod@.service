@@ -1,0 +1,7 @@
+[Unit]
+Description=Make %f accessible to all users
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/chmod 0777 %f
