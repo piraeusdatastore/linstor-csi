@@ -1,11 +1,11 @@
-FROM --platform=$BUILDPLATFORM golang:1 as builder
-MAINTAINER Roland Kammerer <roland.kammerer@linbit.com>
+FROM --platform=$BUILDPLATFORM golang:1 AS builder
 
 WORKDIR /src
-COPY go.mod go.sum /src/
+COPY --link go.mod go.sum /src/
 RUN go mod download
 
-COPY . /src/
+COPY --link . /src/
+
 ARG TARGETARCH
 ARG TARGETOS
 ARG VERSION=unknown
@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build GOOS=$TARGETOS GOARCH=$TARGE
     -o /linstor-csi  \
     ./cmd/linstor-csi/linstor-csi.go
 
-FROM --platform=$BUILDPLATFORM golang:1 as downloader
+FROM --platform=$BUILDPLATFORM golang:1 AS downloader
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -27,7 +27,7 @@ FROM debian:trixie-slim
 ARG LINSTOR_WAIT_UNTIL
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      xfsprogs e2fsprogs \
+      xfsprogs e2fsprogs nfs-common \
       && apt-get clean && rm -rf /var/lib/apt/lists/* \
       && ln -sf /proc/mounts /etc/mtab
 

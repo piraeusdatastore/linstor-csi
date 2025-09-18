@@ -1,28 +1,27 @@
-PROJECT ?= piraeus-csi
 REGISTRY ?= quay.io/piraeusdatastore
 PLATFORMS ?= linux/amd64,linux/arm64
 VERSION ?= $(shell git describe --tags --match "v*.*" HEAD)
-TAG ?= $(VERSION)
+TAGS ?= $(VERSION),latest
 NOCACHE ?= false
+ARGS ?=
 
 help:
-	@echo "Useful targets: 'update', 'upload'"
+	@echo "Useful targets: 'print', 'update', 'upload'"
 
-all: update upload
+all: upload
+
+.PHONY: print
+print:
+	$(MAKE) bake ARGS="$(ARGS) --print"
 
 .PHONY: update
 update:
-	for r in $(REGISTRY); do \
-		docker buildx build $(_EXTRA_ARGS) \
-			--build-arg=VERSION=$(VERSION) \
-			--platform=$(PLATFORMS) \
-			--no-cache=$(NOCACHE) \
-			--pull=$(NOCACHE) \
-			--tag $$r/$(PROJECT):$(TAG) \
-			--tag $$r/$(PROJECT):latest \
-			. ;\
-	done
+	$(MAKE) bake ARGS="$(ARGS) --no-cache=$(NOCACHE) --pull=$(NOCACHE)"
 
 .PHONY: upload
 upload:
-	make update _EXTRA_ARGS=--push
+	$(MAKE) bake ARGS="$(ARGS) --no-cache=$(NOCACHE) --pull=$(NOCACHE) --push"
+
+.PHONY: bake
+bake:
+	REGISTRY=$(REGISTRY) PLATFORMS=$(PLATFORMS) TAGS=$(TAGS) VERSION=$(VERSION) docker buildx bake $(ARGS)
