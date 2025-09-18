@@ -64,6 +64,7 @@ type Driver struct {
 	Expander      volume.Expander
 	NodeInformer  volume.NodeInformer
 	kubeClient    dynamic.Interface
+	nfsExporter   *NfsExporter
 	cancel        context.CancelFunc
 	srv           *grpc.Server
 	log           *logrus.Entry
@@ -261,6 +262,25 @@ func ConfigureKubernetesIfAvailable() func(*Driver) error {
 		}
 
 		d.kubeClient = dyn
+
+		return nil
+	}
+}
+
+func ConfigureRWX(namespace, reactorConfigMap string) func(*Driver) error {
+	return func(d *Driver) error {
+		cl, _, err := utils.KubernetesClient()
+		if err != nil {
+			return fmt.Errorf("RWX support requires running in Kubernetes: %w", err)
+		}
+
+		d.nfsExporter = &NfsExporter{
+			cl:               cl,
+			namespace:        namespace,
+			reactorConfigMap: reactorConfigMap,
+			log:              d.log.WithField("component", "nfsExporter"),
+		}
+
 		return nil
 	}
 }
@@ -526,7 +546,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 		return nil, missingAttr("ValidateVolumeCapabilities", req.GetName(), "VolumeCapabilities")
 	}
 
-	fsType, err := validateCapabilities(req.GetVolumeCapabilities())
+	fsType, nfsExport, err := d.validateCapabilities(req.GetVolumeCapabilities())
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "CreateVolume failed for %s: %v", req.Name, err)
 	}
@@ -538,9 +558,23 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 			codes.Internal, "CreateVolume failed for %s: %v", req.Name, err)
 	}
 
+	volumeBytes := map[int]int64{
+		0: requiredBytes,
+	}
+
 	params, err := volume.NewParameters(req.GetParameters(), d.topologyPrefix)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to parse parameters: %v", err)
+	}
+
+	if nfsExport {
+		requiredBytes, err := d.Storage.AllocationSize(params.NfsRecoveryVolumeBytes, 0, fsType)
+		if err != nil {
+			return nil, status.Errorf(
+				codes.Internal, "CreateVolume failed for %s: %v", req.Name, err)
+		}
+
+		volumeBytes[1] = requiredBytes
 	}
 
 	pvcName := req.GetParameters()[ParameterCsiPvcName]
@@ -574,10 +608,12 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 	if existingVolume != nil && strings.HasPrefix(existingVolume.Properties[linstor.PropertyProvisioningCompletedBy], "linstor-csi") {
 		log.WithField("existingVolume", existingVolume).Info("volume already present")
 
-		if existingVolume.DeviceBytes[0] != requiredBytes {
-			return nil, status.Errorf(codes.AlreadyExists,
-				"CreateVolume failed for %s: volume already present, but size differs (existing: %d, wanted: %d)",
-				volId, existingVolume.DeviceBytes[0], requiredBytes)
+		for vnr, size := range volumeBytes {
+			if existingVolume.DeviceBytes[vnr] != size {
+				return nil, status.Errorf(codes.AlreadyExists,
+					"CreateVolume failed for %s: volume already present, but size differs on volume %d (existing: %d, wanted: %d)",
+					volId, vnr, existingVolume.DeviceBytes[vnr], size)
+			}
 		}
 
 		if existingVolume.ResourceGroup != params.ResourceGroup {
@@ -617,6 +653,15 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 			return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: unable to encode volume context: %v", volId, err)
 		}
 
+		if nfsExport {
+			export, err := d.nfsExporter.Export(ctx, existingVolume, &params)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: unable to export: %v", volId, err)
+			}
+
+			volCtx[NfsExport] = export.String()
+		}
+
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
 				VolumeId:           existingVolume.ID,
@@ -639,16 +684,15 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 	return d.createNewVolume(
 		ctx,
 		&volume.Info{
-			ID: volId,
-			DeviceBytes: map[int]int64{
-				0: requiredBytes,
-			},
+			ID:            volId,
+			DeviceBytes:   volumeBytes,
 			ResourceGroup: params.ResourceGroup,
 			FsType:        fsType,
 			Properties:    volumeProperties,
 		},
 		&params,
 		req,
+		nfsExport,
 	)
 }
 
@@ -658,7 +702,12 @@ func (d Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) 
 		return nil, missingAttr("DeleteVolume", req.GetVolumeId(), "VolumeId")
 	}
 
-	err := d.Storage.Delete(ctx, req.GetVolumeId())
+	err := d.nfsExporter.Unexport(ctx, req.GetVolumeId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to delete NFS export for %s: %v", req.GetVolumeId(), err)
+	}
+
+	err = d.Storage.Delete(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to delete volume: %v", err)
 	}
@@ -691,6 +740,15 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 	}
 
 	d.log.WithField("existingVolume", fmt.Sprintf("%+v", existingVolume)).Debug("found existing volume")
+
+	if export, ok := req.GetVolumeContext()[NfsExport]; ok {
+		return &csi.ControllerPublishVolumeResponse{
+			PublishContext: (&PublishContext{
+				DevicePath: export,
+				FsType:     "nfs",
+			}).ToMap(),
+		}, nil
+	}
 
 	// Don't even attempt to put it on nodes that aren't available.
 	if err := d.Assignments.NodeAvailable(ctx, req.GetNodeId()); err != nil {
@@ -759,7 +817,7 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 		"existingVolume": fmt.Sprintf("%+v", existingVolume),
 	}).Debug("found existing volume")
 
-	_, err = validateCapabilities(req.GetVolumeCapabilities())
+	_, _, err = d.validateCapabilities(req.GetVolumeCapabilities())
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "ValidateVolumeCapabilities failed to validate capabilities for %s: %v", req.GetVolumeId(), err)
 	}
@@ -1195,9 +1253,15 @@ func (d Driver) ControllerExpandVolume(ctx context.Context, req *csi.ControllerE
 	}
 
 	isBlockMode := req.GetVolumeCapability().GetBlock() != nil
+	isRwx := req.GetVolumeCapability().GetAccessMode().GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER ||
+		req.GetVolumeCapability().GetAccessMode().GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
 
 	return &csi.ControllerExpandVolumeResponse{
-		CapacityBytes: existingVolume.DeviceBytes[0], NodeExpansionRequired: !isBlockMode,
+		CapacityBytes: existingVolume.DeviceBytes[0],
+		// Skip node expansion for:
+		// * block volumes: normal LINSTOR resize is enough
+		// * NFS export, handled by the NFS exporter
+		NodeExpansionRequired: !isBlockMode && !isRwx,
 	}, nil
 }
 
@@ -1310,7 +1374,7 @@ func (d Driver) Stop() error {
 	return nil
 }
 
-func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *volume.Parameters, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
+func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *volume.Parameters, req *csi.CreateVolumeRequest, nfsExport bool) (*csi.CreateVolumeResponse, error) {
 	logger := d.log.WithFields(logrus.Fields{
 		"volume": info.ID,
 	})
@@ -1401,6 +1465,15 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 	volCtx, err := VolumeContextFromParameters(params).ToMap()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", info.ID, err)
+	}
+
+	if nfsExport {
+		export, err := d.nfsExporter.Export(ctx, info, params)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: unable to export: %v", info.ID, err)
+		}
+
+		volCtx[NfsExport] = export.String()
 	}
 
 	return &csi.CreateVolumeResponse{
@@ -1524,7 +1597,11 @@ func (d Driver) failpathDelete(ctx context.Context, volId string) {
 	}
 }
 
-func validateCapabilities(caps []*csi.VolumeCapability) (string, error) {
+// Validates the volume capabilities and returns:
+// * The fsType for the volume, or "" for block volumes
+// * If this volume should be exported via NFS or not
+// * validation errors
+func (d Driver) validateCapabilities(caps []*csi.VolumeCapability) (string, bool, error) {
 	var mountCaps, blockCaps []*csi.VolumeCapability
 
 	for _, capability := range caps {
@@ -1536,11 +1613,12 @@ func validateCapabilities(caps []*csi.VolumeCapability) (string, error) {
 	}
 
 	if len(mountCaps) > 0 && len(blockCaps) > 0 {
-		return "", fmt.Errorf("unsupported FileSystem and Block mode on the same volume")
+		return "", false, fmt.Errorf("unsupported FileSystem and Block mode on the same volume")
 	}
 
 	if len(mountCaps) > 0 {
 		fsType := ""
+		nfsExport := false
 
 		for _, c := range mountCaps {
 			fs := c.GetMount().GetFsType()
@@ -1554,7 +1632,7 @@ func validateCapabilities(caps []*csi.VolumeCapability) (string, error) {
 			}
 
 			if fsType != fs {
-				return "", fmt.Errorf("unsupported conflicting FS types: '%s' != '%s'", fsType, fs)
+				return "", false, fmt.Errorf("unsupported conflicting FS types: '%s' != '%s'", fsType, fs)
 			}
 
 			mode := c.GetAccessMode().GetMode()
@@ -1567,21 +1645,25 @@ func validateCapabilities(caps []*csi.VolumeCapability) (string, error) {
 				csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER:
 			// These are all fine
 			case csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER, csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER:
-				return "", fmt.Errorf("unsupported access mode '%s' for FileSystem volumes", mode.String())
+				if !d.nfsExporter.Enabled() {
+					return "", false, fmt.Errorf("unsupported access mode '%s' for FileSystem volumes, NFS export not enabled", mode.String())
+				}
+
+				nfsExport = true
 			default:
-				return "", fmt.Errorf("unsupported access mode: '%s'", mode.String())
+				return "", false, fmt.Errorf("unsupported access mode: '%s'", mode.String())
 			}
 		}
 
-		return fsType, nil
+		return fsType, nfsExport, nil
 	}
 
 	if len(blockCaps) > 0 {
 		// Nothing to check in this case, for block volumes we support all access modes
-		return "", nil
+		return "", false, nil
 	}
 
-	return "", fmt.Errorf("unsupported volume without any capabilities")
+	return "", false, fmt.Errorf("unsupported volume without any capabilities")
 }
 
 const (

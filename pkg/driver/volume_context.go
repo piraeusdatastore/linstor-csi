@@ -13,6 +13,7 @@ const (
 	MountOptions           = linstor.ParameterNamespace + "/mount-options"
 	PostMountXfsOpts       = linstor.ParameterNamespace + "/post-mount-xfs-opts"
 	RemoteAccessPolicyOpts = linstor.ParameterNamespace + "/remote-access-policy"
+	NfsExport              = linstor.ParameterNamespace + "/nfs-export"
 )
 
 // VolumeContext stores the context parameters required to mount a volume.
