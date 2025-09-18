@@ -1,0 +1,8 @@
+[Unit]
+Description=Mount DRBD device %I/0 on /var/lib/nfs/ganesha/%I
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/bin/nfs-helper mount /dev/drbd/by-res/%I/1 /var/lib/nfs/ganesha/%I
+ExecStop=/usr/bin/umount /var/lib/nfs/ganesha/%I
