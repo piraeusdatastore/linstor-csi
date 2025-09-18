@@ -39,6 +39,8 @@ RUN --mount=type=cache,target=/var/cache,sharing=private \
 
 COPY --from=builder --link /nfs-helper /usr/bin/nfs-helper
 COPY --link nfs/service/nfs-ganesha@.service nfs/service/growfs@.service nfs/service/growfs@.timer nfs/service/mount-export@.service nfs/service/mount-recovery@.service nfs/service/chmod@.service nfs/service/prepare-device-links@.service nfs/service/advertise-nfs-endpoint@.service nfs/service/clean-nfs-endpoint@.service nfs/service/start-stop-reactor.service /usr/lib/systemd/system/
+COPY --link nfs/service/drbd@.service.override.conf /usr/lib/systemd/system/drbd@.service.d/container.conf
+COPY --link nfs/service/drbd-demote-or-escalate@.service.override.conf /usr/lib/systemd/system/drbd-demote-or-escalate@.service.d/container.conf
 COPY --link nfs/service/default-config.tmpl /etc/nfs-helper/default-config.tmpl
 COPY --link nfs/service/journald.conf /etc/systemd/journald.conf
 
