@@ -1,0 +1,32 @@
+[Unit]
+Description=Advertise Kubernetes Endpoint for NFS resource
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/bin/nfs-helper advertise start %I ${STATE_DIRECTORY}/slice.json
+ExecStop=/usr/bin/nfs-helper advertise stop ${STATE_DIRECTORY}/slice.json
+PassEnvironment=POD_NAME POD_NAMESPACE POD_IP POD_UID KUBERNETES_SERVICE_HOST KUBERNETES_SERVICE_PORT
+
+StateDirectory=advertise-nfs-endpoint/%I
+
+RestrictNamespaces=yes
+LockPersonality=yes
+
+ProtectSystem=strict
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProtectHome=yes
+ProtectHostname=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+
+PrivateDevices=yes
+ProcSubset=pid
+
+SystemCallArchitectures=native
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
