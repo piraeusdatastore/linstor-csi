@@ -1,0 +1,23 @@
+[Unit]
+Description=NFS-Ganesha file server - Instance %I
+Documentation=http://github.com/nfs-ganesha/nfs-ganesha/wiki
+Conflicts=nfs.target
+
+[Service]
+Type=forking
+RuntimeDirectory=ganesha/%I
+StateDirectory=nfs/ganesha/%I
+ExecStartPre=/usr/bin/nfs-helper generate-ganesha-config %I ${RUNTIME_DIRECTORY}/ganesha.conf
+ExecStart=/usr/bin/ganesha.nfsd -I %f -f ${RUNTIME_DIRECTORY}/ganesha.conf -N NIV_EVENT -p ${RUNTIME_DIRECTORY}/ganesha.pid
+
+RestrictNamespaces=yes
+LockPersonality=yes
+
+# Using additional protections sadly makes systemd keep all currently mounted volumes
+# open through the use of overlay FS. This means that the shutdown of another ganesha
+# instance can fail in the demote stage, as this instance is keeping the mount open.
+
+SystemCallArchitectures=native
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
