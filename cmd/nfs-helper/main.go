@@ -17,6 +17,10 @@ func run(ctx context.Context, args ...string) error {
 		return startStopReactor(ctx, args[1:])
 	case "generate-ganesha-config":
 		return generateGaneshaConfig(ctx, args[1:])
+	case "mount":
+		return mount(ctx, args[1:])
+	case "prepare-device-links":
+		return prepareDeviceLinks(ctx, args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
