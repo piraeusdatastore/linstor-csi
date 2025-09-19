@@ -45,6 +45,9 @@ const (
 	usepvcname
 	overprovision
 	xreplicasondifferent
+	nfsconfigtemplate
+	nfsservicename
+	nfssquash
 )
 
 // Parameters configuration for linstor volumes.
@@ -103,6 +106,13 @@ type Parameters struct {
 	// If set, free capacity is calculated by (TotalCapacity * OverProvision) - ReservedCapacity.
 	// If not set, the free capacity is taken directly from LINSTOR.
 	OverProvision *float64
+	// NfsConfigTemplatePath sets the template used by the ganesha-config-generator. A default template is provided.
+	NfsConfigTemplatePath string
+	// NfsServiceName is the name of the Kubernetes service the NFS export should be made available on. Defaults to
+	// "linstor-csi-nfs".
+	NfsServiceName string
+	// NfsSquash determine the UID and GID squash policy of the export. Defaults to "no_root_squash".
+	NfsSquash string
 }
 
 const DefaultDisklessStoragePoolName = "DfltDisklessStorPool"
@@ -115,12 +125,15 @@ var DefaultRemoteAccessPolicy = RemoteAccessPolicyAnywhere
 func NewParameters(params map[string]string, topologyPrefix string) (Parameters, error) {
 	// set zero values
 	p := Parameters{
-		LayerList:           []devicelayerkind.DeviceLayerKind{devicelayerkind.Drbd, devicelayerkind.Storage},
-		PlacementCount:      1,
-		DisklessStoragePool: DefaultDisklessStoragePoolName,
-		Encryption:          false,
-		PlacementPolicy:     topology.AutoPlaceTopology,
-		Properties:          make(map[string]string),
+		LayerList:             []devicelayerkind.DeviceLayerKind{devicelayerkind.Drbd, devicelayerkind.Storage},
+		PlacementCount:        1,
+		DisklessStoragePool:   DefaultDisklessStoragePoolName,
+		Encryption:            false,
+		PlacementPolicy:       topology.AutoPlaceTopology,
+		Properties:            make(map[string]string),
+		NfsConfigTemplatePath: "/etc/nfs-helper/default-config.tmpl",
+		NfsServiceName:        "linstor-csi-nfs",
+		NfsSquash:             "no_root_squash",
 	}
 
 	for k, v := range params {
@@ -255,6 +268,12 @@ func NewParameters(params map[string]string, topologyPrefix string) (Parameters,
 			}
 
 			p.OverProvision = &f
+		case nfsconfigtemplate:
+			p.NfsConfigTemplatePath = v
+		case nfsservicename:
+			p.NfsServiceName = v
+		case nfssquash:
+			p.NfsSquash = v
 		}
 	}
 

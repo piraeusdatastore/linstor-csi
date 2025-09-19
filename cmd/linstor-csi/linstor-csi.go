@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	linstor "github.com/LINBIT/golinstor"
@@ -53,6 +54,9 @@ func main() {
 		nodeCacheTimeout      = flag.Duration("node-cache-timeout", 1*time.Minute, "Duration for which the results of node and storage pool related API responses should be cached.")
 		resourceCacheTimeout  = flag.Duration("resource-cache-timeout", 30*time.Second, "Duration for which the results of resource related API responses should be cached.")
 		resyncAfter           = flag.Duration("resync-after", 5*time.Minute, "Duration after which reconciliations (such as for VolumeSnapshotClasses) should be rerun. Set to 0 to disable.")
+		enableRWX             = flag.Bool("enable-rwx", false, "Enable RWX support via NFS (requires running in Kubernetes).")
+		namespace             = flag.String("nfs-service-namespace", "", "The namespace the NFS service is running in.")
+		reactorConfigMapName  = flag.String("nfs-reactor-config-map-name", "linstor-csi-nfs-reactor-config", "Name of the config map used to store promoter configuration")
 	)
 
 	flag.Var(&volume.DefaultRemoteAccessPolicy, "default-remote-access-policy", "")
@@ -135,7 +139,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	drv, err := driver.NewDriver(
+	opts := []func(*driver.Driver) error{
 		driver.Assignments(linstorClient),
 		driver.Endpoint(*csiEndpoint),
 		driver.LogLevel(*logLevel),
@@ -150,7 +154,22 @@ func main() {
 		driver.TopologyPrefix(*propNs),
 		driver.ConfigureKubernetesIfAvailable(),
 		driver.ResyncAfter(*resyncAfter),
-	)
+	}
+
+	if *enableRWX {
+		if *namespace == "" {
+			content, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+			if err != nil {
+				log.Fatalf("RWX enabled but no valid service namespace could be found: %s", err)
+			}
+
+			*namespace = strings.TrimSpace(string(content))
+		}
+
+		opts = append(opts, driver.ConfigureRWX(*namespace, *reactorConfigMapName))
+	}
+
+	drv, err := driver.NewDriver(opts...)
 	if err != nil {
 		log.Fatal(err)
 	}

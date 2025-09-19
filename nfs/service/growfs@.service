@@ -1,0 +1,6 @@
+[Unit]
+Description=Grow File System on %f
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/nfs-helper growfs %f
