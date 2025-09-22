@@ -6,11 +6,10 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	lapi "github.com/LINBIT/golinstor/client"
-	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
 	hlc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
@@ -19,29 +18,25 @@ import (
 
 var (
 	snapshotA = &volume.Snapshot{
-		Snapshot: csi.Snapshot{
-			SnapshotId:     "snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956",
-			SourceVolumeId: "pvc-5113e62a-2874-421c-979a-ef08e1543581",
-			CreationTime: &timestamppb.Timestamp{
-				Seconds: 1607588002,
-				Nanos:   126000000,
-			},
-			SizeBytes:  838860800,
-			ReadyToUse: true,
+		SnapshotId: volume.SnapshotId{
+			Type:         volume.SnapshotTypeInCluster,
+			SourceName:   "pvc-5113e62a-2874-421c-979a-ef08e1543581",
+			SnapshotName: "snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956",
 		},
+		CreationTime: time.Unix(1607588002, 126000000),
+		SizeBytes:    838860800,
+		ReadyToUse:   true,
 	}
 
 	snapshotB = &volume.Snapshot{
-		Snapshot: csi.Snapshot{
-			SnapshotId:     "snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831",
-			SourceVolumeId: "pvc-9f0cceb1-6ef7-425e-9f29-15c482b3ac65",
-			CreationTime: &timestamppb.Timestamp{
-				Seconds: 1607588001,
-				Nanos:   392000000,
-			},
-			SizeBytes:  524288000,
-			ReadyToUse: true,
+		SnapshotId: volume.SnapshotId{
+			Type:         volume.SnapshotTypeInCluster,
+			SourceName:   "pvc-9f0cceb1-6ef7-425e-9f29-15c482b3ac65",
+			SnapshotName: "snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831",
 		},
+		CreationTime: time.Unix(1607588001, 392000000),
+		SizeBytes:    524288000,
+		ReadyToUse:   true,
 	}
 
 	fakeControllerResponses = []fakeControllerCfg{
@@ -50,8 +45,8 @@ var (
 			Response: "[{\"name\":\"snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956\",\"resource_name\":\"pvc-5113e62a-2874-421c-979a-ef08e1543581\",\"nodes\":[\"demo1.linstor-days.at.linbit.com\",\"demo2.linstor-days.at.linbit.com\",\"demo3.linstor-days.at.linbit.com\"],\"props\":{\"Aux/csi-volume-annotations\":\"{\\\"name\\\":\\\"pvc-5113e62a-2874-421c-979a-ef08e1543581\\\",\\\"id\\\":\\\"pvc-5113e62a-2874-421c-979a-ef08e1543581\\\",\\\"createdBy\\\":\\\"linstor.csi.linbit.com\\\",\\\"creationTime\\\":\\\"2020-12-10T08:07:44.79360651Z\\\",\\\"sizeBytes\\\":838860800,\\\"readonly\\\":false,\\\"parameters\\\":{\\\"autoPlace\\\":\\\"3\\\",\\\"resourceGroup\\\":\\\"linstor-3-replicas\\\",\\\"storagePool\\\":\\\"vdb\\\"},\\\"snapshots\\\":[]}\",\"DrbdOptions/Resource/on-no-quorum\":\"io-error\",\"DrbdOptions/Resource/quorum\":\"majority\",\"DrbdPrimarySetOn\":\"DEMO3.LINSTOR-DAYS.AT.LINBIT.COM\",\"SequenceNumber\":\"1\"},\"flags\":[\"SUCCESSFUL\"],\"volume_definitions\":[{\"volume_number\":0,\"size_kib\":819200}],\"uuid\":\"0b733015-6d70-4b04-878e-08faa1992bc3\",\"snapshots\":[{\"snapshot_name\":\"snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956\",\"node_name\":\"demo1.linstor-days.at.linbit.com\",\"create_timestamp\":1607588002126,\"uuid\":\"8f19860f-d7f8-4082-a145-d28e2cd556cc\"},{\"snapshot_name\":\"snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956\",\"node_name\":\"demo2.linstor-days.at.linbit.com\",\"create_timestamp\":1607588002126,\"uuid\":\"2eee497e-b368-4957-b559-0de8baea0f36\"},{\"snapshot_name\":\"snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956\",\"node_name\":\"demo3.linstor-days.at.linbit.com\",\"create_timestamp\":1607588002126,\"uuid\":\"e2fe91c2-3ead-4d7f-b464-cd2595465417\"}]},{\"name\":\"snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831\",\"resource_name\":\"pvc-9f0cceb1-6ef7-425e-9f29-15c482b3ac65\",\"nodes\":[\"demo1.linstor-days.at.linbit.com\",\"demo2.linstor-days.at.linbit.com\",\"demo3.linstor-days.at.linbit.com\"],\"props\":{\"Aux/csi-volume-annotations\":\"{\\\"name\\\":\\\"pvc-9f0cceb1-6ef7-425e-9f29-15c482b3ac65\\\",\\\"id\\\":\\\"pvc-9f0cceb1-6ef7-425e-9f29-15c482b3ac65\\\",\\\"createdBy\\\":\\\"linstor.csi.linbit.com\\\",\\\"creationTime\\\":\\\"2020-12-10T08:06:07.850996937Z\\\",\\\"sizeBytes\\\":524288000,\\\"readonly\\\":false,\\\"parameters\\\":{\\\"autoPlace\\\":\\\"3\\\",\\\"resourceGroup\\\":\\\"linstor-3-replicas\\\",\\\"storagePool\\\":\\\"vdb\\\"},\\\"snapshots\\\":[]}\",\"DrbdOptions/Resource/on-no-quorum\":\"io-error\",\"DrbdOptions/Resource/quorum\":\"majority\",\"DrbdPrimarySetOn\":\"DEMO3.LINSTOR-DAYS.AT.LINBIT.COM\",\"SequenceNumber\":\"1\"},\"flags\":[\"SUCCESSFUL\"],\"volume_definitions\":[{\"volume_number\":0,\"size_kib\":512000}],\"uuid\":\"3a9be40d-441d-414a-8958-f6f0cb68289d\",\"snapshots\":[{\"snapshot_name\":\"snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831\",\"node_name\":\"demo1.linstor-days.at.linbit.com\",\"create_timestamp\":1607588001392,\"uuid\":\"8c87e9be-18a1-41f3-8790-8e36a85f7950\"},{\"snapshot_name\":\"snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831\",\"node_name\":\"demo2.linstor-days.at.linbit.com\",\"create_timestamp\":1607588001393,\"uuid\":\"b8f309fe-5b27-42b5-9c9c-e50cf025dd9e\"},{\"snapshot_name\":\"snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831\",\"node_name\":\"demo3.linstor-days.at.linbit.com\",\"create_timestamp\":1607588001393,\"uuid\":\"8c6fea5f-7350-46b8-882e-179bd48b724e\"}]}]",
 		},
 		{
-			Path:     "/v1/remotes/s3",
-			Response: "[]",
+			Path:     "/v1/remotes",
+			Response: "{}",
 		},
 		{
 			Path:     "/v1/resource-definitions",
@@ -66,8 +61,16 @@ var (
 			Response: "[{\"name\":\"snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831\",\"resource_name\":\"pvc-9f0cceb1-6ef7-425e-9f29-15c482b3ac65\",\"nodes\":[\"demo1.linstor-days.at.linbit.com\",\"demo2.linstor-days.at.linbit.com\",\"demo3.linstor-days.at.linbit.com\"],\"props\":{\"Aux/csi-volume-annotations\":\"{\\\"name\\\":\\\"pvc-9f0cceb1-6ef7-425e-9f29-15c482b3ac65\\\",\\\"id\\\":\\\"pvc-9f0cceb1-6ef7-425e-9f29-15c482b3ac65\\\",\\\"createdBy\\\":\\\"linstor.csi.linbit.com\\\",\\\"creationTime\\\":\\\"2020-12-10T08:06:07.850996937Z\\\",\\\"sizeBytes\\\":524288000,\\\"readonly\\\":false,\\\"parameters\\\":{\\\"autoPlace\\\":\\\"3\\\",\\\"resourceGroup\\\":\\\"linstor-3-replicas\\\",\\\"storagePool\\\":\\\"vdb\\\"},\\\"snapshots\\\":[]}\",\"DrbdOptions/Resource/on-no-quorum\":\"io-error\",\"DrbdOptions/Resource/quorum\":\"majority\",\"DrbdPrimarySetOn\":\"DEMO3.LINSTOR-DAYS.AT.LINBIT.COM\",\"SequenceNumber\":\"1\"},\"flags\":[\"SUCCESSFUL\"],\"volume_definitions\":[{\"volume_number\":0,\"size_kib\":512000}],\"uuid\":\"3a9be40d-441d-414a-8958-f6f0cb68289d\",\"snapshots\":[{\"snapshot_name\":\"snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831\",\"node_name\":\"demo1.linstor-days.at.linbit.com\",\"create_timestamp\":1607588001392,\"uuid\":\"8c87e9be-18a1-41f3-8790-8e36a85f7950\"},{\"snapshot_name\":\"snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831\",\"node_name\":\"demo2.linstor-days.at.linbit.com\",\"create_timestamp\":1607588001393,\"uuid\":\"b8f309fe-5b27-42b5-9c9c-e50cf025dd9e\"},{\"snapshot_name\":\"snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831\",\"node_name\":\"demo3.linstor-days.at.linbit.com\",\"create_timestamp\":1607588001393,\"uuid\":\"8c6fea5f-7350-46b8-882e-179bd48b724e\"}]}]",
 		},
 		{
+			Path:     "/v1/resource-definitions/pvc-9f0cceb1-6ef7-425e-9f29-15c482b3ac65/snapshots/snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831",
+			Response: "{\"name\":\"snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831\",\"resource_name\":\"pvc-9f0cceb1-6ef7-425e-9f29-15c482b3ac65\",\"nodes\":[\"demo1.linstor-days.at.linbit.com\",\"demo2.linstor-days.at.linbit.com\",\"demo3.linstor-days.at.linbit.com\"],\"props\":{\"Aux/csi-volume-annotations\":\"{\\\"name\\\":\\\"pvc-9f0cceb1-6ef7-425e-9f29-15c482b3ac65\\\",\\\"id\\\":\\\"pvc-9f0cceb1-6ef7-425e-9f29-15c482b3ac65\\\",\\\"createdBy\\\":\\\"linstor.csi.linbit.com\\\",\\\"creationTime\\\":\\\"2020-12-10T08:06:07.850996937Z\\\",\\\"sizeBytes\\\":524288000,\\\"readonly\\\":false,\\\"parameters\\\":{\\\"autoPlace\\\":\\\"3\\\",\\\"resourceGroup\\\":\\\"linstor-3-replicas\\\",\\\"storagePool\\\":\\\"vdb\\\"},\\\"snapshots\\\":[]}\",\"DrbdOptions/Resource/on-no-quorum\":\"io-error\",\"DrbdOptions/Resource/quorum\":\"majority\",\"DrbdPrimarySetOn\":\"DEMO3.LINSTOR-DAYS.AT.LINBIT.COM\",\"SequenceNumber\":\"1\"},\"flags\":[\"SUCCESSFUL\"],\"volume_definitions\":[{\"volume_number\":0,\"size_kib\":512000}],\"uuid\":\"3a9be40d-441d-414a-8958-f6f0cb68289d\",\"snapshots\":[{\"snapshot_name\":\"snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831\",\"node_name\":\"demo1.linstor-days.at.linbit.com\",\"create_timestamp\":1607588001392,\"uuid\":\"8c87e9be-18a1-41f3-8790-8e36a85f7950\"},{\"snapshot_name\":\"snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831\",\"node_name\":\"demo2.linstor-days.at.linbit.com\",\"create_timestamp\":1607588001393,\"uuid\":\"b8f309fe-5b27-42b5-9c9c-e50cf025dd9e\"},{\"snapshot_name\":\"snapshot-2255bcf5-6e8a-43ba-8856-a3e330424831\",\"node_name\":\"demo3.linstor-days.at.linbit.com\",\"create_timestamp\":1607588001393,\"uuid\":\"8c6fea5f-7350-46b8-882e-179bd48b724e\"}]}",
+		},
+		{
 			Path:     "/v1/resource-definitions/pvc-5113e62a-2874-421c-979a-ef08e1543581/snapshots",
 			Response: "[{\"name\":\"snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956\",\"resource_name\":\"pvc-5113e62a-2874-421c-979a-ef08e1543581\",\"nodes\":[\"demo1.linstor-days.at.linbit.com\",\"demo2.linstor-days.at.linbit.com\",\"demo3.linstor-days.at.linbit.com\"],\"props\":{\"Aux/csi-volume-annotations\":\"{\\\"name\\\":\\\"pvc-5113e62a-2874-421c-979a-ef08e1543581\\\",\\\"id\\\":\\\"pvc-5113e62a-2874-421c-979a-ef08e1543581\\\",\\\"createdBy\\\":\\\"linstor.csi.linbit.com\\\",\\\"creationTime\\\":\\\"2020-12-10T08:07:44.79360651Z\\\",\\\"sizeBytes\\\":838860800,\\\"readonly\\\":false,\\\"parameters\\\":{\\\"autoPlace\\\":\\\"3\\\",\\\"resourceGroup\\\":\\\"linstor-3-replicas\\\",\\\"storagePool\\\":\\\"vdb\\\"},\\\"snapshots\\\":[]}\",\"DrbdOptions/Resource/on-no-quorum\":\"io-error\",\"DrbdOptions/Resource/quorum\":\"majority\",\"DrbdPrimarySetOn\":\"DEMO3.LINSTOR-DAYS.AT.LINBIT.COM\",\"SequenceNumber\":\"1\"},\"flags\":[\"SUCCESSFUL\"],\"volume_definitions\":[{\"volume_number\":0,\"size_kib\":819200}],\"uuid\":\"0b733015-6d70-4b04-878e-08faa1992bc3\",\"snapshots\":[{\"snapshot_name\":\"snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956\",\"node_name\":\"demo1.linstor-days.at.linbit.com\",\"create_timestamp\":1607588002126,\"uuid\":\"8f19860f-d7f8-4082-a145-d28e2cd556cc\"},{\"snapshot_name\":\"snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956\",\"node_name\":\"demo2.linstor-days.at.linbit.com\",\"create_timestamp\":1607588002126,\"uuid\":\"2eee497e-b368-4957-b559-0de8baea0f36\"},{\"snapshot_name\":\"snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956\",\"node_name\":\"demo3.linstor-days.at.linbit.com\",\"create_timestamp\":1607588002126,\"uuid\":\"e2fe91c2-3ead-4d7f-b464-cd2595465417\"}]}]",
+		},
+		{
+			Path:     "/v1/resource-definitions/pvc-5113e62a-2874-421c-979a-ef08e1543581/snapshots/snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956",
+			Response: "{\"name\":\"snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956\",\"resource_name\":\"pvc-5113e62a-2874-421c-979a-ef08e1543581\",\"nodes\":[\"demo1.linstor-days.at.linbit.com\",\"demo2.linstor-days.at.linbit.com\",\"demo3.linstor-days.at.linbit.com\"],\"props\":{\"Aux/csi-volume-annotations\":\"{\\\"name\\\":\\\"pvc-5113e62a-2874-421c-979a-ef08e1543581\\\",\\\"id\\\":\\\"pvc-5113e62a-2874-421c-979a-ef08e1543581\\\",\\\"createdBy\\\":\\\"linstor.csi.linbit.com\\\",\\\"creationTime\\\":\\\"2020-12-10T08:07:44.79360651Z\\\",\\\"sizeBytes\\\":838860800,\\\"readonly\\\":false,\\\"parameters\\\":{\\\"autoPlace\\\":\\\"3\\\",\\\"resourceGroup\\\":\\\"linstor-3-replicas\\\",\\\"storagePool\\\":\\\"vdb\\\"},\\\"snapshots\\\":[]}\",\"DrbdOptions/Resource/on-no-quorum\":\"io-error\",\"DrbdOptions/Resource/quorum\":\"majority\",\"DrbdPrimarySetOn\":\"DEMO3.LINSTOR-DAYS.AT.LINBIT.COM\",\"SequenceNumber\":\"1\"},\"flags\":[\"SUCCESSFUL\"],\"volume_definitions\":[{\"volume_number\":0,\"size_kib\":819200}],\"uuid\":\"0b733015-6d70-4b04-878e-08faa1992bc3\",\"snapshots\":[{\"snapshot_name\":\"snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956\",\"node_name\":\"demo1.linstor-days.at.linbit.com\",\"create_timestamp\":1607588002126,\"uuid\":\"8f19860f-d7f8-4082-a145-d28e2cd556cc\"},{\"snapshot_name\":\"snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956\",\"node_name\":\"demo2.linstor-days.at.linbit.com\",\"create_timestamp\":1607588002126,\"uuid\":\"2eee497e-b368-4957-b559-0de8baea0f36\"},{\"snapshot_name\":\"snapshot-a1b89a9c-f59d-40f1-843a-e4240e98d956\",\"node_name\":\"demo3.linstor-days.at.linbit.com\",\"create_timestamp\":1607588002126,\"uuid\":\"e2fe91c2-3ead-4d7f-b464-cd2595465417\"}]}",
 		},
 	}
 )
@@ -121,15 +124,17 @@ func TestCompatFindSnapByID(t *testing.T) {
 
 	compatClient := prepareFakeClient(t)
 
-	empty, ok, err := compatClient.FindSnapByID(ctx, "none")
+	empty, err := compatClient.FindSnapByID(ctx, "none")
 	assert.NoError(t, err)
-	assert.True(t, ok)
 	assert.Empty(t, empty)
 
-	actual, ok, err := compatClient.FindSnapByID(ctx, snapshotA.SnapshotId)
+	actualByInProgressId, err := compatClient.FindSnapByID(ctx, snapshotA.SnapshotName)
 	assert.NoError(t, err)
-	assert.True(t, ok)
-	assert.Equal(t, snapshotA, actual)
+	assert.Equal(t, snapshotA, actualByInProgressId)
+
+	actualByCompleteId, err := compatClient.FindSnapByID(ctx, snapshotB.String())
+	assert.NoError(t, err)
+	assert.Equal(t, snapshotB, actualByCompleteId)
 }
 
 func TestCompatFindSnapBySource(t *testing.T) {
@@ -142,7 +147,7 @@ func TestCompatFindSnapBySource(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Empty(t, empty)
 
-	volB := &volume.Info{ID: snapshotB.SourceVolumeId}
+	volB := &volume.Info{ID: snapshotB.SourceName}
 	actual, err := compatClient.FindSnapsBySource(ctx, volB, 0, 0)
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, []*volume.Snapshot{snapshotB}, actual)

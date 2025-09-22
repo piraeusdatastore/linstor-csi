@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _SnapshotTypeName = "InClusterS3Linstor"
+const _SnapshotTypeName = "InClusterS3LinstorUnknown"
 
-var _SnapshotTypeIndex = [...]uint8{0, 9, 11, 18}
+var _SnapshotTypeIndex = [...]uint8{0, 9, 11, 18, 25}
 
-const _SnapshotTypeLowerName = "inclusters3linstor"
+const _SnapshotTypeLowerName = "inclusters3linstorunknown"
 
 func (i SnapshotType) String() string {
 	if i < 0 || i >= SnapshotType(len(_SnapshotTypeIndex)-1) {
@@ -27,9 +27,10 @@ func _SnapshotTypeNoOp() {
 	_ = x[SnapshotTypeInCluster-(0)]
 	_ = x[SnapshotTypeS3-(1)]
 	_ = x[SnapshotTypeLinstor-(2)]
+	_ = x[SnapshotTypeUnknown-(3)]
 }
 
-var _SnapshotTypeValues = []SnapshotType{SnapshotTypeInCluster, SnapshotTypeS3, SnapshotTypeLinstor}
+var _SnapshotTypeValues = []SnapshotType{SnapshotTypeInCluster, SnapshotTypeS3, SnapshotTypeLinstor, SnapshotTypeUnknown}
 
 var _SnapshotTypeNameToValueMap = map[string]SnapshotType{
 	_SnapshotTypeName[0:9]:        SnapshotTypeInCluster,
@@ -38,12 +39,15 @@ var _SnapshotTypeNameToValueMap = map[string]SnapshotType{
 	_SnapshotTypeLowerName[9:11]:  SnapshotTypeS3,
 	_SnapshotTypeName[11:18]:      SnapshotTypeLinstor,
 	_SnapshotTypeLowerName[11:18]: SnapshotTypeLinstor,
+	_SnapshotTypeName[18:25]:      SnapshotTypeUnknown,
+	_SnapshotTypeLowerName[18:25]: SnapshotTypeUnknown,
 }
 
 var _SnapshotTypeNames = []string{
 	_SnapshotTypeName[0:9],
 	_SnapshotTypeName[9:11],
 	_SnapshotTypeName[11:18],
+	_SnapshotTypeName[18:25],
 }
 
 // SnapshotTypeString retrieves an enum value from the enum constants string name.
