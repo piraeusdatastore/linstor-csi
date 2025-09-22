@@ -18,6 +18,7 @@ const (
 	SnapshotTypeInCluster SnapshotType = iota
 	SnapshotTypeS3
 	SnapshotTypeLinstor
+	SnapshotTypeUnknown
 )
 
 type SnapshotParameters struct {
