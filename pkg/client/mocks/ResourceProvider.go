@@ -220,24 +220,6 @@ func (_m *ResourceProvider) EnableDRBDProxy(ctx context.Context, resName string,
 	return r0
 }
 
-// EnableSnapshotShipping provides a mock function with given fields: ctx, resName, ship
-func (_m *ResourceProvider) EnableSnapshotShipping(ctx context.Context, resName string, ship client.SnapshotShipping) error {
-	ret := _m.Called(ctx, resName, ship)
-
-	if len(ret) == 0 {
-		panic("no return value specified for EnableSnapshotShipping")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, client.SnapshotShipping) error); ok {
-		r0 = rf(ctx, resName, ship)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
 // Get provides a mock function with given fields: ctx, resName, nodeName, opts
 func (_m *ResourceProvider) Get(ctx context.Context, resName string, nodeName string, opts ...*client.ListOpts) (client.Resource, error) {
 	_va := make([]interface{}, len(opts))
@@ -486,43 +468,6 @@ func (_m *ResourceProvider) GetSnapshot(ctx context.Context, resName string, sna
 
 	if rf, ok := ret.Get(1).(func(context.Context, string, string, ...*client.ListOpts) error); ok {
 		r1 = rf(ctx, resName, snapName, opts...)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// GetSnapshotShippings provides a mock function with given fields: ctx, opts
-func (_m *ResourceProvider) GetSnapshotShippings(ctx context.Context, opts ...*client.ListOpts) ([]client.SnapshotShippingStatus, error) {
-	_va := make([]interface{}, len(opts))
-	for _i := range opts {
-		_va[_i] = opts[_i]
-	}
-	var _ca []interface{}
-	_ca = append(_ca, ctx)
-	_ca = append(_ca, _va...)
-	ret := _m.Called(_ca...)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetSnapshotShippings")
-	}
-
-	var r0 []client.SnapshotShippingStatus
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, ...*client.ListOpts) ([]client.SnapshotShippingStatus, error)); ok {
-		return rf(ctx, opts...)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, ...*client.ListOpts) []client.SnapshotShippingStatus); ok {
-		r0 = rf(ctx, opts...)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]client.SnapshotShippingStatus)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, ...*client.ListOpts) error); ok {
-		r1 = rf(ctx, opts...)
 	} else {
 		r1 = ret.Error(1)
 	}

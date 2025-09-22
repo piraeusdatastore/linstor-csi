@@ -30,6 +30,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -41,7 +42,6 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/slices"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/mount-utils"
@@ -411,9 +411,10 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 			logger.Debugf("create new cloned volume")
 
 			_, err := s.client.ResourceDefinitions.Clone(ctx, src.ID, lapi.ResourceDefinitionCloneRequest{
-				Name:          vol.ID,
-				LayerList:     params.LayerList,
-				ResourceGroup: rGroup.Name,
+				Name:               vol.ID,
+				LayerList:          params.LayerList,
+				ResourceGroup:      rGroup.Name,
+				GenericPropsModify: lapi.GenericPropsModify{DeleteProps: []string{linstor.PropertyProvisioningCompletedBy}},
 			})
 			if err != nil {
 				logger.Debugf("clone failed: %v", err)
@@ -429,20 +430,6 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 			logger.Debugf("clone status failed: %v", err)
 			return err
 		}
-	}
-
-	// This is not perfect: if we fail to delete the ProvisioningCompletedBy property, the volume creation will be
-	// retried. If LINSTOR has already finished cloning the volume, we could think that the volume is already "done"
-	// with provisioning.
-	//
-	// Mitigating factors: it is extremely unlikely that we fail exactly at the step below and that cloning
-	// completes faster than the CSI retry.
-	logger.Debugf("Reset ProvisioningCompletedBy for new resource definition")
-
-	err = s.client.ResourceDefinitions.Modify(ctx, vol.ID, lapi.GenericPropsModify{DeleteProps: []string{linstor.PropertyProvisioningCompletedBy}})
-	if err != nil {
-		logger.Debugf("failed resetting cloned resource definition property: %v", err)
-		return err
 	}
 
 	for status.Status != clonestatus.Complete {

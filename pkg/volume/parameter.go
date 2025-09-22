@@ -3,6 +3,8 @@ package volume
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -11,8 +13,6 @@ import (
 	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/pborman/uuid"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
@@ -408,7 +408,6 @@ func ParseLayerList(s string) ([]devicelayerkind.DeviceLayerKind, error) {
 		devicelayerkind.Nvme,
 		devicelayerkind.Cache,
 		devicelayerkind.Writecache,
-		devicelayerkind.Exos,
 	}
 
 userLayers:
