@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -1008,23 +1009,20 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 
 	d.log.WithField("snapshot id", id).Debug("using snapshot id")
 
-	existingSnap, ok, err := d.Snapshots.FindSnapByID(ctx, id)
+	existingSnap, err := d.Snapshots.FindSnapByID(ctx, id)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to check for existing snapshot: %v", err)
 	}
 
-	if !ok {
+	if existingSnap != nil && existingSnap.Failed {
 		d.log.Debug("existing snapshot is in failed state, deleting")
-		err := d.Snapshots.SnapDelete(ctx, &volume.Snapshot{
-			Snapshot: csi.Snapshot{
-				SourceVolumeId: req.GetSourceVolumeId(),
-				SnapshotId:     req.GetName(),
-			},
-			Remote: params.RemoteName,
-		})
+
+		err := d.Snapshots.SnapDelete(ctx, &existingSnap.SnapshotId)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "tried deleting a leftover unsuccessful snapshot")
 		}
+
+		existingSnap = nil
 	}
 
 	if existingSnap != nil {
@@ -1035,26 +1033,32 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 			"existingSnapshot":              fmt.Sprintf("%+v", existingSnap),
 		}).Debug("found existing snapshot")
 
-		if existingSnap.GetSourceVolumeId() == req.GetSourceVolumeId() {
-			err = d.maybeDeleteLocalSnapshot(ctx, existingSnap, params)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to delete local snapshot: %s", err)
-			}
-
-			if existingSnap.ReadyToUse {
-				d.log.WithField("snapshot id", id).Debug("snapshot ready, delete temporary ID mapping if it exists")
-
-				err := d.Snapshots.DeleteTemporarySnapshotID(ctx, id, params)
-				if err != nil {
-					return nil, status.Errorf(codes.Internal, "failed to delete temporary snapshot ID: %v", err)
-				}
-			}
-
-			return &csi.CreateSnapshotResponse{Snapshot: &existingSnap.Snapshot}, nil
+		if existingSnap.SourceName != req.GetSourceVolumeId() {
+			return nil, status.Errorf(codes.AlreadyExists, "can't use %q for snapshot name for volume %q, snapshot name is in use for volume %q",
+				req.GetName(), req.GetSourceVolumeId(), existingSnap.SourceName)
 		}
 
-		return nil, status.Errorf(codes.AlreadyExists, "can't use %q for snapshot name for volume %q, snapshot name is in use for volume %q",
-			req.GetName(), req.GetSourceVolumeId(), existingSnap.GetSourceVolumeId())
+		err = d.maybeDeleteLocalSnapshot(ctx, existingSnap, params)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to delete local snapshot: %s", err)
+		}
+
+		if existingSnap.ReadyToUse {
+			d.log.WithField("snapshot id", id).Debug("snapshot ready, delete temporary ID mapping if it exists")
+
+			err := d.Snapshots.DeleteTemporarySnapshotID(ctx, id, params)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to delete temporary snapshot ID: %v", err)
+			}
+		}
+
+		return &csi.CreateSnapshotResponse{Snapshot: &csi.Snapshot{
+			SnapshotId:     existingSnap.String(),
+			SourceVolumeId: existingSnap.SourceName,
+			CreationTime:   timestamppb.New(existingSnap.CreationTime),
+			SizeBytes:      existingSnap.SizeBytes,
+			ReadyToUse:     existingSnap.ReadyToUse,
+		}}, nil
 	}
 
 	snap, err := d.Snapshots.SnapCreate(ctx, id, req.GetSourceVolumeId(), params)
@@ -1076,7 +1080,13 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 		}
 	}
 
-	return &csi.CreateSnapshotResponse{Snapshot: &snap.Snapshot}, nil
+	return &csi.CreateSnapshotResponse{Snapshot: &csi.Snapshot{
+		SnapshotId:     snap.String(),
+		SourceVolumeId: snap.SourceName,
+		CreationTime:   timestamppb.New(snap.CreationTime),
+		SizeBytes:      snap.SizeBytes,
+		ReadyToUse:     snap.ReadyToUse,
+	}}, nil
 }
 
 // DeleteSnapshot https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#deletesnapshot
@@ -1085,7 +1095,7 @@ func (d Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotReque
 		return nil, missingAttr("DeleteSnapshot", req.GetSnapshotId(), "SnapshotId")
 	}
 
-	snap, _, err := d.Snapshots.FindSnapByID(ctx, req.GetSnapshotId())
+	snap, err := d.Snapshots.FindSnapByID(ctx, req.GetSnapshotId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "unable to find snapshot %s: %v",
 			req.GetSnapshotId(), err)
@@ -1097,7 +1107,7 @@ func (d Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotReque
 		return &csi.DeleteSnapshotResponse{}, nil
 	}
 
-	if err := d.Snapshots.SnapDelete(ctx, snap); err != nil {
+	if err := d.Snapshots.SnapDelete(ctx, &snap.SnapshotId); err != nil {
 		return nil, status.Errorf(codes.Internal, "unable to delete snapshot %s: %v",
 			req.GetSnapshotId(), err)
 	}
@@ -1116,7 +1126,7 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 	switch {
 	// Handle case where a single snapshot is requested.
 	case req.GetSnapshotId() != "":
-		snap, _, err := d.Snapshots.FindSnapByID(ctx, req.GetSnapshotId())
+		snap, err := d.Snapshots.FindSnapByID(ctx, req.GetSnapshotId())
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to list snapshots: %v", err)
 		}
@@ -1166,7 +1176,13 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 
 	entries := make([]*csi.ListSnapshotsResponse_Entry, len(snapshots))
 	for i, snap := range snapshots {
-		entries[i] = &csi.ListSnapshotsResponse_Entry{Snapshot: &snap.Snapshot}
+		entries[i] = &csi.ListSnapshotsResponse_Entry{Snapshot: &csi.Snapshot{
+			SnapshotId:     snap.String(),
+			SourceVolumeId: snap.SourceName,
+			CreationTime:   timestamppb.New(snap.CreationTime),
+			SizeBytes:      snap.SizeBytes,
+			ReadyToUse:     snap.ReadyToUse,
+		}}
 	}
 
 	return &csi.ListSnapshotsResponse{Entries: entries, NextToken: nextToken}, nil
@@ -1377,7 +1393,7 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 			}
 			logger.Debugf("pre-populate volume from snapshot: %+v", snapshotID)
 
-			snap, _, err := d.Snapshots.FindSnapByID(ctx, snapshotID)
+			snap, err := d.Snapshots.FindSnapByID(ctx, snapshotID)
 			if err != nil {
 				return nil, status.Errorf(
 					codes.Internal, "CreateVolume failed for %s: %v", req.GetName(), err)
@@ -1387,7 +1403,7 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 					"CreateVolume failed for %s: snapshot not found in storage backend", req.GetName())
 			}
 
-			snapParams, err := d.maybeGetSnapshotParameters(ctx, snap)
+			snapParams, err := d.maybeGetSnapshotParameters(ctx, snapshotID)
 			if err != nil {
 				logger.WithError(err).Warn("failed to fetch snapshot parameters, continuing without it")
 
@@ -1470,14 +1486,14 @@ func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *
 	}, nil
 }
 
-func findMatchingSnapshotClassName(snap *volume.Snapshot, contents ...unstructured.Unstructured) string {
+func findMatchingSnapshotClassName(snapId string, contents ...unstructured.Unstructured) string {
 	for i := range contents {
 		content := contents[i].Object
 		if driver, _, _ := unstructured.NestedString(content, "spec", "driver"); driver != linstor.DriverName {
 			continue
 		}
 
-		if handle, _, _ := unstructured.NestedString(content, "status", "snapshotHandle"); handle != snap.SnapshotId {
+		if handle, _, _ := unstructured.NestedString(content, "status", "snapshotHandle"); handle != snapId {
 			continue
 		}
 
@@ -1493,7 +1509,7 @@ func findMatchingSnapshotClassName(snap *volume.Snapshot, contents ...unstructur
 	return ""
 }
 
-func (d Driver) maybeGetSnapshotParameters(ctx context.Context, snap *volume.Snapshot) (*volume.SnapshotParameters, error) {
+func (d Driver) maybeGetSnapshotParameters(ctx context.Context, snapshotID string) (*volume.SnapshotParameters, error) {
 	if d.kubeClient == nil {
 		return nil, nil
 	}
@@ -1507,7 +1523,7 @@ func (d Driver) maybeGetSnapshotParameters(ctx context.Context, snap *volume.Sna
 		return nil, fmt.Errorf("failed to fetch list of snapshot contents")
 	}
 
-	snapshotClassName := findMatchingSnapshotClassName(snap, result.Items...)
+	snapshotClassName := findMatchingSnapshotClassName(snapshotID, result.Items...)
 	if snapshotClassName == "" {
 		return nil, fmt.Errorf("failed to determine snapshot class name")
 	}
@@ -1541,7 +1557,7 @@ func (d Driver) maybeDeleteLocalSnapshot(ctx context.Context, snap *volume.Snaps
 	}
 
 	// Create a new, local only snapshot object (no remote set!), so we don't accidentally delete the remote backup
-	return d.Snapshots.SnapDelete(ctx, &volume.Snapshot{Snapshot: snap.Snapshot})
+	return d.Snapshots.SnapDelete(ctx, &snap.SnapshotId)
 }
 
 func missingAttr(methodCall, volumeID, attr string) error {
