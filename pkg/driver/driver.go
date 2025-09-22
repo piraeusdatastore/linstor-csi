@@ -624,23 +624,6 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 
 		log.Info("existing volume matches request")
 
-		log.Debug("check if source snapshot exists")
-
-		snapId := d.Snapshots.CompatibleSnapshotId(snapshotForVolumeName(req.GetName()))
-		leftoverSnap, _, err := d.Snapshots.FindSnapByID(ctx, snapId)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to check on potential left-over source snapshot: %v", err)
-		}
-
-		if leftoverSnap != nil {
-			log.Debug("found left-over source snapshot, removing...")
-
-			err := d.Snapshots.SnapDelete(ctx, leftoverSnap)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to delete source snapshot for volume '%s': %v", volId, err)
-			}
-		}
-
 		topos, err := d.Storage.AccessibleTopologies(ctx, existingVolume.ID, &params)
 		if err != nil {
 			return nil, status.Errorf(
@@ -1579,11 +1562,6 @@ func parseAsInt(s string) (int, error) {
 		return 0, fmt.Errorf("failed to parse starting token: %v", err)
 	}
 	return int(i), nil
-}
-
-// Returns the name of the snapshot used to populate data in volume-from-volume scenarios
-func snapshotForVolumeName(name string) string {
-	return fmt.Sprintf("for-%s", name)
 }
 
 // failpathDelete deletes volumes and logs if that fails. Mostly useful
