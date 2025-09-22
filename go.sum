@@ -1,5 +1,5 @@
-github.com/LINBIT/golinstor v0.56.2 h1:efT4d8C712bSEyxvhgMoExpPAVJhkViX8g+GOgC3fEI=
-github.com/LINBIT/golinstor v0.56.2/go.mod h1:JF2dGKWa9wyT6M9GOHmlzqFB9/s84Z9bt3tRkZLvZSU=
+github.com/LINBIT/golinstor v0.57.0 h1:1ZJt3otytQ99QdIvXAFItnGpmM2+Y5FYRGI5XCbhKVM=
+github.com/LINBIT/golinstor v0.57.0/go.mod h1:TXAMGiskT4fY/koTCOt6qqF60uWobDqUHoB8srNeCnY=
 github.com/Masterminds/semver/v3 v3.4.0 h1:Zog+i5UMtVoCU8oKka5P7i9q9HgrJeGzI9SA1Xbatp0=
 github.com/Masterminds/semver/v3 v3.4.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/container-storage-interface/spec v1.11.0 h1:H/YKTOeUZwHtyPOr9raR+HgFmGluGCklulxDYxSdVNM=
@@ -83,8 +83,8 @@ github.com/kubernetes-csi/external-snapshotter/client/v8 v8.2.0 h1:Q3jQ1NkFqv5o+
 github.com/kubernetes-csi/external-snapshotter/client/v8 v8.2.0/go.mod h1:E3vdYxHj2C2q6qo8/Da4g7P+IcwqRZyy3gJBzYybV9Y=
 github.com/kubernetes-csi/external-snapshotter/v8 v8.3.0 h1:qkUw53bWEuHY0iVaF4V+oIS3r2vm8Sz1/xzf+D+yi80=
 github.com/kubernetes-csi/external-snapshotter/v8 v8.3.0/go.mod h1:iFq0CxAt/6NfK8QFyYRpObTL3Ar/lG8H045Btk6fo7s=
-github.com/mailru/easyjson v0.9.0 h1:PrnmzHw7262yW8sTBwxi1PdJA3Iw/EKBa8psRf7d9a4=
-github.com/mailru/easyjson v0.9.0/go.mod h1:1+xMtQp2MRNVL/V1bOzuP3aP8VNwRW55fQUto+XFtTU=
+github.com/mailru/easyjson v0.9.1 h1:LbtsOm5WAswyWbvTEOqhypdPeZzHavpZx96/n553mR8=
+github.com/mailru/easyjson v0.9.1/go.mod h1:1+xMtQp2MRNVL/V1bOzuP3aP8VNwRW55fQUto+XFtTU=
 github.com/moby/sys/mountinfo v0.7.2 h1:1shs6aH5s4o5H2zQLn796ADW1wMrIwHsyJ2v9KouLrg=
 github.com/moby/sys/mountinfo v0.7.2/go.mod h1:1YOa8w8Ih7uW0wALDUgT1dTTSBrZ+HiBLGws92L2RU4=
 github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
