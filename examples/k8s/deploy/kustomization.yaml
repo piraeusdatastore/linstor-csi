@@ -6,28 +6,28 @@ resources:
 images:
 - name: csi-attacher
   newName: registry.k8s.io/sig-storage/csi-attacher
-  newTag: v4.9.0
+  newTag: v4.10.0
 - name: csi-external-health-monitor-controller
   newName: registry.k8s.io/sig-storage/csi-external-health-monitor-controller
-  newTag: v0.15.0
+  newTag: v0.16.0
 - name: csi-livenessprobe
   newName: registry.k8s.io/sig-storage/livenessprobe
-  newTag: v2.16.0
+  newTag: v2.17.0
 - name: csi-node-driver-registrar
   newName: registry.k8s.io/sig-storage/csi-node-driver-registrar
-  newTag: v2.14.0
+  newTag: v2.15.0
 - name: csi-provisioner
   newName: registry.k8s.io/sig-storage/csi-provisioner
   newTag: v5.3.0
 - name: csi-resizer
   newName: registry.k8s.io/sig-storage/csi-resizer
-  newTag: v1.13.2
+  newTag: v1.14.0
 - name: csi-snapshotter
   newName: registry.k8s.io/sig-storage/csi-snapshotter
-  newTag: v8.2.1
+  newTag: v8.3.0
 - name: linstor-csi
   newName: quay.io/piraeusdatastore/piraeus-csi
-  newTag: v1.8.1
+  newTag: v1.9.0
 patches:
 - path: controller-patch.yaml
 - path: daemonset-patch.yaml
