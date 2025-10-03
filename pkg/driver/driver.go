@@ -547,14 +547,14 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 	pvcName := req.GetParameters()[ParameterCsiPvcName]
 	pvcNamespace := req.GetParameters()[ParameterCsiPvcNamespace]
 
-	namespaceToUse := ""
-	nameToUse := ""
+	pvcNamespaceToUse := ""
+	pvcNameToUse := ""
 	if params.UsePvcName {
-		namespaceToUse = pvcNamespace
-		nameToUse = pvcName
+		pvcNamespaceToUse = pvcNamespace
+		pvcNameToUse = pvcName
 	}
 
-	volId := d.Storage.CompatibleVolumeId(req.GetName(), namespaceToUse, nameToUse)
+	volId := d.Storage.CompatibleVolumeId(req.GetName(), pvcNamespaceToUse, pvcNameToUse)
 
 	log := d.log.WithField("volume", volId)
 	log.Infof("determined volume id for volume named '%s'", req.GetName())
