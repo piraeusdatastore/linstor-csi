@@ -124,17 +124,17 @@ func TestCompatFindSnapByID(t *testing.T) {
 
 	compatClient := prepareFakeClient(t)
 
-	empty, err := compatClient.FindSnapByID(ctx, "none")
+	empty, err := compatClient.FindSnapsByID(ctx, "none")
 	assert.NoError(t, err)
 	assert.Empty(t, empty)
 
-	actualByInProgressId, err := compatClient.FindSnapByID(ctx, snapshotA.SnapshotName)
+	actualByInProgressId, err := compatClient.FindSnapsByID(ctx, snapshotA.SnapshotName)
 	assert.NoError(t, err)
-	assert.Equal(t, snapshotA, actualByInProgressId)
+	assert.Equal(t, []*volume.Snapshot{snapshotA}, actualByInProgressId)
 
-	actualByCompleteId, err := compatClient.FindSnapByID(ctx, snapshotB.String())
+	actualByCompleteId, err := compatClient.FindSnapsByID(ctx, snapshotB.String())
 	assert.NoError(t, err)
-	assert.Equal(t, snapshotB, actualByCompleteId)
+	assert.Equal(t, []*volume.Snapshot{snapshotB}, actualByCompleteId)
 }
 
 func TestCompatFindSnapBySource(t *testing.T) {

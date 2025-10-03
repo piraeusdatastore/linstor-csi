@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -111,36 +112,39 @@ func (s *MockStorage) CompatibleSnapshotId(name string) string {
 	return name
 }
 
-func (s *MockStorage) SnapCreate(ctx context.Context, id, sourceVolId string, params *volume.SnapshotParameters) (*volume.Snapshot, error) {
+func (s *MockStorage) SnapCreate(ctx context.Context, id string, params *volume.SnapshotParameters, sourceVolIds ...string) ([]*volume.Snapshot, error) {
 	for _, snap := range s.snapshots {
 		if snap.SnapshotName == id {
 			return nil, fmt.Errorf("snapshot '%s' already exists", id)
 		}
 	}
 
-	var size int64
+	now := time.Now()
 
-	for i := range s.createdVolumes {
-		if s.createdVolumes[i].ID == id {
-			size = s.createdVolumes[i].DeviceBytes[0]
+	var snaps []*volume.Snapshot
+	for _, sourceId := range sourceVolIds {
+		i := slices.IndexFunc(s.createdVolumes, func(info *volume.Info) bool {
+			return info.ID == sourceId
+		})
+		if i == -1 {
+			return nil, fmt.Errorf("no such volume '%s'", sourceId)
 		}
+
+		snaps = append(snaps, &volume.Snapshot{
+			SnapshotId: volume.SnapshotId{
+				Type:         volume.SnapshotTypeInCluster,
+				SnapshotName: id,
+				SourceName:   s.createdVolumes[i].ID,
+			},
+			CreationTime: now,
+			SizeBytes:    s.createdVolumes[i].DeviceBytes[0],
+			ReadyToUse:   true,
+		})
 	}
 
-	// Fill in missing snapshot fields on creation, keep original SourceVolumeId.
-	snap := &volume.Snapshot{
-		SnapshotId: volume.SnapshotId{
-			Type:         volume.SnapshotTypeInCluster,
-			SnapshotName: id,
-			SourceName:   sourceVolId,
-		},
-		CreationTime: time.Now(),
-		SizeBytes:    size,
-		ReadyToUse:   true,
-	}
+	s.snapshots = append(s.snapshots, snaps...)
 
-	s.snapshots = append(s.snapshots, snap)
-
-	return snap, nil
+	return snaps, nil
 }
 
 func (s *MockStorage) SnapDelete(ctx context.Context, snap *volume.SnapshotId) error {
@@ -175,22 +179,23 @@ func (s *MockStorage) ListSnaps(ctx context.Context, start, limit int) ([]*volum
 	return s.snapshots[start:end], nil
 }
 
-func (s *MockStorage) FindSnapByID(ctx context.Context, id string) (*volume.Snapshot, error) {
+func (s *MockStorage) FindSnapsByID(ctx context.Context, id string) ([]*volume.Snapshot, error) {
+	var snaps []*volume.Snapshot
+
 	// First search for complete snapshot ID
 	for _, snap := range s.snapshots {
 		if snap.String() == id {
-			return snap, nil
+			snaps = append(snaps, snap)
+			continue
 		}
-	}
 
-	// Only now check by plain snapshot name
-	for _, snap := range s.snapshots {
 		if snap.SnapshotName == id {
-			return snap, nil
+			snaps = append(snaps, snap)
+			continue
 		}
 	}
 
-	return nil, nil
+	return snaps, nil
 }
 
 func (s *MockStorage) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info, start, limit int) ([]*volume.Snapshot, error) {
