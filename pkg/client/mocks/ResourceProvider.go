@@ -87,6 +87,31 @@ func (_m *ResourceProvider) CreateSnapshot(ctx context.Context, snapshot client.
 	return r0
 }
 
+// CreateSnapshots provides a mock function with given fields: ctx, snapshot
+func (_m *ResourceProvider) CreateSnapshots(ctx context.Context, snapshot ...client.Snapshot) error {
+	_va := make([]interface{}, len(snapshot))
+	for _i := range snapshot {
+		_va[_i] = snapshot[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateSnapshots")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, ...client.Snapshot) error); ok {
+		r0 = rf(ctx, snapshot...)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // Deactivate provides a mock function with given fields: ctx, resName, nodeName
 func (_m *ResourceProvider) Deactivate(ctx context.Context, resName string, nodeName string) error {
 	ret := _m.Called(ctx, resName, nodeName)

@@ -6,7 +6,7 @@ toolchain go1.24.2
 
 require (
 	github.com/BurntSushi/toml v1.5.0
-	github.com/LINBIT/golinstor v0.57.0
+	github.com/LINBIT/golinstor v0.58.0
 	github.com/container-storage-interface/spec v1.11.0
 	github.com/coreos/go-systemd/v22 v22.6.0
 	github.com/kubernetes-csi/csi-test/v5 v5.3.1
