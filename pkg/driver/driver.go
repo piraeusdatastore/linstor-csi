@@ -544,13 +544,15 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 		return nil, status.Errorf(codes.InvalidArgument, "failed to parse parameters: %v", err)
 	}
 
-	var pvcNamespace, pvcName string
-	if params.UsePvcName {
-		pvcName = req.GetParameters()[ParameterCsiPvcName]
-		pvcNamespace = req.GetParameters()[ParameterCsiPvcNamespace]
-	}
+	pvcName := req.GetParameters()[ParameterCsiPvcName]
+	pvcNamespace := req.GetParameters()[ParameterCsiPvcNamespace]
 
-	volId := d.Storage.CompatibleVolumeId(req.GetName(), pvcNamespace, pvcName)
+	var volId string
+	if params.UsePvcName {
+		volId = d.Storage.CompatibleVolumeId(req.GetName(), pvcNamespace, pvcName)
+	} else {
+		volId = d.Storage.CompatibleVolumeId(req.GetName(), "", "")
+	}
 
 	log := d.log.WithField("volume", volId)
 	log.Infof("determined volume id for volume named '%s'", req.GetName())
@@ -625,6 +627,14 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 		}, nil
 	}
 
+	volumeProperties := map[string]string{
+		linstor.PropertyProvisioningCompletedBy: "linstor-csi/" + Version,
+	}
+	if pvcName != "" && pvcNamespace != "" {
+		volumeProperties[lc.NamespcAuxiliary+"/"+ParameterCsiPvcName] = pvcName
+		volumeProperties[lc.NamespcAuxiliary+"/"+ParameterCsiPvcNamespace] = pvcNamespace
+	}
+
 	return d.createNewVolume(
 		ctx,
 		&volume.Info{
@@ -634,7 +644,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 			},
 			ResourceGroup: params.ResourceGroup,
 			FsType:        fsType,
-			Properties:    map[string]string{linstor.PropertyProvisioningCompletedBy: "linstor-csi/" + Version},
+			Properties:    volumeProperties,
 		},
 		&params,
 		req,
