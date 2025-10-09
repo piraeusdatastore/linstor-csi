@@ -10,6 +10,8 @@ jobs:
   build:
     name: Build piraeus-csi
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v5
       - name: Set up QEMU
@@ -19,6 +21,9 @@ jobs:
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v3
+      - name: Set up cosign
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: sigstore/cosign-installer@v3
       - name: login to registry
         if: github.event_name != 'pull_request'
         env:
@@ -39,7 +44,16 @@ jobs:
         run: echo "VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
       - name: Build
         uses: docker/bake-action@v6
+        id: bake
         with:
+          provenance: true
+          sbom: true
+          push: ${{ github.event_name != 'pull_request' }}
           files: |
             ./docker-bake.hcl
             cwd://${{ steps.meta.outputs.bake-file }}
+      - name: Sign images
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          jq '.[] | select(type=="object") | select(."containerimage.digest") | ."containerimage.digest" as $DIGEST | ."image.name" | split(":")[0] | "\(.)@\($DIGEST)"' -r <<<'${{ steps.bake.outputs.metadata }}>
+            | xargs --no-run-if-empty cosign sign --yes
