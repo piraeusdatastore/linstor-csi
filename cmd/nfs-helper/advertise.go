@@ -62,12 +62,11 @@ func advertiseStart(ctx context.Context, args []string) error {
 				},
 				OwnerReferences: []metav1.OwnerReference{
 					{
-						APIVersion:         "v1",
-						Kind:               "Pod",
-						Name:               os.Getenv("POD_NAME"),
-						UID:                types.UID(os.Getenv("POD_UID")),
-						BlockOwnerDeletion: ptr.To(true),
-						Controller:         ptr.To(true),
+						APIVersion: "v1",
+						Kind:       "Pod",
+						Name:       os.Getenv("POD_NAME"),
+						UID:        types.UID(os.Getenv("POD_UID")),
+						Controller: ptr.To(true),
 					},
 				},
 			},
