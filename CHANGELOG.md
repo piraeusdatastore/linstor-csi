@@ -6,9 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] - 2025-10-14
+
 ### Added
 
 - Enable [Group Snapshots] for in-cluster snapshots.
+- Add components for RWX volumes via NFS server.
 
 [Group Snapshots]: https://kubernetes-csi.github.io/docs/group-snapshot-restore-feature.html
 
@@ -625,7 +628,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.7.1...v1.8.0
