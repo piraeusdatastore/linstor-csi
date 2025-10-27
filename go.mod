@@ -9,8 +9,8 @@ require (
 	github.com/LINBIT/golinstor v0.58.0
 	github.com/container-storage-interface/spec v1.12.0
 	github.com/coreos/go-systemd/v22 v22.6.0
-	github.com/kubernetes-csi/csi-test/v5 v5.3.1
-	github.com/kubernetes-csi/external-snapshotter/v8 v8.3.0
+	github.com/kubernetes-csi/csi-test/v5 v5.4.0
+	github.com/kubernetes-csi/external-snapshotter/v8 v8.4.0
 	github.com/pborman/uuid v1.2.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1
@@ -57,12 +57,12 @@ require (
 	github.com/google/pprof v0.0.0-20250820193118-f64d9cf942d6 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.2.0 // indirect
+	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.4.0 // indirect
 	github.com/moby/sys/mountinfo v0.7.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/onsi/ginkgo/v2 v2.26.0 // indirect
+	github.com/onsi/ginkgo/v2 v2.27.1 // indirect
 	github.com/onsi/gomega v1.38.2 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
