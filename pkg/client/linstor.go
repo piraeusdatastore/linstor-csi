@@ -60,6 +60,7 @@ import (
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler/balancer"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler/followtopology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler/manual"
+	"github.com/piraeusdatastore/linstor-csi/pkg/utils"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
@@ -2283,6 +2284,10 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 
 			source = fmt.Sprintf("%s:%s", u.Hostname(), u.Path)
 			mntOpts = append(mntOpts, fmt.Sprintf("port=%s,vers=4", u.Port()))
+		} else if !block {
+			if err := utils.Fsck(ctx, source); err != nil {
+				return fmt.Errorf("failed to run fsck on device '%s': %w", source, err)
+			}
 		}
 
 		err = s.mounter.MountSensitiveWithoutSystemdWithMountFlags(source, target, fsType, mntOpts, nil, mntFlags)
