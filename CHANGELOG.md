@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Search for snapshots in differently named remotes if using new snapshot ID format.
+
 ## [1.10.1] - 2025-11-05
 
 ### Added
