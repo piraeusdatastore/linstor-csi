@@ -27,7 +27,7 @@ images:
   newTag: v8.4.0
 - name: linstor-csi
   newName: quay.io/piraeusdatastore/piraeus-csi
-  newTag: v1.10.1
+  newTag: v1.10.2
 patches:
 - path: controller-patch.yaml
 - path: daemonset-patch.yaml
