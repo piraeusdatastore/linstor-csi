@@ -13,8 +13,9 @@ import (
 func Fsck(ctx context.Context, device string) error {
 	// -l: lock the devices in /run/fsck/<device>.lock
 	// -p: run into "auto" mode, not requesting confirmation on TTY.
+	// -M: do not run if filesystem is mounted, which can happen if the volume is used multiple times on the same node.
 	//     This is an option that is specific to fsck.ext4 and fsck.xfs, passed along by fsck.
-	out, err := exec.CommandContext(ctx, "fsck", "-l", "-p", device).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "fsck", "-l", "-p", "-M", device).CombinedOutput()
 	if err != nil {
 		var execErr *exec.ExitError
 		if errors.As(err, &execErr) && execErr.ExitCode() <= 1 {
