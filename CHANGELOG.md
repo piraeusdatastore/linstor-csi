@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.3] - 2025-11-26
+
 ### Changed
 
 - Do not run fsck for already mounted filesystems.
@@ -644,7 +646,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.2...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.3...HEAD
+[1.10.3]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.2...v1.10.3
 [1.10.2]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.1...v1.10.2
 [1.10.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.9.0...v1.10.0
