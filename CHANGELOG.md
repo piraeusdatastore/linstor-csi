@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Do not run fsck on read-only mounts.
+
 ## [1.10.3] - 2025-11-26
 
 ### Changed
