@@ -942,6 +942,11 @@ func (s *Linstor) SnapCreate(ctx context.Context, id string, params *volume.Snap
 
 	for i := range lsnaps {
 		s, err := linstorSnapshotToCSI(&lsnaps[i])
+
+		if s != nil {
+			s.Type = params.Type
+		}
+
 		result = append(result, s)
 		errs = append(errs, err)
 	}
