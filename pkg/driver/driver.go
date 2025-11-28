@@ -1683,8 +1683,12 @@ func (d Driver) maybeDeleteLocalSnapshot(ctx context.Context, snap *volume.Snaps
 		return nil
 	}
 
-	// Create a new, local only snapshot object (no remote set!), so we don't accidentally delete the remote backup
-	return d.Snapshots.SnapDelete(ctx, &snap.SnapshotId)
+	// Create a new, local only snapshot ID (no remote set!), so we don't accidentally delete the remote backup
+	return d.Snapshots.SnapDelete(ctx, &volume.SnapshotId{
+		Type:         volume.SnapshotTypeInCluster,
+		SnapshotName: snap.SnapshotName,
+		SourceName:   snap.SourceName,
+	})
 }
 
 func missingAttr(methodCall, volumeID, attr string) error {

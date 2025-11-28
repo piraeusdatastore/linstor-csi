@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Do not run fsck on read-only mounts.
 
+### Fixed
+
+- Only delete local snapshot of backup when `delete-local` parameter is set.
+
 ## [1.10.3] - 2025-11-26
 
 ### Changed
