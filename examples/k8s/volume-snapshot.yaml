@@ -3,7 +3,6 @@ kind: VolumeSnapshot
 metadata:
   name: linstor-snapshot-test
 spec:
-  snapshotClassName: linstor-csi-snapshot-class
+  volumeSnapshotClassName: linstor-csi-snapshot-class
   source:
-    name: linstor-pvc-test
-    kind: PersistentVolumeClaim
+    persistentVolumeClaimName: linstor-pvc-test

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Only delete local snapshot of backup when `delete-local` parameter is set.
+- Fixed volume snapshot handle using the wrong format for S3 remotes when `delete-local` is set.
 
 ## [1.10.3] - 2025-11-26
 
