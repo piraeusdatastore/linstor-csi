@@ -76,6 +76,11 @@ func (c *HighLevelClient) GenericAccessibleTopologies(ctx context.Context, volId
 			}
 		}
 
+		// Include the node name in segments so that RemoteAccessPolicyLocalOnly
+		// (which uses topology.LinstorNodeKey) can properly restrict access to
+		// only the nodes where the volume has diskful replicas.
+		segs[topology.LinstorNodeKey] = nodes[i].Name
+
 		for _, m := range remoteAccessPolicy.AccessibleSegments(segs) {
 			if len(m) == 0 {
 				// Empty segment -> access allowed from everywhere.
