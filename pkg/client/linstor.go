@@ -52,7 +52,6 @@ import (
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor/util"
-	"github.com/piraeusdatastore/linstor-csi/pkg/slice"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler/autoplace"
@@ -666,7 +665,7 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 	overrideProps := map[string]string{}
 
 	// If the resource is already on the node, don't worry about attaching, unless we also need to activate it.
-	if existingRes == nil || slice.ContainsString(existingRes.Flags, lapiconsts.FlagRscInactive) {
+	if existingRes == nil || slices.Contains(existingRes.Flags, lapiconsts.FlagRscInactive) {
 		err := s.client.Resources.MakeAvailable(ctx, volId, node, lapi.ResourceMakeAvailable{Diskful: false})
 
 		if errors.Is(err, lapi.NotFoundError) {
@@ -712,7 +711,7 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 		}
 	}
 
-	if slice.ContainsString(existingRes.Flags, lapiconsts.FlagDelete) {
+	if slices.Contains(existingRes.Flags, lapiconsts.FlagDelete) {
 		return "", &DeleteInProgressError{
 			Operation: "attach volume",
 			Kind:      "resource",
@@ -843,11 +842,11 @@ func (s *Linstor) CapacityBytes(ctx context.Context, storagePools []string, over
 	for i := range allNodes {
 		node := &allNodes[i]
 
-		if !slice.ContainsString(requestedNodes, node.Name) {
+		if !slices.Contains(requestedNodes, node.Name) {
 			continue
 		}
 
-		if slice.ContainsString(node.Flags, lapiconsts.FlagEvicted) || slice.ContainsString(node.Flags, lapiconsts.FlagEvacuate) {
+		if slices.Contains(node.Flags, lapiconsts.FlagEvicted) || slices.Contains(node.Flags, lapiconsts.FlagEvacuate) {
 			continue
 		}
 
@@ -864,12 +863,12 @@ func (s *Linstor) CapacityBytes(ctx context.Context, storagePools []string, over
 	for _, sp := range pools {
 		log := log.WithField("pool-to-check", sp.StoragePoolName).WithField("node", sp.NodeName)
 
-		if !slice.ContainsString(requestedNodes, sp.NodeName) {
+		if !slices.Contains(requestedNodes, sp.NodeName) {
 			log.Trace("not an allowed node")
 			continue
 		}
 
-		if len(requestedStoragePools) > 0 && !slice.ContainsString(requestedStoragePools, sp.StoragePoolName) {
+		if len(requestedStoragePools) > 0 && !slices.Contains(requestedStoragePools, sp.StoragePoolName) {
 			log.Trace("not an allowed storage pool")
 			continue
 		}
@@ -1382,17 +1381,17 @@ func (s *Linstor) waitLocalSnapshotSuccessful(ctx context.Context, snap *lapi.Sn
 	logger := s.log.WithField("snap", snap.Name)
 
 	snapshotReady := func(snap *lapi.Snapshot) bool {
-		if !slice.ContainsString(snap.Flags, lapiconsts.FlagSuccessful) {
+		if !slices.Contains(snap.Flags, lapiconsts.FlagSuccessful) {
 			return false
 		}
 
-		if !slice.ContainsString(snap.Flags, lapiconsts.FlagBackup) {
+		if !slices.Contains(snap.Flags, lapiconsts.FlagBackup) {
 			// not a backup -> successful == everything ready
 			return true
 		}
 
 		// Shipped is also used to imply "shipped back"
-		return slice.ContainsString(snap.Flags, lapiconsts.FlagShipped)
+		return slices.Contains(snap.Flags, lapiconsts.FlagShipped)
 	}
 
 	for {
@@ -1488,7 +1487,7 @@ func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *volu
 			continue
 		}
 
-		if slice.ContainsString(preferredNodes, snapNode) {
+		if slices.Contains(preferredNodes, snapNode) {
 			// We found a perfect candidate.
 			selectedNode = snapNode
 			break
@@ -1610,7 +1609,7 @@ func (s *Linstor) reconcileResourceDefinition(ctx context.Context, volId, rgName
 		return nil, err
 	}
 
-	if slice.ContainsString(rd.Flags, lapiconsts.FlagDelete) {
+	if slices.Contains(rd.Flags, lapiconsts.FlagDelete) {
 		return nil, &DeleteInProgressError{
 			Operation: "reconcile resource definition",
 			Kind:      "resource definition",
@@ -2102,7 +2101,7 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*volume.Snapshot, error) {
 		return nil, fmt.Errorf("missing snapshots")
 	}
 
-	if slice.ContainsString(lsnap.Flags, lapiconsts.FlagDelete) {
+	if slices.Contains(lsnap.Flags, lapiconsts.FlagDelete) {
 		return nil, &DeleteInProgressError{
 			Operation: "csi snapshot from linstor",
 			Kind:      "snapshot",
@@ -2113,12 +2112,12 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*volume.Snapshot, error) {
 	snapSizeBytes := int64(lsnap.VolumeDefinitions[0].SizeKib) * KiB
 	creationTimeMicroSecs := lsnap.Snapshots[0].CreateTimestamp
 
-	ready := slice.ContainsString(lsnap.Flags, lapiconsts.FlagSuccessful)
-	if slice.ContainsString(lsnap.Flags, lapiconsts.FlagBackup) {
-		ready = slice.ContainsString(lsnap.Flags, lapiconsts.FlagShipped)
+	ready := slices.Contains(lsnap.Flags, lapiconsts.FlagSuccessful)
+	if slices.Contains(lsnap.Flags, lapiconsts.FlagBackup) {
+		ready = slices.Contains(lsnap.Flags, lapiconsts.FlagShipped)
 	}
 
-	failed := slice.ContainsString(lsnap.Flags, lapiconsts.FlagFailedDisconnect) || slice.ContainsString(lsnap.Flags, lapiconsts.FlagFailedDeployment)
+	failed := slices.Contains(lsnap.Flags, lapiconsts.FlagFailedDisconnect) || slices.Contains(lsnap.Flags, lapiconsts.FlagFailedDeployment)
 
 	if creationTimeMicroSecs == nil {
 		// Some failed snapshots do not show any time values, set a default value.
@@ -2611,7 +2610,7 @@ func (s *Linstor) deleteResourceDefinitionAndGroupIfUnused(ctx context.Context, 
 	}
 
 	for _, res := range resources {
-		if !slice.ContainsString(res.Flags, lapiconsts.FlagDelete) {
+		if !slices.Contains(res.Flags, lapiconsts.FlagDelete) {
 			log.WithField("resource", res).Debug("not deleting resource definition, found undeleted resource")
 			return nil
 		}
@@ -2626,7 +2625,7 @@ func (s *Linstor) deleteResourceDefinitionAndGroupIfUnused(ctx context.Context, 
 	}
 
 	for _, snap := range snapshots {
-		if !slice.ContainsString(snap.Flags, lapiconsts.FlagDelete) {
+		if !slices.Contains(snap.Flags, lapiconsts.FlagDelete) {
 			log.WithField("snapshot", snap).Debug("not deleting resource definition, found undeleted snapshot")
 			return nil
 		}

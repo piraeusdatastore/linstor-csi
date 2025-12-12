@@ -21,13 +21,13 @@ package highlevelclient
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor/util"
-	"github.com/piraeusdatastore/linstor-csi/pkg/slice"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
@@ -112,10 +112,11 @@ func (c *HighLevelClient) GetAllTopologyNodes(ctx context.Context, remoteAccessP
 			return nil, err
 		}
 
-		allNodes = slice.AppendUnique(allNodes, nodes...)
+		allNodes = append(allNodes, nodes...)
 	}
 
-	return allNodes, nil
+	slices.Sort(allNodes)
+	return slices.Compact(allNodes), nil
 }
 
 // NodesForTopology finds all matching nodes for the given topology segment.
