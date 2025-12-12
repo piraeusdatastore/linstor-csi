@@ -34,6 +34,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1380,22 +1381,13 @@ outer:
 func (s *Linstor) waitLocalSnapshotSuccessful(ctx context.Context, snap *lapi.Snapshot) error {
 	logger := s.log.WithField("snap", snap.Name)
 
-	snapshotReady := func(snap *lapi.Snapshot) bool {
-		if !slices.Contains(snap.Flags, lapiconsts.FlagSuccessful) {
-			return false
-		}
-
-		if !slices.Contains(snap.Flags, lapiconsts.FlagBackup) {
-			// not a backup -> successful == everything ready
-			return true
-		}
-
-		// Shipped is also used to imply "shipped back"
-		return slices.Contains(snap.Flags, lapiconsts.FlagShipped)
-	}
-
 	for {
-		if snapshotReady(snap) {
+		_, ready, err := GetSnapshotRemoteAndReadiness(snap)
+		if err != nil {
+			return fmt.Errorf("failed to wait for snapshot success: %w", err)
+		}
+
+		if ready {
 			logger.Debug("local snapshot present and ready, nothing to do")
 			return nil
 		}
@@ -2112,9 +2104,9 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*volume.Snapshot, error) {
 	snapSizeBytes := int64(lsnap.VolumeDefinitions[0].SizeKib) * KiB
 	creationTimeMicroSecs := lsnap.Snapshots[0].CreateTimestamp
 
-	ready := slices.Contains(lsnap.Flags, lapiconsts.FlagSuccessful)
-	if slices.Contains(lsnap.Flags, lapiconsts.FlagBackup) {
-		ready = slices.Contains(lsnap.Flags, lapiconsts.FlagShipped)
+	remote, ready, err := GetSnapshotRemoteAndReadiness(lsnap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get snapshot status: %w", err)
 	}
 
 	failed := slices.Contains(lsnap.Flags, lapiconsts.FlagFailedDisconnect) || slices.Contains(lsnap.Flags, lapiconsts.FlagFailedDeployment)
@@ -2123,8 +2115,6 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*volume.Snapshot, error) {
 		// Some failed snapshots do not show any time values, set a default value.
 		creationTimeMicroSecs = &lapi.TimeStampMs{}
 	}
-
-	remote := lsnap.Props["BackupShipping/BackupTargetRemote"]
 
 	return &volume.Snapshot{
 		SnapshotId: volume.SnapshotId{
@@ -2212,6 +2202,63 @@ func SetSnapshotType(snapId *volume.SnapshotId, remotes lapi.RemoteList) {
 		snapId.Remote = ""
 		snapId.Type = volume.SnapshotTypeInCluster
 	}
+}
+
+// GetSnapshotRemoteAndReadiness returns the snapshots primary remote and readiness.
+// For "local-only" snapshots, this returns remote "", and ready if the snapshot is successful.
+// For "remote" snapshots, this first looks for BackupShipping properties (LINSTOR >= 1.33)
+// or backup flags (LINSTOR < 1.33). A "remote" snapshot is ready is the upload or download is successful.
+func GetSnapshotRemoteAndReadiness(snap *lapi.Snapshot) (string, bool, error) {
+	// For LINSTOR >= 1.33, first check if this is a snapshot being "received", in which case we have
+	// BackupShipping/Target/BackupSrcRemote property set.
+	if remote, ok := snap.SnapshotDefinitionProps[lapiconsts.NamespcBackupShipping+"/Target/BackupSrcRemote"]; ok {
+		return remote, snap.SnapshotDefinitionProps[lapiconsts.NamespcBackupShipping+"/Target/ShippingStatus"] == "Success", nil
+	}
+
+	remote := ""
+	ready := false
+
+	// For LINSTOR >= 1.33, check if this snapshot is currently being uploaded by searching for
+	// BackupShipping/Source/... properties.
+	for k, v := range snap.SnapshotDefinitionProps {
+		if strings.HasPrefix(k, lapiconsts.NamespcBackupShipping+"/Source/") && strings.HasSuffix(k, "BackupTargetRemote") {
+			r := v
+
+			if remote == "" {
+				remote = r
+				ready = snap.SnapshotDefinitionProps[fmt.Sprintf("%s/Source/%s/ShippingStatus", lapiconsts.NamespcBackupShipping, remote)] == "Success"
+			} else {
+				// Compare start times of backups, selecting the first one
+				rTime, err := strconv.ParseInt(snap.SnapshotDefinitionProps[fmt.Sprintf("%s/Source/%s/BackupStartTimestamp", lapiconsts.NamespcBackupShipping, r)], 10, 64)
+				if err != nil {
+					return "", false, fmt.Errorf("malformed backup start timestamp for remote '%s': %w", r, err)
+				}
+
+				cTime, err := strconv.ParseInt(snap.SnapshotDefinitionProps[fmt.Sprintf("%s/Source/%s/BackupStartTimestamp", lapiconsts.NamespcBackupShipping, remote)], 10, 64)
+				if err != nil {
+					return "", false, fmt.Errorf("malformed backup start timestamp for remote '%s': %w", remote, err)
+				}
+
+				if rTime < cTime {
+					remote = r
+					ready = snap.SnapshotDefinitionProps[fmt.Sprintf("%s/Source/%s/ShippingStatus", lapiconsts.NamespcBackupShipping, remote)] == "Success"
+				}
+			}
+		}
+	}
+
+	if remote != "" {
+		return remote, ready, nil
+	}
+
+	// For LINSTOR <1.33, check the backup flag
+	if slices.Contains(snap.Flags, lapiconsts.FlagBackup) {
+		// Check deprecated Properties, as older LINSTOR versions may not have SnapshotDefinitionProps yet.
+		return snap.Props["BackupShipping/BackupTargetRemote"], slices.Contains(snap.Flags, lapiconsts.FlagShipped), nil
+	}
+
+	// Local only snapshot
+	return "", slices.Contains(snap.Flags, lapiconsts.FlagSuccessful), nil
 }
 
 func NodesAndConditionFromResources(ress []lapi.Resource) ([]string, *csi.VolumeCondition) {
