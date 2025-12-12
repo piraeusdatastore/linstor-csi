@@ -470,3 +470,104 @@ func TestLinstor_Status(t *testing.T) {
 		})
 	}
 }
+
+func TestGetSnapshotRemoteAndReadiness(t *testing.T) {
+	t.Parallel()
+
+	tcases := []struct {
+		snapshot       *lapi.Snapshot
+		expectedRemote string
+		expectedReady  bool
+	}{
+		{
+			snapshot: &lapi.Snapshot{
+				Name:                    "local-snapshot-not-ready",
+				SnapshotDefinitionProps: map[string]string{"sample": "stuff"},
+			},
+			expectedRemote: "",
+			expectedReady:  false,
+		},
+		{
+			snapshot: &lapi.Snapshot{
+				Name:  "local-snapshot-ready",
+				Flags: []string{lapiconsts.FlagSuccessful},
+			},
+			expectedRemote: "",
+			expectedReady:  true,
+		},
+		{
+			snapshot: &lapi.Snapshot{
+				Name: "remote-snapshot-upload-not-ready",
+				SnapshotDefinitionProps: map[string]string{
+					lapiconsts.NamespcBackupShipping + "/Source/remote1/BackupTargetRemote":   "remote1",
+					lapiconsts.NamespcBackupShipping + "/Source/remote1/BackupStartTimestamp": "1765525033750",
+					lapiconsts.NamespcBackupShipping + "/Source/remote1/ShippingStatus":       "Upload",
+				},
+			},
+			expectedRemote: "remote1",
+			expectedReady:  false,
+		},
+		{
+			snapshot: &lapi.Snapshot{
+				Name: "remote-snapshot-upload-ready",
+				SnapshotDefinitionProps: map[string]string{
+					lapiconsts.NamespcBackupShipping + "/Source/remote1/BackupTargetRemote":   "remote1",
+					lapiconsts.NamespcBackupShipping + "/Source/remote1/BackupStartTimestamp": "1765525033750",
+					lapiconsts.NamespcBackupShipping + "/Source/remote1/ShippingStatus":       "Success",
+				},
+			},
+			expectedRemote: "remote1",
+			expectedReady:  true,
+		},
+		{
+			snapshot: &lapi.Snapshot{
+				Name: "remote-snapshot-upload-multiple-remotes",
+				SnapshotDefinitionProps: map[string]string{
+					lapiconsts.NamespcBackupShipping + "/Source/remote1/BackupTargetRemote":   "remote1",
+					lapiconsts.NamespcBackupShipping + "/Source/remote1/BackupStartTimestamp": "1765525033750",
+					lapiconsts.NamespcBackupShipping + "/Source/remote1/ShippingStatus":       "Upload",
+					lapiconsts.NamespcBackupShipping + "/Source/remote2/BackupTargetRemote":   "remote2",
+					lapiconsts.NamespcBackupShipping + "/Source/remote2/BackupStartTimestamp": "1765525033749",
+					lapiconsts.NamespcBackupShipping + "/Source/remote2/ShippingStatus":       "Success",
+				},
+			},
+			expectedRemote: "remote2",
+			expectedReady:  true,
+		},
+		{
+			snapshot: &lapi.Snapshot{
+				Name: "remote-snapshot-download-not-ready",
+				SnapshotDefinitionProps: map[string]string{
+					lapiconsts.NamespcBackupShipping + "/Target/BackupSrcRemote": "remote3",
+					lapiconsts.NamespcBackupShipping + "/Target/ShippingStatus":  "Download",
+				},
+			},
+			expectedRemote: "remote3",
+			expectedReady:  false,
+		},
+		{
+			snapshot: &lapi.Snapshot{
+				Name: "remote-snapshot-download-ready",
+				SnapshotDefinitionProps: map[string]string{
+					lapiconsts.NamespcBackupShipping + "/Target/BackupSrcRemote": "remote3",
+					lapiconsts.NamespcBackupShipping + "/Target/ShippingStatus":  "Success",
+				},
+			},
+			expectedRemote: "remote3",
+			expectedReady:  true,
+		},
+	}
+
+	for i := range tcases {
+		tcase := &tcases[i]
+
+		t.Run(tcase.snapshot.Name, func(t *testing.T) {
+			t.Parallel()
+
+			remote, ready, err := GetSnapshotRemoteAndReadiness(tcase.snapshot)
+			assert.NoError(t, err)
+			assert.Equal(t, tcase.expectedRemote, remote)
+			assert.Equal(t, tcase.expectedReady, ready)
+		})
+	}
+}

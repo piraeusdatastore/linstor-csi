@@ -116,6 +116,7 @@ func (c *HighLevelClient) GetAllTopologyNodes(ctx context.Context, remoteAccessP
 	}
 
 	slices.Sort(allNodes)
+
 	return slices.Compact(allNodes), nil
 }
 

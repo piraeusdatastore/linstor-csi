@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Compatibility with LINSTOR 1.33+ when sending snapshots to S3.
+
 ## [1.10.4] - 2025-12-01
 
 ### Changed
