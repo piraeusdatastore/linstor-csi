@@ -3,6 +3,7 @@ package autoplacetopology
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 
 	linstor "github.com/LINBIT/golinstor"
@@ -14,7 +15,6 @@ import (
 
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor/util"
-	"github.com/piraeusdatastore/linstor-csi/pkg/slice"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology/scheduler"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
@@ -74,7 +74,7 @@ func (s *Scheduler) Create(ctx context.Context, volId string, params *volume.Par
 	}
 
 	for _, node := range diskfulNodes {
-		if slice.ContainsString(requisiteNodes, node) && len(diskfulNodes) >= int(params.PlacementCount) {
+		if slices.Contains(requisiteNodes, node) && len(diskfulNodes) >= int(params.PlacementCount) {
 			log.Debug("resource already deployed with minimum replica count and on at least one requisite node")
 			return nil
 		}
@@ -102,7 +102,7 @@ func (s *Scheduler) Create(ctx context.Context, volId string, params *volume.Par
 	}
 
 	for _, node := range diskfulNodes {
-		if slice.ContainsString(requisiteNodes, node) && len(diskfulNodes) >= int(params.PlacementCount) {
+		if slices.Contains(requisiteNodes, node) && len(diskfulNodes) >= int(params.PlacementCount) {
 			log.Debug("resource already deployed with minimum replica count and on at least one requisite node")
 			return nil
 		}
@@ -174,7 +174,7 @@ func (s *Scheduler) PlaceOneAccessibleToSegment(ctx context.Context, volId strin
 	}
 
 	for _, node := range nodes {
-		if slice.ContainsString(existingNodes, node) {
+		if slices.Contains(existingNodes, node) {
 			log.WithField("node", node).Debug("already deployed on preferred node")
 			return nil
 		}
