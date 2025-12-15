@@ -159,17 +159,17 @@ func (_m *NodeProvider) DeleteStoragePool(ctx context.Context, nodeName string, 
 	return r0
 }
 
-// Evacuate provides a mock function with given fields: ctx, nodeName
-func (_m *NodeProvider) Evacuate(ctx context.Context, nodeName string) error {
-	ret := _m.Called(ctx, nodeName)
+// Evacuate provides a mock function with given fields: ctx, nodeName, evacuate
+func (_m *NodeProvider) Evacuate(ctx context.Context, nodeName string, evacuate *client.NodeEvacuate) error {
+	ret := _m.Called(ctx, nodeName, evacuate)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Evacuate")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
-		r0 = rf(ctx, nodeName)
+	if rf, ok := ret.Get(0).(func(context.Context, string, *client.NodeEvacuate) error); ok {
+		r0 = rf(ctx, nodeName, evacuate)
 	} else {
 		r0 = ret.Error(0)
 	}
