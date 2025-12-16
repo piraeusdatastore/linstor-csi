@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.5] - 2025-12-16
+
 ### Changed
 
 - Compatibility with LINSTOR 1.33+ when sending snapshots to S3.
@@ -661,7 +663,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.4...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.5...HEAD
+[1.10.5]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.4...v1.10.5
 [1.10.4]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.3...v1.10.4
 [1.10.3]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.2...v1.10.3
 [1.10.2]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.1...v1.10.2
