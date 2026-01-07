@@ -139,33 +139,48 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "empty PVC name should skip validation",
-			pods:        []*unstructured.Unstructured{},
-			pvcName:     "",
+			name: "hotplug disk pod with virt-launcher (should succeed)",
+			pods: []*unstructured.Unstructured{
+				createUnstructuredPod("virt-launcher-vm1-abc", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+				createHotplugDiskPod("hp-volume-xyz", "default", "test-pvc", "virt-launcher-vm1-abc", "Running"),
+			},
+			pvcName:     "test-pvc",
 			namespace:   "default",
 			expectError: false,
 		},
 		{
-			name:        "empty namespace should skip validation",
-			pods:        []*unstructured.Unstructured{},
+			name: "hotplug disks from different VMs (should fail)",
+			pods: []*unstructured.Unstructured{
+				createUnstructuredPod("virt-launcher-vm1-abc", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+				createHotplugDiskPod("hp-volume-vm1", "default", "test-pvc", "virt-launcher-vm1-abc", "Running"),
+				createUnstructuredPod("virt-launcher-vm2-xyz", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm2"}, "Running"),
+				createHotplugDiskPod("hp-volume-vm2", "default", "test-pvc", "virt-launcher-vm2-xyz", "Running"),
+			},
 			pvcName:     "test-pvc",
-			namespace:   "",
-			expectError: false,
+			namespace:   "default",
+			expectError: true,
+			errorMsg:    "different VMs",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create fake dynamic client with test pods
+			// Create fake dynamic client with test pods and PV
 			scheme := runtime.NewScheme()
 
-			objects := make([]runtime.Object, len(tc.pods))
-			for i, pod := range tc.pods {
-				objects[i] = pod
+			// Create PV object that references the PVC
+			pv := createUnstructuredPV("test-volume-id", tc.namespace, tc.pvcName)
+
+			objects := make([]runtime.Object, 0, len(tc.pods)+1)
+			objects = append(objects, pv)
+
+			for _, pod := range tc.pods {
+				objects = append(objects, pod)
 			}
 
 			gvrToListKind := map[schema.GroupVersionResource]string{
 				podGVR: "PodList",
+				pvGVR:  "PersistentVolumeList",
 			}
 			client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme, gvrToListKind, objects...)
 
@@ -179,7 +194,7 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 			}
 
 			// Run validation
-			err := driver.validateRWXBlockAttachment(context.Background(), tc.namespace, tc.pvcName)
+			vmName, err := driver.validateRWXBlockAttachment(context.Background(), "test-volume-id")
 
 			if tc.expectError {
 				assert.Error(t, err)
@@ -189,6 +204,10 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 				}
 			} else {
 				assert.NoError(t, err)
+				// VM name is returned when there are pods using the volume
+				if len(tc.pods) > 0 {
+					assert.NotEmpty(t, vmName)
+				}
 			}
 		})
 	}
@@ -202,8 +221,32 @@ func TestValidateRWXBlockAttachmentNoKubeClient(t *testing.T) {
 		log:        logger,
 	}
 
-	err := driver.validateRWXBlockAttachment(context.Background(), "default", "test-pvc")
+	vmName, err := driver.validateRWXBlockAttachment(context.Background(), "test-volume-id")
 	assert.NoError(t, err)
+	assert.Empty(t, vmName)
+}
+
+func TestValidateRWXBlockAttachmentPVNotFound(t *testing.T) {
+	// When PV is not found, validation should be skipped with warning
+	scheme := runtime.NewScheme()
+
+	gvrToListKind := map[schema.GroupVersionResource]string{
+		podGVR: "PodList",
+		pvGVR:  "PersistentVolumeList",
+	}
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme, gvrToListKind)
+
+	logger := logrus.NewEntry(logrus.New())
+	logger.Logger.SetLevel(logrus.DebugLevel)
+
+	driver := &Driver{
+		kubeClient: client,
+		log:        logger,
+	}
+
+	vmName, err := driver.validateRWXBlockAttachment(context.Background(), "non-existent-pv")
+	assert.NoError(t, err)
+	assert.Empty(t, vmName)
 }
 
 // createUnstructuredPod creates an unstructured pod object for testing.
@@ -236,6 +279,27 @@ func createUnstructuredPod(name, namespace, pvcName string, labels map[string]st
 	return pod
 }
 
+// createUnstructuredPV creates an unstructured PersistentVolume object for testing.
+func createUnstructuredPV(name, pvcNamespace, pvcName string) *unstructured.Unstructured {
+	pv := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "PersistentVolume",
+			"metadata": map[string]interface{}{
+				"name": name,
+			},
+			"spec": map[string]interface{}{
+				"claimRef": map[string]interface{}{
+					"name":      pvcName,
+					"namespace": pvcNamespace,
+				},
+			},
+		},
+	}
+
+	return pv
+}
+
 // toStringInterfaceMap converts map[string]string to map[string]interface{}.
 func toStringInterfaceMap(m map[string]string) map[string]interface{} {
 	result := make(map[string]interface{})
@@ -245,4 +309,45 @@ func toStringInterfaceMap(m map[string]string) map[string]interface{} {
 	}
 
 	return result
+}
+
+// createHotplugDiskPod creates a hotplug disk pod that references a virt-launcher pod via ownerReferences.
+func createHotplugDiskPod(name, namespace, pvcName, ownerPodName, phase string) *unstructured.Unstructured {
+	pod := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Pod",
+			"metadata": map[string]interface{}{
+				"name":      name,
+				"namespace": namespace,
+				"labels": map[string]interface{}{
+					"kubevirt.io": "hotplug-disk",
+				},
+				"ownerReferences": []interface{}{
+					map[string]interface{}{
+						"apiVersion":         "v1",
+						"kind":               "Pod",
+						"name":               ownerPodName,
+						"controller":         true,
+						"blockOwnerDeletion": true,
+					},
+				},
+			},
+			"spec": map[string]interface{}{
+				"volumes": []interface{}{
+					map[string]interface{}{
+						"name": "data",
+						"persistentVolumeClaim": map[string]interface{}{
+							"claimName": pvcName,
+						},
+					},
+				},
+			},
+			"status": map[string]interface{}{
+				"phase": phase,
+			},
+		},
+	}
+
+	return pod
 }

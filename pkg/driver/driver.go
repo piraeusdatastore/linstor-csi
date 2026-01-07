@@ -401,6 +401,16 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 		}
 	}
 
+	// Validate RWX block volumes on node side using local filesystem check
+	// This provides protection for the edge case where two pods from different VMs land on the same node
+	if req.GetVolumeCapability().GetBlock() != nil &&
+		req.GetVolumeCapability().GetAccessMode().GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER {
+		if err := d.validateRWXBlockOnNode(ctx, req.GetVolumeId(), req.GetTargetPath()); err != nil {
+			return nil, status.Errorf(codes.FailedPrecondition,
+				"NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
+		}
+	}
+
 	if block := req.GetVolumeCapability().GetBlock(); block != nil {
 		volCtx.MountOptions = []string{"bind"}
 	}
@@ -710,30 +720,107 @@ func (d Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) 
 // KubeVirtVMLabel is the label that KubeVirt adds to pods to identify the VM they belong to.
 const KubeVirtVMLabel = "vm.kubevirt.io/name"
 
+// KubeVirtHotplugDiskLabel is the label that KubeVirt adds to hotplug disk pods.
+const KubeVirtHotplugDiskLabel = "kubevirt.io"
+
 // podGVR is the GroupVersionResource for pods.
 var podGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
 
-// validateRWXBlockAttachment checks that RWX block volumes are only used by pods belonging to the same VM.
-// This prevents misuse of allow-two-primaries while still permitting live migration.
-// Returns an error if:
-// - Multiple pods from different VMs are trying to use the same volume
-// - A pod without the KubeVirt VM label is trying to use a volume already attached elsewhere (strict mode)
-func (d Driver) validateRWXBlockAttachment(ctx context.Context, pvcNamespace, pvcName string) error {
-	if d.kubeClient == nil {
-		// Not running in Kubernetes, skip validation
-		return nil
+// pvGVR is the GroupVersionResource for persistent volumes.
+var pvGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "persistentvolumes"}
+
+// getVMNameFromPod extracts the VM name from a pod, handling both regular virt-launcher pods
+// and hotplug disk pods (which reference the virt-launcher pod via ownerReferences).
+func (d Driver) getVMNameFromPod(ctx context.Context, pod *unstructured.Unstructured) (string, error) {
+	labels := pod.GetLabels()
+	if labels == nil {
+		return "", nil
 	}
 
+	// Direct case: pod has vm.kubevirt.io/name label (virt-launcher pod)
+	if vmName, ok := labels[KubeVirtVMLabel]; ok && vmName != "" {
+		return vmName, nil
+	}
+
+	// Hotplug disk case: pod has kubevirt.io: hotplug-disk label
+	// Follow ownerReferences to find the virt-launcher pod
+	if hotplugValue, ok := labels[KubeVirtHotplugDiskLabel]; ok && hotplugValue == "hotplug-disk" {
+		ownerRefs := pod.GetOwnerReferences()
+		for _, owner := range ownerRefs {
+			if owner.Kind != "Pod" || owner.Controller == nil || !*owner.Controller {
+				continue
+			}
+
+			// Get the owner pod (virt-launcher)
+			ownerPod, err := d.kubeClient.Resource(podGVR).Namespace(pod.GetNamespace()).Get(ctx, owner.Name, metav1.GetOptions{})
+			if err != nil {
+				return "", fmt.Errorf("failed to get owner pod %s: %w", owner.Name, err)
+			}
+
+			// Extract VM name from owner pod
+			ownerLabels := ownerPod.GetLabels()
+			if ownerLabels != nil {
+				if vmName, ok := ownerLabels[KubeVirtVMLabel]; ok && vmName != "" {
+					d.log.WithFields(logrus.Fields{
+						"hotplugPod":   pod.GetName(),
+						"virtLauncher": owner.Name,
+						"vmName":       vmName,
+					}).Debug("resolved VM name from hotplug disk pod via owner reference")
+
+					return vmName, nil
+				}
+			}
+
+			return "", fmt.Errorf("owner pod %s does not have %s label", owner.Name, KubeVirtVMLabel)
+		}
+
+		return "", fmt.Errorf("hotplug disk pod %s has no controller owner reference", pod.GetName())
+	}
+
+	return "", nil
+}
+
+// validateRWXBlockAttachment checks that RWX block volumes are only used by pods belonging to the same VM.
+// This prevents misuse of allow-two-primaries while still permitting live migration.
+// Returns the VM name if validation passes, or an error if:
+// - Multiple pods from different VMs are trying to use the same volume
+// - A pod without the KubeVirt VM label is trying to use a volume already attached elsewhere (strict mode)
+// Returns empty string for VM name when no pods are using the volume or validation is skipped.
+func (d Driver) validateRWXBlockAttachment(ctx context.Context, volumeID string) (string, error) {
+	d.log.WithField("volumeID", volumeID).Info("validateRWXBlockAttachment called")
+
+	if d.kubeClient == nil {
+		// Not running in Kubernetes, skip validation
+		d.log.Warn("validateRWXBlockAttachment: kubeClient is nil, skipping validation")
+		return "", nil
+	}
+
+	// Get PV to find PVC reference (volumeID == PV name in CSI)
+	pv, err := d.kubeClient.Resource(pvGVR).Get(ctx, volumeID, metav1.GetOptions{})
+	if err != nil {
+		d.log.WithError(err).Warn("cannot validate RWX attachment: failed to get PV")
+		return "", nil
+	}
+
+	// Extract claimRef from PV
+	claimRef, found, _ := unstructured.NestedMap(pv.Object, "spec", "claimRef")
+	if !found {
+		d.log.Warn("cannot validate RWX attachment: PV has no claimRef")
+		return "", nil
+	}
+
+	pvcName, _, _ := unstructured.NestedString(claimRef, "name")
+	pvcNamespace, _, _ := unstructured.NestedString(claimRef, "namespace")
+
 	if pvcNamespace == "" || pvcName == "" {
-		// Cannot validate without PVC info
-		d.log.Warn("cannot validate RWX attachment: PVC name or namespace is empty")
-		return nil
+		d.log.Warn("cannot validate RWX attachment: PVC name or namespace is empty in claimRef")
+		return "", nil
 	}
 
 	// List all pods in the namespace
 	podList, err := d.kubeClient.Resource(podGVR).Namespace(pvcNamespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to list pods in namespace %s: %w", pvcNamespace, err)
+		return "", fmt.Errorf("failed to list pods in namespace %s: %w", pvcNamespace, err)
 	}
 
 	// Filter pods that use this PVC and are in a running/pending state
@@ -770,11 +857,12 @@ func (d Driver) validateRWXBlockAttachment(ctx context.Context, pvcNamespace, pv
 
 			claimName, _, _ := unstructured.NestedString(pvc, "claimName")
 			if claimName == pvcName {
-				labels := item.GetLabels()
-
-				vmName := ""
-				if labels != nil {
-					vmName = labels[KubeVirtVMLabel]
+				// Extract VM name, handling both regular and hotplug disk pods
+				vmName, err := d.getVMNameFromPod(ctx, &item)
+				if err != nil {
+					d.log.WithError(err).WithField("pod", item.GetName()).Warn("failed to get VM name from pod")
+					// Continue with empty vmName - will be caught by strict mode check
+					vmName = ""
 				}
 
 				podsUsingPVC = append(podsUsingPVC, podInfo{
@@ -789,7 +877,26 @@ func (d Driver) validateRWXBlockAttachment(ctx context.Context, pvcNamespace, pv
 
 	// If 0 or 1 pod uses the PVC, no conflict possible
 	if len(podsUsingPVC) <= 1 {
-		return nil
+		// Return VM name if there's exactly one pod
+		if len(podsUsingPVC) == 1 {
+			d.log.WithFields(logrus.Fields{
+				"volumeID":     volumeID,
+				"vmName":       podsUsingPVC[0].vmName,
+				"podCount":     1,
+				"pvcNamespace": pvcNamespace,
+				"pvcName":      pvcName,
+			}).Info("validateRWXBlockAttachment: single pod found, returning VM name")
+
+			return podsUsingPVC[0].vmName, nil
+		}
+
+		d.log.WithFields(logrus.Fields{
+			"volumeID":     volumeID,
+			"pvcNamespace": pvcNamespace,
+			"pvcName":      pvcName,
+		}).Info("validateRWXBlockAttachment: no pods found using PVC")
+
+		return "", nil
 	}
 
 	// Check that all pods belong to the same VM
@@ -798,7 +905,7 @@ func (d Driver) validateRWXBlockAttachment(ctx context.Context, pvcNamespace, pv
 		if pod.vmName == "" {
 			// Strict mode: if any pod doesn't have the KubeVirt label and there are multiple pods,
 			// deny the attachment
-			return fmt.Errorf("RWX block volume %s/%s is used by multiple pods but pod %s does not have the %s label; "+
+			return "", fmt.Errorf("RWX block volume %s/%s is used by multiple pods but pod %s does not have the %s label; "+
 				"RWX block volumes with allow-two-primaries are only supported for KubeVirt live migration",
 				pvcNamespace, pvcName, pod.name, KubeVirtVMLabel)
 		}
@@ -807,7 +914,7 @@ func (d Driver) validateRWXBlockAttachment(ctx context.Context, pvcNamespace, pv
 			vmName = pod.vmName
 		} else if vmName != pod.vmName {
 			// Different VMs are trying to use the same volume
-			return fmt.Errorf("RWX block volume %s/%s is being used by pods from different VMs (%s and %s); "+
+			return "", fmt.Errorf("RWX block volume %s/%s is being used by pods from different VMs (%s and %s); "+
 				"this is not supported - RWX block volumes with allow-two-primaries are only for live migration of a single VM",
 				pvcNamespace, pvcName, vmName, pod.vmName)
 		}
@@ -819,6 +926,42 @@ func (d Driver) validateRWXBlockAttachment(ctx context.Context, pvcNamespace, pv
 		"vmName":       vmName,
 		"podCount":     len(podsUsingPVC),
 	}).Debug("RWX block attachment validated: all pods belong to the same VM (likely live migration)")
+
+	return vmName, nil
+}
+
+// validateRWXBlockOnNode performs node-side validation of RWX block volumes using local filesystem check.
+// This provides protection against the edge case where two pods from different VMs land on the same node.
+// Since ControllerPublishVolume is called only once per (volumeID, nodeID) pair, not per pod,
+// we need to check if the volume is already mounted for another pod on this node.
+func (d Driver) validateRWXBlockOnNode(ctx context.Context, volumeID, targetPath string) error {
+	// Extract base directory for this volume (contains subdirectories per pod UID)
+	baseDir := filepath.Dir(targetPath)
+
+	// List existing mounts for this volume
+	entries, err := os.ReadDir(baseDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Directory doesn't exist yet - first mount
+			return nil
+		}
+
+		d.log.WithError(err).Warn("cannot check existing mounts for RWX validation")
+
+		return nil
+	}
+
+	// If there are already other mounts, block the second one
+	if len(entries) > 0 {
+		d.log.WithFields(logrus.Fields{
+			"volumeID":       volumeID,
+			"existingMounts": len(entries),
+			"baseDir":        baseDir,
+		}).Warn("blocking RWX block volume mount: already mounted for another pod on this node")
+
+		return fmt.Errorf("RWX block volume is already mounted for another pod on this node - " +
+			"multiple pods on the same node sharing a block device is not supported (only for live migration across nodes)")
+	}
 
 	return nil
 }
@@ -869,10 +1012,8 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 
 	// Validate RWX block attachment to prevent misuse of allow-two-primaries
 	if rwxBlock {
-		pvcName := existingVolume.Properties[lc.NamespcAuxiliary+"/"+ParameterCsiPvcName]
-		pvcNamespace := existingVolume.Properties[lc.NamespcAuxiliary+"/"+ParameterCsiPvcNamespace]
-
-		if err := d.validateRWXBlockAttachment(ctx, pvcNamespace, pvcName); err != nil {
+		_, err := d.validateRWXBlockAttachment(ctx, req.GetVolumeId())
+		if err != nil {
 			return nil, status.Errorf(codes.FailedPrecondition,
 				"ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err)
 		}
