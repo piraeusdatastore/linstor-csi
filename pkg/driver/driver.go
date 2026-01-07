@@ -707,6 +707,122 @@ func (d Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) 
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
+// KubeVirtVMLabel is the label that KubeVirt adds to pods to identify the VM they belong to.
+const KubeVirtVMLabel = "vm.kubevirt.io/name"
+
+// podGVR is the GroupVersionResource for pods.
+var podGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+
+// validateRWXBlockAttachment checks that RWX block volumes are only used by pods belonging to the same VM.
+// This prevents misuse of allow-two-primaries while still permitting live migration.
+// Returns an error if:
+// - Multiple pods from different VMs are trying to use the same volume
+// - A pod without the KubeVirt VM label is trying to use a volume already attached elsewhere (strict mode)
+func (d Driver) validateRWXBlockAttachment(ctx context.Context, pvcNamespace, pvcName string) error {
+	if d.kubeClient == nil {
+		// Not running in Kubernetes, skip validation
+		return nil
+	}
+
+	if pvcNamespace == "" || pvcName == "" {
+		// Cannot validate without PVC info
+		d.log.Warn("cannot validate RWX attachment: PVC name or namespace is empty")
+		return nil
+	}
+
+	// List all pods in the namespace
+	podList, err := d.kubeClient.Resource(podGVR).Namespace(pvcNamespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list pods in namespace %s: %w", pvcNamespace, err)
+	}
+
+	// Filter pods that use this PVC and are in a running/pending state
+	type podInfo struct {
+		name   string
+		vmName string
+	}
+
+	var podsUsingPVC []podInfo
+
+	for _, item := range podList.Items {
+		// Get pod phase from status
+		phase, _, _ := unstructured.NestedString(item.Object, "status", "phase")
+		if phase == "Succeeded" || phase == "Failed" {
+			continue
+		}
+
+		// Check if pod uses the PVC
+		volumes, found, _ := unstructured.NestedSlice(item.Object, "spec", "volumes")
+		if !found {
+			continue
+		}
+
+		for _, vol := range volumes {
+			volMap, ok := vol.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			pvc, found, _ := unstructured.NestedMap(volMap, "persistentVolumeClaim")
+			if !found {
+				continue
+			}
+
+			claimName, _, _ := unstructured.NestedString(pvc, "claimName")
+			if claimName == pvcName {
+				labels := item.GetLabels()
+
+				vmName := ""
+				if labels != nil {
+					vmName = labels[KubeVirtVMLabel]
+				}
+
+				podsUsingPVC = append(podsUsingPVC, podInfo{
+					name:   item.GetName(),
+					vmName: vmName,
+				})
+
+				break
+			}
+		}
+	}
+
+	// If 0 or 1 pod uses the PVC, no conflict possible
+	if len(podsUsingPVC) <= 1 {
+		return nil
+	}
+
+	// Check that all pods belong to the same VM
+	var vmName string
+	for _, pod := range podsUsingPVC {
+		if pod.vmName == "" {
+			// Strict mode: if any pod doesn't have the KubeVirt label and there are multiple pods,
+			// deny the attachment
+			return fmt.Errorf("RWX block volume %s/%s is used by multiple pods but pod %s does not have the %s label; "+
+				"RWX block volumes with allow-two-primaries are only supported for KubeVirt live migration",
+				pvcNamespace, pvcName, pod.name, KubeVirtVMLabel)
+		}
+
+		if vmName == "" {
+			vmName = pod.vmName
+		} else if vmName != pod.vmName {
+			// Different VMs are trying to use the same volume
+			return fmt.Errorf("RWX block volume %s/%s is being used by pods from different VMs (%s and %s); "+
+				"this is not supported - RWX block volumes with allow-two-primaries are only for live migration of a single VM",
+				pvcNamespace, pvcName, vmName, pod.vmName)
+		}
+	}
+
+	d.log.WithFields(logrus.Fields{
+		"pvcNamespace": pvcNamespace,
+		"pvcName":      pvcName,
+		"vmName":       vmName,
+		"podCount":     len(podsUsingPVC),
+	}).Debug("RWX block attachment validated: all pods belong to the same VM (likely live migration)")
+
+	return nil
+}
+
 // ControllerPublishVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#controllerpublishvolume
 func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
 	if req.GetVolumeId() == "" {
@@ -750,6 +866,17 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 
 	// ReadWriteMany block volume
 	rwxBlock := req.VolumeCapability.AccessMode.GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER && req.VolumeCapability.GetBlock() != nil
+
+	// Validate RWX block attachment to prevent misuse of allow-two-primaries
+	if rwxBlock {
+		pvcName := existingVolume.Properties[lc.NamespcAuxiliary+"/"+ParameterCsiPvcName]
+		pvcNamespace := existingVolume.Properties[lc.NamespcAuxiliary+"/"+ParameterCsiPvcNamespace]
+
+		if err := d.validateRWXBlockAttachment(ctx, pvcNamespace, pvcName); err != nil {
+			return nil, status.Errorf(codes.FailedPrecondition,
+				"ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err)
+		}
+	}
 
 	devPath, err := d.Assignments.Attach(ctx, req.GetVolumeId(), req.GetNodeId(), rwxBlock)
 	if err != nil {
