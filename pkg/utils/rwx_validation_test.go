@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
-package driver
+package utils
 
 import (
 	"context"
@@ -179,22 +179,17 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 			}
 
 			gvrToListKind := map[schema.GroupVersionResource]string{
-				podGVR: "PodList",
-				pvGVR:  "PersistentVolumeList",
+				PodGVR: "PodList",
+				PVGVR:  "PersistentVolumeList",
 			}
 			client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme, gvrToListKind, objects...)
 
-			// Create driver with fake client
+			// Create logger
 			logger := logrus.NewEntry(logrus.New())
 			logger.Logger.SetLevel(logrus.DebugLevel)
 
-			driver := &Driver{
-				kubeClient: client,
-				log:        logger,
-			}
-
 			// Run validation
-			vmName, err := driver.validateRWXBlockAttachment(context.Background(), "test-volume-id")
+			vmName, err := ValidateRWXBlockAttachment(context.Background(), client, logger, "test-volume-id")
 
 			if tc.expectError {
 				assert.Error(t, err)
@@ -216,12 +211,8 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 func TestValidateRWXBlockAttachmentNoKubeClient(t *testing.T) {
 	// When not running in Kubernetes (no client), validation should be skipped
 	logger := logrus.NewEntry(logrus.New())
-	driver := &Driver{
-		kubeClient: nil,
-		log:        logger,
-	}
 
-	vmName, err := driver.validateRWXBlockAttachment(context.Background(), "test-volume-id")
+	vmName, err := ValidateRWXBlockAttachment(context.Background(), nil, logger, "test-volume-id")
 	assert.NoError(t, err)
 	assert.Empty(t, vmName)
 }
@@ -231,20 +222,15 @@ func TestValidateRWXBlockAttachmentPVNotFound(t *testing.T) {
 	scheme := runtime.NewScheme()
 
 	gvrToListKind := map[schema.GroupVersionResource]string{
-		podGVR: "PodList",
-		pvGVR:  "PersistentVolumeList",
+		PodGVR: "PodList",
+		PVGVR:  "PersistentVolumeList",
 	}
 	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme, gvrToListKind)
 
 	logger := logrus.NewEntry(logrus.New())
 	logger.Logger.SetLevel(logrus.DebugLevel)
 
-	driver := &Driver{
-		kubeClient: client,
-		log:        logger,
-	}
-
-	vmName, err := driver.validateRWXBlockAttachment(context.Background(), "non-existent-pv")
+	vmName, err := ValidateRWXBlockAttachment(context.Background(), client, logger, "non-existent-pv")
 	assert.NoError(t, err)
 	assert.Empty(t, vmName)
 }
@@ -292,6 +278,9 @@ func createUnstructuredPV(name, pvcNamespace, pvcName string) *unstructured.Unst
 				"claimRef": map[string]interface{}{
 					"name":      pvcName,
 					"namespace": pvcNamespace,
+				},
+				"csi": map[string]interface{}{
+					"volumeHandle": name,
 				},
 			},
 		},

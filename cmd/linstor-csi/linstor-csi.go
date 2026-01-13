@@ -41,22 +41,23 @@ import (
 
 func main() {
 	var (
-		lsEndpoint            = flag.String("linstor-endpoint", "", "Controller API endpoint for LINSTOR")
-		lsSkipTLSVerification = flag.Bool("linstor-skip-tls-verification", false, "If true, do not verify tls")
-		csiEndpoint           = flag.String("csi-endpoint", "unix:///var/lib/kubelet/plugins/linstor.csi.linbit.com/csi.sock", "CSI endpoint")
-		node                  = flag.String("node", "", "Node ID to pass to node service")
-		logLevel              = flag.String("log-level", "info", "Enable debug log output. Choose from: panic, fatal, error, warn, info, debug")
-		rps                   = flag.Float64("linstor-api-requests-per-second", 0, "Maximum allowed number of LINSTOR API requests per second. Default: Unlimited")
-		burst                 = flag.Int("linstor-api-burst", 1, "Maximum number of API requests allowed before being limited by requests-per-second. Default: 1 (no bursting)")
-		bearerTokenFile       = flag.String("bearer-token", "", "Read the bearer token from the given file and use it for authentication.")
-		propNs                = flag.String("property-namespace", linstor.NamespcAuxiliary, "Limit the reported topology keys to properties from the given namespace.")
-		labelBySP             = flag.Bool("label-by-storage-pool", true, "Set to false to disable labeling of nodes based on their configured storage pools.")
-		nodeCacheTimeout      = flag.Duration("node-cache-timeout", 1*time.Minute, "Duration for which the results of node and storage pool related API responses should be cached.")
-		resourceCacheTimeout  = flag.Duration("resource-cache-timeout", 30*time.Second, "Duration for which the results of resource related API responses should be cached.")
-		resyncAfter           = flag.Duration("resync-after", 5*time.Minute, "Duration after which reconciliations (such as for VolumeSnapshotClasses) should be rerun. Set to 0 to disable.")
-		enableRWX             = flag.Bool("enable-rwx", false, "Enable RWX support via NFS (requires running in Kubernetes).")
-		namespace             = flag.String("nfs-service-namespace", "", "The namespace the NFS service is running in.")
-		reactorConfigMapName  = flag.String("nfs-reactor-config-map-name", "linstor-csi-nfs-reactor-config", "Name of the config map used to store promoter configuration")
+		lsEndpoint                = flag.String("linstor-endpoint", "", "Controller API endpoint for LINSTOR")
+		lsSkipTLSVerification     = flag.Bool("linstor-skip-tls-verification", false, "If true, do not verify tls")
+		csiEndpoint               = flag.String("csi-endpoint", "unix:///var/lib/kubelet/plugins/linstor.csi.linbit.com/csi.sock", "CSI endpoint")
+		node                      = flag.String("node", "", "Node ID to pass to node service")
+		logLevel                  = flag.String("log-level", "info", "Enable debug log output. Choose from: panic, fatal, error, warn, info, debug")
+		rps                       = flag.Float64("linstor-api-requests-per-second", 0, "Maximum allowed number of LINSTOR API requests per second. Default: Unlimited")
+		burst                     = flag.Int("linstor-api-burst", 1, "Maximum number of API requests allowed before being limited by requests-per-second. Default: 1 (no bursting)")
+		bearerTokenFile           = flag.String("bearer-token", "", "Read the bearer token from the given file and use it for authentication.")
+		propNs                    = flag.String("property-namespace", linstor.NamespcAuxiliary, "Limit the reported topology keys to properties from the given namespace.")
+		labelBySP                 = flag.Bool("label-by-storage-pool", true, "Set to false to disable labeling of nodes based on their configured storage pools.")
+		nodeCacheTimeout          = flag.Duration("node-cache-timeout", 1*time.Minute, "Duration for which the results of node and storage pool related API responses should be cached.")
+		resourceCacheTimeout      = flag.Duration("resource-cache-timeout", 30*time.Second, "Duration for which the results of resource related API responses should be cached.")
+		resyncAfter               = flag.Duration("resync-after", 5*time.Minute, "Duration after which reconciliations (such as for VolumeSnapshotClasses) should be rerun. Set to 0 to disable.")
+		enableRWX                 = flag.Bool("enable-rwx", false, "Enable RWX support via NFS (requires running in Kubernetes).")
+		namespace                 = flag.String("nfs-service-namespace", "", "The namespace the NFS service is running in.")
+		reactorConfigMapName      = flag.String("nfs-reactor-config-map-name", "linstor-csi-nfs-reactor-config", "Name of the config map used to store promoter configuration")
+		disableRWXBlockValidation = flag.Bool("disable-rwx-block-validation", false, "Disable KubeVirt VM ownership validation for RWX block volumes.")
 	)
 
 	flag.Var(&volume.DefaultRemoteAccessPolicy, "default-remote-access-policy", "")
@@ -167,6 +168,10 @@ func main() {
 		}
 
 		opts = append(opts, driver.ConfigureRWX(*namespace, *reactorConfigMapName))
+	}
+
+	if *disableRWXBlockValidation {
+		opts = append(opts, driver.DisableRWXBlockValidation())
 	}
 
 	drv, err := driver.NewDriver(opts...)
