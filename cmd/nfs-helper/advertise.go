@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/netip"
 	"os"
 
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -50,6 +51,16 @@ func advertiseStart(ctx context.Context, args []string) error {
 		return fmt.Errorf("failed to get k8s client: %w", err)
 	}
 
+	podAddr, err := netip.ParseAddr(os.Getenv("POD_IP"))
+	if err != nil {
+		return fmt.Errorf("failed to parse POD_IP '%s': %w", os.Getenv("POD_IP"), err)
+	}
+
+	addressType := discoveryv1.AddressTypeIPv6
+	if podAddr.Is4() {
+		addressType = discoveryv1.AddressTypeIPv4
+	}
+
 	endpointslice, err := k8scl.DiscoveryV1().EndpointSlices(os.Getenv("POD_NAMESPACE")).Create(
 		ctx,
 		&discoveryv1.EndpointSlice{
@@ -70,9 +81,9 @@ func advertiseStart(ctx context.Context, args []string) error {
 					},
 				},
 			},
-			AddressType: discoveryv1.AddressTypeIPv4,
+			AddressType: addressType,
 			Endpoints: []discoveryv1.Endpoint{{
-				Addresses: []string{os.Getenv("POD_IP")},
+				Addresses: []string{podAddr.String()},
 			}},
 			Ports: []discoveryv1.EndpointPort{{
 				Name: &resource,
