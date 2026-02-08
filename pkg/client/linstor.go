@@ -2399,6 +2399,28 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 			source = fmt.Sprintf("%s:%s", u.Hostname(), u.Path)
 			mntOpts = append(mntOpts, fmt.Sprintf("port=%s,vers=4", u.Port()))
 		} else if !block && !readonly {
+			// Check if the device has a filesystem. If LINSTOR's server-side
+			// formatting was interrupted during initial provisioning, the device
+			// may be completely unformatted. In that case, format it now as a
+			// fallback rather than failing forever on fsck.
+			hasFS, probeErr := utils.HasFilesystem(ctx, source)
+			if probeErr != nil {
+				s.log.WithError(probeErr).Warn("failed to probe device for filesystem, proceeding with fsck")
+
+				hasFS = true // assume formatted, let fsck handle it
+			}
+
+			if !hasFS {
+				s.log.WithFields(logrus.Fields{
+					"device":     source,
+					"filesystem": fsType,
+				}).Warn("device has no filesystem, formatting as fallback (LINSTOR server-side format may have failed)")
+
+				if err := utils.FormatDevice(ctx, source, fsType); err != nil {
+					return fmt.Errorf("failed to format unformatted device '%s': %w", source, err)
+				}
+			}
+
 			if err := utils.Fsck(ctx, source); err != nil {
 				return fmt.Errorf("failed to run fsck on device '%s': %w", source, err)
 			}
