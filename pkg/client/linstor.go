@@ -181,7 +181,7 @@ func LogLevel(s string) func(*Linstor) error {
 func (s *Linstor) ListAllWithStatus(ctx context.Context) ([]volume.VolumeStatus, error) {
 	var vols []volume.VolumeStatus
 
-	resourcesByName := make(map[string][]lapi.Resource)
+	resourcesByName := make(map[string][]lapi.ResourceWithVolumes)
 
 	resDefs, err := s.client.ResourceDefinitions.GetAll(ctx, lapi.RDGetAllRequest{WithVolumeDefinitions: true})
 	if err != nil {
@@ -194,7 +194,7 @@ func (s *Linstor) ListAllWithStatus(ctx context.Context) ([]volume.VolumeStatus,
 	}
 
 	for i := range allResources {
-		resourcesByName[allResources[i].Name] = append(resourcesByName[allResources[i].Name], allResources[i].Resource)
+		resourcesByName[allResources[i].Name] = append(resourcesByName[allResources[i].Name], allResources[i])
 	}
 
 	for _, rd := range resDefs {
@@ -2173,7 +2173,7 @@ func (s *Linstor) Status(ctx context.Context, volId string) ([]string, *csi.Volu
 		"volume": volId,
 	}).Debug("getting assignments")
 
-	ress, err := s.client.Resources.GetAll(ctx, volId)
+	ress, err := s.client.Resources.GetResourceView(ctx, &lapi.ListOpts{Resource: []string{volId}})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to list resources for '%s': %w", volId, err)
 	}
@@ -2261,13 +2261,20 @@ func GetSnapshotRemoteAndReadiness(snap *lapi.Snapshot) (string, bool, error) {
 	return "", slices.Contains(snap.Flags, lapiconsts.FlagSuccessful), nil
 }
 
-func NodesAndConditionFromResources(ress []lapi.Resource) ([]string, *csi.VolumeCondition) {
+func NodesAndConditionFromResources(ress []lapi.ResourceWithVolumes) ([]string, *csi.VolumeCondition) {
 	var allNodes, abnormalNodes []string
 
 	for i := range ress {
 		res := &ress[i]
 
-		allNodes = append(allNodes, res.NodeName)
+		// A resource is a CSI publish target if any of its volumes were created
+		// by ControllerPublishVolume, identified by the temporary-diskless-attach property.
+		if slices.ContainsFunc(res.Volumes, func(v lapi.Volume) bool {
+			createdFor, ok := v.Props[linstor.PropertyCreatedFor]
+			return ok && createdFor == linstor.CreatedForTemporaryDisklessAttach
+		}) {
+			allNodes = append(allNodes, res.NodeName)
+		}
 
 		if res.State == nil {
 			abnormalNodes = append(abnormalNodes, res.NodeName)
