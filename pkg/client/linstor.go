@@ -2404,6 +2404,13 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 			}
 		}
 
+		if fsType == "ext4" {
+			_, err := s.resizer.Resize(source, target)
+			if err != nil {
+				return fmt.Errorf("failed to resize ext4 device: %w", err)
+			}
+		}
+
 		err = s.mounter.MountSensitiveWithoutSystemdWithMountFlags(source, target, fsType, mntOpts, nil, mntFlags)
 		if err != nil {
 			return err
