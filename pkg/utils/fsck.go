@@ -18,9 +18,11 @@ func Fsck(ctx context.Context, device string) error {
 	out, err := exec.CommandContext(ctx, "fsck", "-l", "-p", "-M", device).CombinedOutput()
 	if err != nil {
 		var execErr *exec.ExitError
-		if errors.As(err, &execErr) && execErr.ExitCode() <= 1 {
+		if errors.As(err, &execErr) && (execErr.ExitCode() <= 1 || execErr.ExitCode() == 8) {
 			// Exit code 0: No error
 			// Exit code 1: Filesystem errors corrected
+			// Exit code 8: Operational error (when the volume is mounted in another mount namespace, and we do not see
+			//                                 it in our /proc/mounts, so "-M" does not work)
 			return nil
 		}
 

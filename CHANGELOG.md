@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - NFS export failed to set correct address type in IPv6 clusters.
+- Improve fsck check for already mounted fileystem.
 
 ## [1.10.5] - 2025-12-16
 
