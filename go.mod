@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/LINBIT/golinstor v0.59.0
+	github.com/LINBIT/golinstor v0.60.0
 	github.com/container-storage-interface/spec v1.12.0
 	github.com/coreos/go-systemd/v22 v22.7.0
 	github.com/kubernetes-csi/csi-test/v5 v5.4.0
