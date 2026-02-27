@@ -397,6 +397,190 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 		"volume": fmt.Sprintf("%+v", vol),
 	})
 
+	if params.CloneFullCopy {
+		// Clone via temporary snapshot + restore instead of LINSTOR rd clone.
+		// This ensures the cloned volume is a full independent copy rather than
+		// a thin COW snapshot that stays on the same nodes as the source.
+
+		// LINSTOR snapshot names are limited to 48 characters.
+		snapSuffix := vol.ID
+		if len(snapSuffix) > 39 {
+			snapSuffix = snapSuffix[len(snapSuffix)-39:]
+		}
+		snapName := fmt.Sprintf("cs-%s", snapSuffix)
+
+		// Clean up any leftover snapshot from a previous interrupted attempt.
+		// The snapshot name is deterministic, so a restart between SnapCreate
+		// and DeleteSnapshot would leave a snapshot that blocks retries.
+		if err := s.client.Resources.DeleteSnapshot(ctx, src.ID, snapName); err != nil && !errors.Is(err, lapi.NotFoundError) {
+			logger.WithError(err).Warn("clone: failed to clean up leftover snapshot")
+		}
+
+		logger.WithField("snapshot", snapName).Debug("create temporary snapshot from source")
+
+		snapParams := &volume.SnapshotParameters{Type: volume.SnapshotTypeInCluster}
+		snaps, err := s.SnapCreate(ctx, snapName, snapParams, src.ID)
+		if err != nil {
+			return fmt.Errorf("clone: create temp snapshot: %w", err)
+		}
+
+		if len(snaps) == 0 {
+			return fmt.Errorf("clone: no snapshots returned for source %s", src.ID)
+		}
+
+		snap := snaps[0]
+
+		logger.Debug("restore volume from temporary snapshot")
+
+		err = s.VolFromSnap(ctx, snap, vol, params, &volume.SnapshotParameters{}, topologies)
+		if err != nil {
+			if delErr := s.client.Resources.DeleteSnapshot(ctx, snap.SourceName, snap.SnapshotName); delErr != nil {
+				logger.WithError(delErr).Warn("clone: failed to clean up temp snapshot after restore failure")
+			}
+			return fmt.Errorf("clone: restore from snapshot: %w", err)
+		}
+
+		logger.Debug("delete temporary snapshot")
+
+		if err := s.client.Resources.DeleteSnapshot(ctx, snap.SourceName, snap.SnapshotName); err != nil {
+			logger.WithError(err).Warn("clone: failed to delete temp snapshot")
+		}
+
+		// Migrate clone data away from source node(s) to distribute storage load.
+		// VolFromSnap restores the snapshot on the source node; without migration,
+		// all clones of the same volume would accumulate on a single node.
+
+		srcResources, err := s.client.Resources.GetAll(ctx, src.ID)
+		if err != nil {
+			logger.WithError(err).Warn("clone: skipping migration, cannot get source resources")
+			return nil
+		}
+
+		srcDiskful := make(map[string]bool)
+		for _, r := range srcResources {
+			diskless := false
+			for _, f := range r.Flags {
+				if f == lapiconsts.FlagDiskless {
+					diskless = true
+					break
+				}
+			}
+			if !diskless {
+				srcDiskful[r.NodeName] = true
+			}
+		}
+
+		cloneResources, err := s.client.Resources.GetAll(ctx, vol.ID)
+		if err != nil {
+			logger.WithError(err).Warn("clone: skipping migration, cannot get clone resources")
+			return nil
+		}
+
+		var overlapping []string
+		for _, r := range cloneResources {
+			diskless := false
+			for _, f := range r.Flags {
+				if f == lapiconsts.FlagDiskless {
+					diskless = true
+					break
+				}
+			}
+			if !diskless && srcDiskful[r.NodeName] {
+				overlapping = append(overlapping, r.NodeName)
+			}
+		}
+
+		if len(overlapping) == 0 {
+			return nil
+		}
+
+		logger.WithField("nodes", overlapping).Debug("clone co-located with source, migrating")
+
+		storagePool := ""
+		if len(params.StoragePools) > 0 {
+			storagePool = params.StoragePools[0]
+		}
+
+		err = s.client.Resources.Autoplace(ctx, vol.ID, lapi.AutoPlaceRequest{
+			SelectFilter: lapi.AutoSelectFilter{
+				AdditionalPlaceCount: int32(len(overlapping)),
+				NotPlaceWithRsc:      []string{src.ID},
+				StoragePool:          storagePool,
+			},
+		})
+		if err != nil {
+			logger.WithError(err).Warn("clone: migration autoplace failed, keeping source placement")
+			return nil
+		}
+
+		logger.Debug("waiting for DRBD sync to new nodes")
+
+		syncTimeout := time.After(10 * time.Minute)
+		for {
+			select {
+			case <-syncTimeout:
+				logger.Warn("clone: DRBD sync timeout, keeping all copies")
+				return nil
+			case <-ctx.Done():
+				return nil
+			default:
+			}
+
+			allSynced := true
+			cloneResources, err = s.client.Resources.GetAll(ctx, vol.ID)
+			if err != nil {
+				logger.WithError(err).Warn("clone: sync check failed, keeping all copies")
+				return nil
+			}
+
+			for _, r := range cloneResources {
+				if srcDiskful[r.NodeName] {
+					continue
+				}
+				diskless := false
+				for _, f := range r.Flags {
+					if f == lapiconsts.FlagDiskless {
+						diskless = true
+						break
+					}
+				}
+				if diskless {
+					continue
+				}
+
+				vols, vErr := s.client.Resources.GetVolumes(ctx, vol.ID, r.NodeName)
+				if vErr != nil {
+					allSynced = false
+					break
+				}
+				for _, v := range vols {
+					if v.State.DiskState != "UpToDate" {
+						allSynced = false
+						break
+					}
+				}
+				if !allSynced {
+					break
+				}
+			}
+
+			if allSynced {
+				break
+			}
+
+			time.Sleep(2 * time.Second)
+		}
+
+		for _, node := range overlapping {
+			logger.WithField("node", node).Debug("removing clone from source node")
+			if err := s.client.Resources.Delete(ctx, vol.ID, node); err != nil {
+				logger.WithError(err).WithField("node", node).Warn("clone: failed to remove source-node copy")
+			}
+		}
+
+		return nil
+	}
+
 	logger.Debug("reconcile resource group from storage class")
 
 	rGroup, err := s.reconcileResourceGroup(ctx, params)

@@ -50,6 +50,7 @@ const (
 	nfsservicename
 	nfssquash
 	nfsrecoveryvolumesize
+	clonefullcopy
 )
 
 // Parameters configuration for linstor volumes.
@@ -118,6 +119,9 @@ type Parameters struct {
 	// NfsRecoveryVolumeSize sets the volume size (in bytes) of the recovery volume used by the NFS server.
 	// Defaults to 300MiB.
 	NfsRecoveryVolumeBytes int64
+	// CloneFullCopy enables clone via snapshot+restore instead of LINSTOR rd clone.
+	// This creates independent full copies rather than thin COW snapshots.
+	CloneFullCopy bool
 }
 
 const DefaultDisklessStoragePoolName = "DfltDisklessStorPool"
@@ -287,6 +291,13 @@ func NewParameters(params map[string]string, topologyPrefix string) (Parameters,
 			}
 
 			p.NfsRecoveryVolumeBytes = s.Value()
+		case clonefullcopy:
+			c, err := strconv.ParseBool(v)
+			if err != nil {
+				return p, err
+			}
+
+			p.CloneFullCopy = c
 		}
 	}
 
