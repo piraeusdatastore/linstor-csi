@@ -92,7 +92,7 @@ func NewSnapshotParameters(params, secrets map[string]string) (*SnapshotParamete
 			p.LinstorTargetClusterID = v
 		case "/linstor-target-storage-pool":
 			p.LinstorTargetStoragePool = v
-		case "/relocate-after-restore":
+		case "/relocateAfterRestore":
 			b, err := strconv.ParseBool(v)
 			if err != nil {
 				return nil, err
