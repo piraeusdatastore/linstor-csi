@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _paramKeyName = "allowremotevolumeaccessautoplaceclientlistdisklessonremainingdisklessstoragepooldonotplacewithregexencryptionfsoptslayerlistmountoptsnodelistplacementcountplacementpolicyreplicasondifferentreplicasonsamesizekibstoragepoolpostmountxfsoptsresourcegroupusepvcnameoverprovisionxreplicasondifferentnfsconfigtemplatenfsservicenamenfssquashnfsrecoveryvolumesizerelocateafterclonerelocateaftersnapshotrestore"
+const _paramKeyName = "allowremotevolumeaccessautoplaceclientlistdisklessonremainingdisklessstoragepooldonotplacewithregexencryptionfsoptslayerlistmountoptsnodelistplacementcountplacementpolicyreplicasondifferentreplicasonsamesizekibstoragepoolpostmountxfsoptsresourcegroupusepvcnameoverprovisionxreplicasondifferentnfsconfigtemplatenfsservicenamenfssquashnfsrecoveryvolumesizerelocateafterclone"
 
-var _paramKeyIndex = [...]uint16{0, 23, 32, 42, 61, 80, 99, 109, 115, 124, 133, 141, 155, 170, 189, 203, 210, 221, 237, 250, 260, 273, 293, 310, 324, 333, 354, 372, 400}
+var _paramKeyIndex = [...]uint16{0, 23, 32, 42, 61, 80, 99, 109, 115, 124, 133, 141, 155, 170, 189, 203, 210, 221, 237, 250, 260, 273, 293, 310, 324, 333, 354, 372}
 
-const _paramKeyLowerName = "allowremotevolumeaccessautoplaceclientlistdisklessonremainingdisklessstoragepooldonotplacewithregexencryptionfsoptslayerlistmountoptsnodelistplacementcountplacementpolicyreplicasondifferentreplicasonsamesizekibstoragepoolpostmountxfsoptsresourcegroupusepvcnameoverprovisionxreplicasondifferentnfsconfigtemplatenfsservicenamenfssquashnfsrecoveryvolumesizerelocateafterclonerelocateaftersnapshotrestore"
+const _paramKeyLowerName = "allowremotevolumeaccessautoplaceclientlistdisklessonremainingdisklessstoragepooldonotplacewithregexencryptionfsoptslayerlistmountoptsnodelistplacementcountplacementpolicyreplicasondifferentreplicasonsamesizekibstoragepoolpostmountxfsoptsresourcegroupusepvcnameoverprovisionxreplicasondifferentnfsconfigtemplatenfsservicenamenfssquashnfsrecoveryvolumesizerelocateafterclone"
 
 func (i paramKey) String() string {
 	if i < 0 || i >= paramKey(len(_paramKeyIndex)-1) {
@@ -51,10 +51,9 @@ func _paramKeyNoOp() {
 	_ = x[nfssquash-(24)]
 	_ = x[nfsrecoveryvolumesize-(25)]
 	_ = x[relocateafterclone-(26)]
-	_ = x[relocateaftersnapshotrestore-(27)]
 }
 
-var _paramKeyValues = []paramKey{allowremotevolumeaccess, autoplace, clientlist, disklessonremaining, disklessstoragepool, donotplacewithregex, encryption, fsopts, layerlist, mountopts, nodelist, placementcount, placementpolicy, replicasondifferent, replicasonsame, sizekib, storagepool, postmountxfsopts, resourcegroup, usepvcname, overprovision, xreplicasondifferent, nfsconfigtemplate, nfsservicename, nfssquash, nfsrecoveryvolumesize, relocateafterclone, relocateaftersnapshotrestore}
+var _paramKeyValues = []paramKey{allowremotevolumeaccess, autoplace, clientlist, disklessonremaining, disklessstoragepool, donotplacewithregex, encryption, fsopts, layerlist, mountopts, nodelist, placementcount, placementpolicy, replicasondifferent, replicasonsame, sizekib, storagepool, postmountxfsopts, resourcegroup, usepvcname, overprovision, xreplicasondifferent, nfsconfigtemplate, nfsservicename, nfssquash, nfsrecoveryvolumesize, relocateafterclone}
 
 var _paramKeyNameToValueMap = map[string]paramKey{
 	_paramKeyName[0:23]:         allowremotevolumeaccess,
@@ -111,8 +110,6 @@ var _paramKeyNameToValueMap = map[string]paramKey{
 	_paramKeyLowerName[333:354]: nfsrecoveryvolumesize,
 	_paramKeyName[354:372]:      relocateafterclone,
 	_paramKeyLowerName[354:372]: relocateafterclone,
-	_paramKeyName[372:400]:      relocateaftersnapshotrestore,
-	_paramKeyLowerName[372:400]: relocateaftersnapshotrestore,
 }
 
 var _paramKeyNames = []string{
@@ -143,7 +140,6 @@ var _paramKeyNames = []string{
 	_paramKeyName[324:333],
 	_paramKeyName[333:354],
 	_paramKeyName[354:372],
-	_paramKeyName[372:400],
 }
 
 // paramKeyString retrieves an enum value from the enum constants string name.

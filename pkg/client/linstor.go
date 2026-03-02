@@ -1288,7 +1288,7 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *v
 		return err
 	}
 
-	if params.RelocateAfterSnapshotRestore {
+	if snapParams != nil && snapParams.RelocateAfterRestore {
 		logger.Debug("relocate resources to optimal nodes")
 
 		if err := s.relocateResources(ctx, vol.ID, rGroup.Name); err != nil {

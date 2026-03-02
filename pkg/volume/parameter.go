@@ -51,7 +51,6 @@ const (
 	nfssquash
 	nfsrecoveryvolumesize
 	relocateafterclone
-	relocateaftersnapshotrestore
 )
 
 // Parameters configuration for linstor volumes.
@@ -122,8 +121,6 @@ type Parameters struct {
 	NfsRecoveryVolumeBytes int64
 	// RelocateAfterClone triggers asynchronous relocation of replicas to optimal nodes after cloning.
 	RelocateAfterClone bool
-	// RelocateAfterSnapshotRestore triggers asynchronous relocation of replicas to optimal nodes after snapshot restore.
-	RelocateAfterSnapshotRestore bool
 }
 
 const DefaultDisklessStoragePoolName = "DfltDisklessStorPool"
@@ -146,8 +143,7 @@ func NewParameters(params map[string]string, topologyPrefix string) (Parameters,
 		NfsServiceName:               "linstor-csi-nfs",
 		NfsSquash:                    "no_root_squash",
 		NfsRecoveryVolumeBytes:       300 * 1024 * 1024,
-		RelocateAfterClone:           true,
-		RelocateAfterSnapshotRestore: true,
+		RelocateAfterClone: false,
 	}
 
 	for k, v := range params {
@@ -302,13 +298,6 @@ func NewParameters(params map[string]string, topologyPrefix string) (Parameters,
 			}
 
 			p.RelocateAfterClone = val
-		case relocateaftersnapshotrestore:
-			val, err := strconv.ParseBool(v)
-			if err != nil {
-				return p, err
-			}
-
-			p.RelocateAfterSnapshotRestore = val
 		}
 	}
 
