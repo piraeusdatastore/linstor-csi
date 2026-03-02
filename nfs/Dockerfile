@@ -47,7 +47,7 @@ COPY --link nfs/service/journald.conf /etc/systemd/journald.conf
 RUN \
     # Random stuff we don't need in the container.
     systemctl disable nfs-client.target nfs-ganesha.service logd.service apt-daily-upgrade.timer apt-daily.timer dpkg-db-backup.timer e2scrub_all.timer && \
-    systemctl mask systemd-tmpfiles-setup.service systemd-tmpfiles-clean.timer systemd-binfmt.service && \
+    systemctl mask systemd-tmpfiles-setup.service systemd-tmpfiles-clean.timer systemd-binfmt.service getty.target systemd-logind.service systemd-modules-load.service && \
     # Disable drbd-reactor, it is started on demand whenever the node we are running on is schedulable in k8s
     systemctl disable drbd-reactor.service && \
     # This starts and stops the reactor, and also writes the necessary configuration files
