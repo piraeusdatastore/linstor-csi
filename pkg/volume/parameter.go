@@ -139,11 +139,11 @@ func NewParameters(params map[string]string, topologyPrefix string) (Parameters,
 		Encryption:             false,
 		PlacementPolicy:        topology.AutoPlaceTopology,
 		Properties:             make(map[string]string),
-		NfsConfigTemplatePath:        "/etc/nfs-helper/default-config.tmpl",
-		NfsServiceName:               "linstor-csi-nfs",
-		NfsSquash:                    "no_root_squash",
-		NfsRecoveryVolumeBytes:       300 * 1024 * 1024,
-		RelocateAfterClone: false,
+		NfsConfigTemplatePath:  "/etc/nfs-helper/default-config.tmpl",
+		NfsServiceName:         "linstor-csi-nfs",
+		NfsSquash:              "no_root_squash",
+		NfsRecoveryVolumeBytes: 300 * 1024 * 1024,
+		RelocateAfterClone:     false,
 	}
 
 	for k, v := range params {
