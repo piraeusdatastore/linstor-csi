@@ -2372,12 +2372,12 @@ func (s *Linstor) Mount(ctx context.Context, source, target, fsType string, read
 
 	// This is a regular filesystem so format the device and create the mountpoint.
 	if !block {
-		if err := os.MkdirAll(target, os.FileMode(0755)); err != nil {
+		if err := os.MkdirAll(target, os.FileMode(0o755)); err != nil {
 			return fmt.Errorf("could not create target directory %s, %v", target, err)
 		}
 		// This is a block volume so create a file to bindmount to.
 	} else {
-		f, err := os.OpenFile(target, os.O_CREATE, os.FileMode(0644))
+		f, err := os.OpenFile(target, os.O_CREATE, os.FileMode(0o644))
 		if err != nil {
 			if !os.IsExist(err) {
 				return fmt.Errorf("could not create bind target for block volume %s, %w", target, err)

@@ -276,7 +276,7 @@ func (s *MockStorage) CapacityBytes(ctx context.Context, pools []string, overPro
 
 func (s *MockStorage) Mount(ctx context.Context, source, target, fsType string, readonly bool, mntOpts []string) error {
 	if _, err := os.Stat(target); os.IsNotExist(err) {
-		return os.MkdirAll(target, 0755)
+		return os.MkdirAll(target, 0o755)
 	}
 
 	return nil

@@ -153,7 +153,7 @@ func getNodesUtil(ctx context.Context, nClient NodeLinstorClient, selectedNodes 
 						TotalCapacity: total,
 						FreeCapacity:  free,
 						StoragePools: []*StoragePool{
-							&StoragePool{
+							{
 								Name:          spName,
 								TotalCapacity: total,
 								FreeCapacity:  free,
@@ -168,12 +168,12 @@ func getNodesUtil(ctx context.Context, nClient NodeLinstorClient, selectedNodes 
 					TotalCapacity: total,
 					FreeCapacity:  free,
 					PrefNics: map[string]*PrefNic{
-						nicName: &PrefNic{
+						nicName: {
 							Name:          nicName,
 							TotalCapacity: total,
 							FreeCapacity:  free,
 							StoragePools: []*StoragePool{
-								&StoragePool{
+								{
 									Name:          spName,
 									TotalCapacity: total,
 									FreeCapacity:  free,
