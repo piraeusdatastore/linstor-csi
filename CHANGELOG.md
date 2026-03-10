@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.6] - 2026-03-10
+
 ### Added
 
 - Storage pool capacity calculation takes LINSTOR Over-Provision properties into account.
@@ -13,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - NFS export failed to set correct address type in IPv6 clusters.
-- Improve fsck check for already mounted fileystem.
+- Improve fsck check for already mounted filesystem.
 
 ## [1.10.5] - 2025-12-16
 
@@ -672,7 +674,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.5...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.6...HEAD
+[1.10.6]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.5...v1.10.6
 [1.10.5]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.4...v1.10.5
 [1.10.4]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.3...v1.10.4
 [1.10.3]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.2...v1.10.3
