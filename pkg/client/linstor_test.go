@@ -153,9 +153,7 @@ const (
 )
 
 func TestLinstor_Attach(t *testing.T) {
-	var (
-		ResourceModifyReadWriteWithTemporaryAttach = lapi.GenericPropsModify{OverrideProps: map[string]string{linstor.PropertyCreatedFor: linstor.CreatedForTemporaryDisklessAttach}}
-	)
+	ResourceModifyReadWriteWithTemporaryAttach := lapi.GenericPropsModify{OverrideProps: map[string]string{linstor.PropertyCreatedFor: linstor.CreatedForTemporaryDisklessAttach}}
 
 	fromJson := func(s string) ([]lapi.Resource, error) {
 		var result []lapi.Resource

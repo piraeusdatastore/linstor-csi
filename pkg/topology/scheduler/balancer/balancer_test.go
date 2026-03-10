@@ -15,8 +15,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-type NodesService struct {
-}
+type NodesService struct{}
 
 func equal(sliceA, sliceB []string) bool {
 	if len(sliceA) != len(sliceB) {
@@ -201,7 +200,7 @@ func (ns *NodesService) GetStoragePools(ctx context.Context, nodeName string, op
 		return []lapi.StoragePool{}, fmt.Errorf("The node has to end with a number from 0-9")
 	}
 	return []lapi.StoragePool{
-		lapi.StoragePool{
+		{
 			StoragePoolName: "sp1",
 			NodeName:        nodeName,
 			FreeCapacity:    10 + int64(offset),
@@ -209,7 +208,7 @@ func (ns *NodesService) GetStoragePools(ctx context.Context, nodeName string, op
 			Props:           map[string]string{PrefNicPropKey: "eno1"},
 			ProviderKind:    lapi.LVM,
 		},
-		lapi.StoragePool{
+		{
 			StoragePoolName: "sp2",
 			NodeName:        nodeName,
 			FreeCapacity:    80 + int64(offset),
@@ -227,29 +226,29 @@ func TestGetNodesUtil(t *testing.T) {
 	assert.Nil(t, err)
 
 	expectedOutput := map[string]*Node{
-		"storage1": &Node{
+		"storage1": {
 			Name:          "storage1",
 			TotalCapacity: 200,
 			FreeCapacity:  92,
 			PrefNics: map[string]*PrefNic{
-				"eno1": &PrefNic{
+				"eno1": {
 					Name:          "eno1",
 					TotalCapacity: 100,
 					FreeCapacity:  11,
 					StoragePools: []*StoragePool{
-						&StoragePool{
+						{
 							Name:          "sp1",
 							TotalCapacity: 100,
 							FreeCapacity:  11,
 						},
 					},
 				},
-				"eno2": &PrefNic{
+				"eno2": {
 					Name:          "eno2",
 					TotalCapacity: 100,
 					FreeCapacity:  81,
 					StoragePools: []*StoragePool{
-						&StoragePool{
+						{
 							Name:          "sp2",
 							TotalCapacity: 100,
 							FreeCapacity:  81,
@@ -258,29 +257,29 @@ func TestGetNodesUtil(t *testing.T) {
 				},
 			},
 		},
-		"storage2": &Node{
+		"storage2": {
 			Name:          "storage2",
 			TotalCapacity: 200,
 			FreeCapacity:  94,
 			PrefNics: map[string]*PrefNic{
-				"eno1": &PrefNic{
+				"eno1": {
 					Name:          "eno1",
 					TotalCapacity: 100,
 					FreeCapacity:  12,
 					StoragePools: []*StoragePool{
-						&StoragePool{
+						{
 							Name:          "sp1",
 							TotalCapacity: 100,
 							FreeCapacity:  12,
 						},
 					},
 				},
-				"eno2": &PrefNic{
+				"eno2": {
 					Name:          "eno2",
 					TotalCapacity: 100,
 					FreeCapacity:  82,
 					StoragePools: []*StoragePool{
-						&StoragePool{
+						{
 							Name:          "sp2",
 							TotalCapacity: 100,
 							FreeCapacity:  82,
@@ -307,12 +306,12 @@ func TestGetLessUsedNode(t *testing.T) {
 	}{
 		{
 			Nodes: map[string]*Node{
-				"storage1": &Node{
+				"storage1": {
 					FreeCapacity:  10,
 					TotalCapacity: 100,
 					Name:          "storage1",
 				},
-				"storage2": &Node{
+				"storage2": {
 					FreeCapacity:  20,
 					TotalCapacity: 100,
 					Name:          "storage2",
@@ -322,17 +321,17 @@ func TestGetLessUsedNode(t *testing.T) {
 		},
 		{
 			Nodes: map[string]*Node{
-				"storage1": &Node{
+				"storage1": {
 					FreeCapacity:  30000,
 					TotalCapacity: 100000,
 					Name:          "storage1",
 				},
-				"storage2": &Node{
+				"storage2": {
 					FreeCapacity:  20,
 					TotalCapacity: 100,
 					Name:          "storage2",
 				},
-				"storage3": &Node{
+				"storage3": {
 					FreeCapacity:  1,
 					TotalCapacity: 2,
 					Name:          "storage3",
@@ -363,7 +362,7 @@ func TestGetLessUsedNic(t *testing.T) {
 			Node: &Node{
 				Name: "storage1",
 				PrefNics: map[string]*PrefNic{
-					"eno1": &PrefNic{
+					"eno1": {
 						Name:          "eno1",
 						FreeCapacity:  20,
 						TotalCapacity: 100,
@@ -376,17 +375,17 @@ func TestGetLessUsedNic(t *testing.T) {
 			Node: &Node{
 				Name: "storage1",
 				PrefNics: map[string]*PrefNic{
-					"eno1": &PrefNic{
+					"eno1": {
 						Name:          "eno1",
 						FreeCapacity:  20,
 						TotalCapacity: 70083299,
 					},
-					"eno2": &PrefNic{
+					"eno2": {
 						Name:          "eno2",
 						FreeCapacity:  80,
 						TotalCapacity: 100,
 					},
-					"eno3": &PrefNic{
+					"eno3": {
 						Name:          "eno3",
 						FreeCapacity:  2,
 						TotalCapacity: 4,
