@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Storage pool capacity calculation takes LINSTOR Over-Provision properties into account.
+
 ### Fixed
 
 - NFS export failed to set correct address type in IPv6 clusters.

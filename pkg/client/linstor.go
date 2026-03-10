@@ -884,6 +884,23 @@ func (s *Linstor) CapacityBytes(ctx context.Context, storagePools []string, over
 			continue
 		}
 
+		overProvision := overProvision
+
+		// LINSTOR itself now also has over-provision knobs built in: use those if they are available
+		// and more restrictive then what is configured now. Check the specific more specific property
+		// first, then the more generic fallback property.
+		if val, ok := sp.Props[lapiconsts.KeyStorPoolMaxTotalCapacityOversubscriptionRatio]; ok {
+			f, err := strconv.ParseFloat(val, 64)
+			if err == nil && (overProvision == nil || *overProvision > f) {
+				overProvision = &f
+			}
+		} else if val, ok := sp.Props[lapiconsts.KeyStorPoolMaxOversubscriptionRatio]; ok {
+			f, err := strconv.ParseFloat(val, 64)
+			if err == nil && (overProvision == nil || *overProvision > f) {
+				overProvision = &f
+			}
+		}
+
 		if overProvision != nil {
 			virtualCapacity := float64(sp.TotalCapacity) * *overProvision
 
