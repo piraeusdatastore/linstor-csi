@@ -1487,9 +1487,8 @@ func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *volu
 		return fmt.Errorf("snapshot '%s' not deployed on any node", snap.Name)
 	}
 
-	// Optimize the node we use to restore. It should be one of the preferred nodes, or just the first with a snapshot
-	// if no preferred nodes match.
-	var selectedNode string
+	// Collect available snapshot nodes, preferring those matching the topology hints.
+	var preferred, available []string
 	for _, snapNode := range snap.Nodes {
 		if err := s.NodeAvailable(ctx, snapNode); err != nil {
 			logger.WithField("selected node candidate", snapNode).WithError(err).Debug("node is not available")
@@ -1497,13 +1496,23 @@ func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *volu
 		}
 
 		if slices.Contains(preferredNodes, snapNode) {
-			// We found a perfect candidate.
-			selectedNode = snapNode
-			break
-		} else if selectedNode == "" {
-			// Set a fallback if we have no candidate yet.
-			selectedNode = snapNode
+			preferred = append(preferred, snapNode)
 		}
+
+		available = append(available, snapNode)
+	}
+
+	// Pick a random node from preferred candidates, falling back to any available node.
+	// Randomization distributes restore load across snapshot nodes, preventing all
+	// clones of the same source from concentrating on a single node.
+	candidates := preferred
+	if len(candidates) == 0 {
+		candidates = available
+	}
+
+	var selectedNode string
+	if len(candidates) > 0 {
+		selectedNode = candidates[rand.Intn(len(candidates))]
 	}
 
 	if selectedNode == "" {
