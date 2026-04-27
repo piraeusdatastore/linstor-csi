@@ -653,11 +653,35 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 	}
 
 	if otherResInUse > 0 && rwxBlock {
-		rdPropsModify := lapi.GenericPropsModify{OverrideProps: map[string]string{
+		rdProps := map[string]string{
 			linstor.PropertyAllowTwoPrimaries: "yes",
-		}}
+		}
 
-		err = s.client.ResourceDefinitions.Modify(ctx, volId, rdPropsModify)
+		// DRBD requires Protocol C whenever allow-two-primaries is enabled.
+		// If the resource is configured with Protocol A or B (typically
+		// through its resource-group), drbdadm adjust on the satellites
+		// fails with "Protocol C required" (errno 139) and live migration
+		// cannot proceed. Override Protocol to C on the resource-definition
+		// itself so it applies to every connection (including diskless
+		// peers, e.g. a TieBreaker). The marker lets Detach revert exactly
+		// the override we installed without disturbing operator-set props.
+		proto, protoErr := s.getEffectiveDrbdProtocol(ctx, volId)
+		if protoErr != nil {
+			s.log.WithError(protoErr).WithField("volume", volId).
+				Warn("failed to determine effective DRBD protocol; skipping Protocol=C override for dual-attach")
+		} else if proto == "A" || proto == "B" {
+			s.log.WithFields(logrus.Fields{
+				"volume":   volId,
+				"protocol": proto,
+			}).Info("installing Protocol=C override on resource-definition for dual-attach")
+
+			rdProps[linstor.PropertyDrbdNetProtocol] = "C"
+			rdProps[linstor.PropertyCsiProtocolOverride] = "yes"
+		}
+
+		err = s.client.ResourceDefinitions.Modify(ctx, volId, lapi.GenericPropsModify{
+			OverrideProps: rdProps,
+		})
 		if err != nil {
 			return "", err
 		}
@@ -774,11 +798,26 @@ func (s *Linstor) Detach(ctx context.Context, volId, node string) error {
 	}
 
 	if resInUse == 1 {
-		rdPropsModify := lapi.GenericPropsModify{DeleteProps: []string{
-			linstor.PropertyAllowTwoPrimaries,
-		}}
+		deleteProps := []string{linstor.PropertyAllowTwoPrimaries}
 
-		err = s.client.ResourceDefinitions.Modify(ctx, volId, rdPropsModify)
+		// Drop the Protocol=C override only if Attach installed it (gated by
+		// our marker), so an operator-set Protocol property on the
+		// resource-definition is preserved.
+		rd, getErr := s.client.ResourceDefinitions.Get(ctx, volId)
+		if getErr != nil {
+			log.WithError(getErr).Warn("failed to fetch resource-definition props; skipping Protocol=C override removal")
+		} else if rd.Props[linstor.PropertyCsiProtocolOverride] != "" {
+			log.Info("removing Protocol=C override from resource-definition")
+
+			deleteProps = append(deleteProps,
+				linstor.PropertyDrbdNetProtocol,
+				linstor.PropertyCsiProtocolOverride,
+			)
+		}
+
+		err = s.client.ResourceDefinitions.Modify(ctx, volId, lapi.GenericPropsModify{
+			DeleteProps: deleteProps,
+		})
 		if err != nil {
 			return nil404(err)
 		}
@@ -803,6 +842,33 @@ func (s *Linstor) Detach(ctx context.Context, volId, node string) error {
 	log.Info("removing temporary resource")
 
 	return nil404(s.client.Resources.Delete(ctx, volId, node))
+}
+
+// getEffectiveDrbdProtocol returns the DRBD network protocol ("A", "B" or "C")
+// that LINSTOR will hand to drbdadm for the given resource. Resource-definition
+// properties take precedence; otherwise the value is inherited from the
+// resource-group. An empty string is returned when neither level sets the
+// property (LINSTOR's compiled-in default is "C").
+func (s *Linstor) getEffectiveDrbdProtocol(ctx context.Context, volId string) (string, error) {
+	rd, err := s.client.ResourceDefinitions.Get(ctx, volId)
+	if err != nil {
+		return "", err
+	}
+
+	if v, ok := rd.Props[linstor.PropertyDrbdNetProtocol]; ok {
+		return v, nil
+	}
+
+	if rd.ResourceGroupName == "" {
+		return "", nil
+	}
+
+	rg, err := s.client.ResourceGroups.Get(ctx, rd.ResourceGroupName)
+	if err != nil {
+		return "", err
+	}
+
+	return rg.Props[linstor.PropertyDrbdNetProtocol], nil
 }
 
 // CapacityBytes returns the amount of free space in the storage pool specified by the params and topology.
