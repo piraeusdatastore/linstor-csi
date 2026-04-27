@@ -36,6 +36,7 @@ import (
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
 	"github.com/piraeusdatastore/linstor-csi/pkg/driver"
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
+	"github.com/piraeusdatastore/linstor-csi/pkg/utils"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
@@ -128,14 +129,21 @@ func main() {
 		log.Fatal(err)
 	}
 
-	linstorClient, err := client.NewLinstor(
+	linstorOps := []func(*client.Linstor) error{
 		client.APIClient(c),
 		client.LogFmt(logFmt),
 		client.LogLevel(*logLevel),
 		client.LogOut(logOut),
 		client.PropertyNamespace(*propNs),
 		client.LabelBySP(*labelBySP),
-	)
+	}
+
+	_, kubeDyn, kubeErr := utils.KubernetesClient()
+	if kubeErr == nil {
+		linstorOps = append(linstorOps, client.KubeClient(kubeDyn))
+	}
+
+	linstorClient, err := client.NewLinstor(linstorOps...)
 	if err != nil {
 		log.Fatal(err)
 	}
