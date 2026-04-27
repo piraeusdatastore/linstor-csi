@@ -44,6 +44,19 @@ const (
 	// PropertyAllowTwoPrimaries is DRBD option to allow second primary. Mainly used for live-migration.
 	PropertyAllowTwoPrimaries = lc.NamespcDrbdNetOptions + "/allow-two-primaries"
 
+	// PropertyDrbdNetProtocol is the DRBD network replication protocol option
+	// (A = async, B = semi-sync, C = sync). DRBD requires Protocol C whenever
+	// allow-two-primaries is enabled, otherwise drbdadm adjust fails with
+	// "Protocol C required" (errno 139).
+	PropertyDrbdNetProtocol = lc.NamespcDrbdNetOptions + "/protocol"
+
+	// PropertyCsiProtocolOverride marks a resource-connection where this driver
+	// has installed a temporary Protocol=C override to make a Protocol-A/B
+	// resource compatible with allow-two-primaries during live migration. The
+	// marker lets us safely remove only the overrides we set, without touching
+	// connection-level overrides installed by the operator.
+	PropertyCsiProtocolOverride = lc.NamespcAuxiliary + "/csi-protocol-override"
+
 	// CreatedForTemporaryDisklessAttach marks a resource as temporary, i.e. it should be removed after it is no longer
 	// needed.
 	CreatedForTemporaryDisklessAttach = "temporary-diskless-attach"
