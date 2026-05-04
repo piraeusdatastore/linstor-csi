@@ -200,11 +200,9 @@ func (s *Linstor) ListAllWithStatus(ctx context.Context) ([]volume.VolumeStatus,
 	for _, rd := range resDefs {
 		vol := s.resourceDefinitionToVolume(rd)
 		if vol != nil {
-			nodes, conds := NodesAndConditionFromResources(resourcesByName[vol.ID])
 			vols = append(vols, volume.VolumeStatus{
 				Info:       *vol,
-				Nodes:      nodes,
-				Conditions: conds,
+				Conditions: ConditionFromResources(resourcesByName[vol.ID]),
 			})
 		}
 	}
@@ -2185,19 +2183,17 @@ func (s *Linstor) FindAssignmentOnNode(ctx context.Context, volId, node string) 
 	return va, nil
 }
 
-func (s *Linstor) Status(ctx context.Context, volId string) ([]string, *csi.VolumeCondition, error) {
+func (s *Linstor) Status(ctx context.Context, volId string) (*csi.VolumeCondition, error) {
 	s.log.WithFields(logrus.Fields{
 		"volume": volId,
 	}).Debug("getting assignments")
 
 	ress, err := s.client.Resources.GetResourceView(ctx, &lapi.ListOpts{Resource: []string{volId}})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to list resources for '%s': %w", volId, err)
+		return nil, fmt.Errorf("failed to list resources for '%s': %w", volId, err)
 	}
 
-	nodes, conds := NodesAndConditionFromResources(ress)
-
-	return nodes, conds, nil
+	return ConditionFromResources(ress), nil
 }
 
 // SetSnapshotType tries to set the snapshot type based on the remote name.
@@ -2278,20 +2274,11 @@ func GetSnapshotRemoteAndReadiness(snap *lapi.Snapshot) (string, bool, error) {
 	return "", slices.Contains(snap.Flags, lapiconsts.FlagSuccessful), nil
 }
 
-func NodesAndConditionFromResources(ress []lapi.ResourceWithVolumes) ([]string, *csi.VolumeCondition) {
-	var allNodes, abnormalNodes []string
+func ConditionFromResources(ress []lapi.ResourceWithVolumes) *csi.VolumeCondition {
+	var abnormalNodes []string
 
 	for i := range ress {
 		res := &ress[i]
-
-		// A resource is a CSI publish target if any of its volumes were created
-		// by ControllerPublishVolume, identified by the temporary-diskless-attach property.
-		if slices.ContainsFunc(res.Volumes, func(v lapi.Volume) bool {
-			createdFor, ok := v.Props[linstor.PropertyCreatedFor]
-			return ok && createdFor == linstor.CreatedForTemporaryDisklessAttach
-		}) {
-			allNodes = append(allNodes, res.NodeName)
-		}
 
 		if res.State == nil {
 			abnormalNodes = append(abnormalNodes, res.NodeName)
@@ -2314,9 +2301,7 @@ func NodesAndConditionFromResources(ress []lapi.ResourceWithVolumes) ([]string, 
 		condition.Message = fmt.Sprintf("Resource with issues on node(s): %s", strings.Join(abnormalNodes, ","))
 	}
 
-	sort.Strings(allNodes)
-
-	return allNodes, condition
+	return condition
 }
 
 // Mount makes volumes consumable from the source to the target.

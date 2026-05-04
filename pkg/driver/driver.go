@@ -897,8 +897,7 @@ func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*
 				// the information, so it should be fine.
 			},
 			Status: &csi.ListVolumesResponse_VolumeStatus{
-				PublishedNodeIds: vol.Nodes,
-				VolumeCondition:  vol.Conditions,
+				VolumeCondition: vol.Conditions,
 			},
 		}
 	}
@@ -995,11 +994,6 @@ func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Controll
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_GET_VOLUME,
-				},
-			}},
-			{Type: &csi.ControllerServiceCapability_Rpc{
-				Rpc: &csi.ControllerServiceCapability_RPC{
-					Type: csi.ControllerServiceCapability_RPC_LIST_VOLUMES_PUBLISHED_NODES,
 				},
 			}},
 			{Type: &csi.ControllerServiceCapability_Rpc{
@@ -1216,7 +1210,7 @@ func (d Driver) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetV
 		return nil, status.Errorf(codes.NotFound, "no volume '%s' found", req.GetVolumeId())
 	}
 
-	nodes, condition, err := d.Assignments.Status(ctx, vol.ID)
+	condition, err := d.Assignments.Status(ctx, vol.ID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to find nodes for volume '%s': %v", vol.ID, err)
 	}
@@ -1227,8 +1221,7 @@ func (d Driver) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetV
 			CapacityBytes: vol.DeviceBytes[0],
 		},
 		Status: &csi.ControllerGetVolumeResponse_VolumeStatus{
-			PublishedNodeIds: nodes,
-			VolumeCondition:  condition,
+			VolumeCondition: condition,
 		},
 	}, nil
 }
