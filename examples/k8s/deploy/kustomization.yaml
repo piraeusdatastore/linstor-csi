@@ -1,33 +1,33 @@
 namespace: piraeus-datastore
 resources:
 - namespace.yaml
-- https://github.com/piraeusdatastore/piraeus-operator//pkg/resources/cluster/csi-controller?ref=v2.10.3
-- https://github.com/piraeusdatastore/piraeus-operator//pkg/resources/cluster/csi-node?ref=v2.10.3
+- https://github.com/piraeusdatastore/piraeus-operator//pkg/resources/cluster/csi-controller?ref=v2.10.5
+- https://github.com/piraeusdatastore/piraeus-operator//pkg/resources/cluster/csi-node?ref=v2.10.5
 images:
 - name: csi-attacher
   newName: registry.k8s.io/sig-storage/csi-attacher
-  newTag: v4.10.0
+  newTag: v4.11.0
 - name: csi-external-health-monitor-controller
   newName: registry.k8s.io/sig-storage/csi-external-health-monitor-controller
-  newTag: v0.16.0
+  newTag: v0.17.0
 - name: csi-livenessprobe
   newName: registry.k8s.io/sig-storage/livenessprobe
-  newTag: v2.17.0
+  newTag: v2.18.0
 - name: csi-node-driver-registrar
   newName: registry.k8s.io/sig-storage/csi-node-driver-registrar
-  newTag: v2.15.0
+  newTag: v2.16.0
 - name: csi-provisioner
   newName: registry.k8s.io/sig-storage/csi-provisioner
-  newTag: v6.1.0
+  newTag: v6.2.0
 - name: csi-resizer
   newName: registry.k8s.io/sig-storage/csi-resizer
-  newTag: v2.0.0
+  newTag: v2.1.0
 - name: csi-snapshotter
   newName: registry.k8s.io/sig-storage/csi-snapshotter
-  newTag: v8.4.0
+  newTag: v8.5.0
 - name: linstor-csi
   newName: quay.io/piraeusdatastore/piraeus-csi
-  newTag: v1.10.5
+  newTag: v1.11.0
 patches:
 - path: controller-patch.yaml
 - path: daemonset-patch.yaml

@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-05-05
+
+### Added
+
+- Only allow DRBD two-primaries for kubevirt deployments by default.
+
+### Fixed
+
+- No longer report the "published nodes" capability.
+- No longer provision RWX volumes without DRBD layer.
+
+## [1.10.6] - 2026-03-10
+
 ### Added
 
 - Storage pool capacity calculation takes LINSTOR Over-Provision properties into account.
@@ -14,8 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - NFS export failed to set correct address type in IPv6 clusters.
 - Improve fsck check for already mounted filesystem.
-- No longer report the "published nodes" capability.
-- No longer provision RWX volumes without DRBD layer.
 
 ## [1.10.5] - 2025-12-16
 
@@ -674,7 +685,9 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.5...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.6...v1.11.0
+[1.10.6]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.5...v1.10.6
 [1.10.5]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.4...v1.10.5
 [1.10.4]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.3...v1.10.4
 [1.10.3]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.2...v1.10.3
