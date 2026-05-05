@@ -36,6 +36,7 @@ import (
 	"time"
 
 	lc "github.com/LINBIT/golinstor"
+	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -597,6 +598,14 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 		}
 
 		volumeBytes[1] = requiredBytes
+	}
+
+	if len(params.LayerList) > 0 && params.LayerList[0] != devicelayerkind.Drbd {
+		for _, c := range req.GetVolumeCapabilities() {
+			if c.GetAccessMode().GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER {
+				return nil, status.Errorf(codes.InvalidArgument, "ReadWriteMany volumes require a DRBD layer")
+			}
+		}
 	}
 
 	pvcName := req.GetParameters()[ParameterCsiPvcName]
