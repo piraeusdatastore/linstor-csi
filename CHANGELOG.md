@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - NFS export failed to set correct address type in IPv6 clusters.
 - Improve fsck check for already mounted filesystem.
 - No longer report the "published nodes" capability.
+- No longer provision RWX volumes without DRBD layer.
 
 ## [1.10.5] - 2025-12-16
 
