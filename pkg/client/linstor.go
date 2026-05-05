@@ -46,6 +46,10 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/mount-utils"
 	utilexec "k8s.io/utils/exec"
 	"k8s.io/utils/ptr"
@@ -72,6 +76,16 @@ type Linstor struct {
 	mounter        mount.Interface
 	resizer        *mount.ResizeFs
 	labelBySP      bool
+	kubeClient     dynamic.Interface
+}
+
+// KubeClient sets the dynamic Kubernetes client used to check PV/PVC state
+// before deleting resource definitions.
+func KubeClient(c dynamic.Interface) func(*Linstor) error {
+	return func(l *Linstor) error {
+		l.kubeClient = c
+		return nil
+	}
 }
 
 // NewLinstor returns a high-level linstor client for CSI applications to interact with
@@ -458,6 +472,14 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 	if err != nil {
 		logger.Debugf("reconcile volume placement failed: %v", err)
 		return err
+	}
+
+	if params.RelocateAfterClone {
+		logger.Debug("relocate resources to optimal nodes")
+
+		if err := s.relocateResources(ctx, vol.ID, rGroup.Name); err != nil {
+			logger.WithError(err).Warn("resource relocation failed, volume is still usable")
+		}
 	}
 
 	logger.Debug("reconcile extra properties")
@@ -1295,6 +1317,14 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *v
 		return err
 	}
 
+	if snapParams != nil && snapParams.RelocateAfterRestore {
+		logger.Debug("relocate resources to optimal nodes")
+
+		if err := s.relocateResources(ctx, vol.ID, rGroup.Name); err != nil {
+			logger.WithError(err).Warn("resource relocation failed, volume is still usable")
+		}
+	}
+
 	logger.Debug("reconcile extra properties")
 
 	err = s.client.ResourceDefinitions.Modify(ctx, vol.ID, lapi.GenericPropsModify{OverrideProps: vol.Properties})
@@ -1485,9 +1515,8 @@ func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *volu
 		return fmt.Errorf("snapshot '%s' not deployed on any node", snap.Name)
 	}
 
-	// Optimize the node we use to restore. It should be one of the preferred nodes, or just the first with a snapshot
-	// if no preferred nodes match.
-	var selectedNode string
+	// Collect available snapshot nodes, preferring those matching the topology hints.
+	var preferred, available []string
 	for _, snapNode := range snap.Nodes {
 		if err := s.NodeAvailable(ctx, snapNode); err != nil {
 			logger.WithField("selected node candidate", snapNode).WithError(err).Debug("node is not available")
@@ -1495,13 +1524,23 @@ func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *volu
 		}
 
 		if slices.Contains(preferredNodes, snapNode) {
-			// We found a perfect candidate.
-			selectedNode = snapNode
-			break
-		} else if selectedNode == "" {
-			// Set a fallback if we have no candidate yet.
-			selectedNode = snapNode
+			preferred = append(preferred, snapNode)
 		}
+
+		available = append(available, snapNode)
+	}
+
+	// Pick a random node from preferred candidates, falling back to any available node.
+	// Randomization distributes restore load across snapshot nodes, preventing all
+	// clones of the same source from concentrating on a single node.
+	candidates := preferred
+	if len(candidates) == 0 {
+		candidates = available
+	}
+
+	var selectedNode string
+	if len(candidates) > 0 {
+		selectedNode = candidates[rand.Intn(len(candidates))]
 	}
 
 	if selectedNode == "" {
@@ -1689,6 +1728,114 @@ func (s *Linstor) reconcileResourcePlacement(ctx context.Context, vol *volume.In
 	err = volumeScheduler.Create(ctx, vol.ID, params, topologies)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+const propertyRelocationTriggered = "Aux/csi-relocation-triggered"
+
+// relocateResources migrates replicas from their current nodes to the nodes that
+// LINSTOR's autoplacer considers optimal. This is a best-effort, fire-and-forget
+// operation: migrate-disk API is asynchronous and the volume remains usable on its
+// current nodes even if relocation fails.
+func (s *Linstor) relocateResources(ctx context.Context, volID, rgName string) error {
+	logger := s.log.WithFields(logrus.Fields{
+		"volume":        volID,
+		"resourceGroup": rgName,
+	})
+
+	// Check if relocation was already triggered (idempotency guard).
+	rd, err := s.client.ResourceDefinitions.Get(ctx, volID)
+	if err != nil {
+		return fmt.Errorf("failed to get resource definition: %w", err)
+	}
+
+	if rd.Props[propertyRelocationTriggered] != "" {
+		logger.Debug("relocation already triggered, skipping")
+		return nil
+	}
+
+	// Get current diskful nodes.
+	resources, err := s.client.Resources.GetAll(ctx, volID)
+	if err != nil {
+		return fmt.Errorf("failed to list resources: %w", err)
+	}
+
+	currentNodes := util.DeployedDiskfullyNodes(resources)
+
+	// Query optimal placement from LINSTOR autoplacer.
+	sizeInfo, err := s.client.ResourceGroups.QuerySizeInfo(ctx, rgName, lapi.QuerySizeInfoRequest{})
+	if err != nil {
+		return fmt.Errorf("failed to query size info: %w", err)
+	}
+
+	if sizeInfo.SpaceInfo == nil || len(sizeInfo.SpaceInfo.NextSpawnResult) == 0 {
+		logger.Debug("no spawn result from query-size-info, skipping relocation")
+		return nil
+	}
+
+	// Build a map of optimal node -> storage pool.
+	optimalPools := make(map[string]string, len(sizeInfo.SpaceInfo.NextSpawnResult))
+	for _, r := range sizeInfo.SpaceInfo.NextSpawnResult {
+		optimalPools[r.NodeName] = r.StorPoolName
+	}
+
+	// Compute nodes to remove (current but not optimal) and nodes to add (optimal but not current).
+	var nodesToRemove, nodesToAdd []string
+
+	for _, node := range currentNodes {
+		if _, ok := optimalPools[node]; !ok {
+			nodesToRemove = append(nodesToRemove, node)
+		}
+	}
+
+	for _, r := range sizeInfo.SpaceInfo.NextSpawnResult {
+		if !slices.Contains(currentNodes, r.NodeName) {
+			nodesToAdd = append(nodesToAdd, r.NodeName)
+		}
+	}
+
+	// Only migrate min(remove, add) pairs.
+	pairs := min(len(nodesToRemove), len(nodesToAdd))
+	if pairs == 0 {
+		logger.Debug("no relocation needed, placement is already optimal")
+		return nil
+	}
+
+	logger.Infof("relocating %d replica(s): %v -> %v", pairs, nodesToRemove[:pairs], nodesToAdd[:pairs])
+
+	// Mark relocation as triggered before starting migrations.
+	err = s.client.ResourceDefinitions.Modify(ctx, volID, lapi.GenericPropsModify{
+		OverrideProps: map[string]string{propertyRelocationTriggered: "true"},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to set relocation property: %w", err)
+	}
+
+	// Migrate each pair sequentially (LINSTOR serializes at the RD level anyway).
+	for i := range pairs {
+		fromNode := nodesToRemove[i]
+		toNode := nodesToAdd[i]
+		storPool := optimalPools[toNode]
+
+		logger := logger.WithFields(logrus.Fields{"from": fromNode, "to": toNode, "storagePool": storPool})
+
+		logger.Info("creating diskless resource on target node")
+
+		err := s.client.Resources.MakeAvailable(ctx, volID, toNode, lapi.ResourceMakeAvailable{})
+		if err != nil {
+			logger.WithError(err).Warn("failed to create diskless on target, skipping this pair")
+			continue
+		}
+
+		logger.Info("initiating migrate-disk")
+
+		err = s.client.Resources.Migrate(ctx, volID, fromNode, toNode, storPool)
+		if err != nil {
+			logger.WithError(err).Warn("migrate-disk failed, skipping this pair")
+			continue
+		}
 	}
 
 	return nil
@@ -2657,6 +2804,29 @@ func (s *Linstor) GetNodeTopologies(ctx context.Context, nodename string) (*csi.
 // * No snapshots of the resource exist
 func (s *Linstor) deleteResourceDefinitionAndGroupIfUnused(ctx context.Context, rdName string) error {
 	log := s.log.WithField("rd", rdName)
+
+	// Safety check: if a Kubernetes PV still exists and is Bound to a PVC that
+	// is not being deleted, do not delete the resource definition.
+	if s.kubeClient != nil {
+		pvGVR := schema.GroupVersionResource{Version: "v1", Resource: "persistentvolumes"}
+		pv, err := s.kubeClient.Resource(pvGVR).Get(ctx, rdName, metav1.GetOptions{})
+		if err == nil && pv.GetDeletionTimestamp() == nil {
+			phase, _, _ := unstructured.NestedString(pv.Object, "status", "phase")
+			claimNs, _, _ := unstructured.NestedString(pv.Object, "spec", "claimRef", "namespace")
+			claimName, _, _ := unstructured.NestedString(pv.Object, "spec", "claimRef", "name")
+			if phase == "Bound" && claimName != "" {
+				pvcGVR := schema.GroupVersionResource{Version: "v1", Resource: "persistentvolumeclaims"}
+				pvc, err := s.kubeClient.Resource(pvcGVR).Namespace(claimNs).Get(ctx, claimName, metav1.GetOptions{})
+				if err == nil && pvc.GetDeletionTimestamp() == nil {
+					log.WithField("pvc", claimName).Info(
+						"not deleting resource definition, PVC still exists and is not being deleted",
+					)
+					return nil
+				}
+			}
+		}
+	}
+
 	log.Debug("checking for undeleted resources")
 
 	resources, err := s.client.Resources.GetAll(ctx, rdName)
