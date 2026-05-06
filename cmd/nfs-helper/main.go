@@ -25,6 +25,8 @@ func run(ctx context.Context, args ...string) error {
 		return growfs(ctx, args[1:])
 	case "advertise":
 		return advertise(ctx, args[1:])
+	case "check-socket":
+		return checkSocket(ctx, args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
