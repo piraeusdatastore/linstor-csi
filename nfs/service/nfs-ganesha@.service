@@ -10,6 +10,7 @@ StateDirectory=nfs/ganesha/%I
 ExecStartPre=/usr/bin/nfs-helper generate-ganesha-config %I ${RUNTIME_DIRECTORY}/ganesha.conf
 ExecStart=/usr/bin/ganesha.nfsd -I %f -f ${RUNTIME_DIRECTORY}/ganesha.conf -N NIV_EVENT -p ${RUNTIME_DIRECTORY}/ganesha.pid
 ExecStartPost=/usr/bin/nfs-helper check-socket %I
+TimeoutStartSec=15s
 
 RestrictNamespaces=yes
 LockPersonality=yes
