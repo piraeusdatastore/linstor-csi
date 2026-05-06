@@ -25,8 +25,9 @@ func checkSocket(ctx context.Context, args []string) error {
 
 	log.WithField("addr", addr).Info("Waiting for NFS socket")
 
+	dialer := &net.Dialer{Timeout: 1 * time.Second}
 	for {
-		conn, err := net.DialTimeout("tcp", addr, time.Second)
+		conn, err := dialer.DialContext(ctx, "tcp", addr)
 		if err == nil {
 			conn.Close()
 			log.WithField("addr", addr).Info("NFS socket is ready")
