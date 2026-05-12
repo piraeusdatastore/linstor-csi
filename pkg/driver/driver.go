@@ -38,6 +38,7 @@ import (
 	lc "github.com/LINBIT/golinstor"
 	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/piraeusdatastore/nri-volume-qos/pkg/meta"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -681,6 +682,16 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		volumeProperties[lc.NamespcAuxiliary+"/"+ParameterCsiPvcNamespace] = pvcNamespace
 	}
 
+	// Persist the IO QoS limits as auxiliary properties so ControllerPublishVolume can read them back.
+	// The device path is per-node and therefore set at publish time, not here.
+	for k, v := range params.IOQoSLimits.ToMap() {
+		if k == meta.KeyDevice {
+			continue
+		}
+
+		volumeProperties[lc.NamespcAuxiliary+"/"+k] = v
+	}
+
 	return d.createNewVolume(
 		ctx,
 		&volume.Info{
@@ -777,10 +788,34 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume failed for %s: could not determine device path", req.GetVolumeId())
 	}
 
+	// Recover the IO QoS limits stored as auxiliary properties at create time. meta.ParseLimits only
+	// reads the qos.linbit.com/* limit keys and ignores everything else, so we strip the Aux/ prefix
+	// off all auxiliary properties and let it pick out the relevant ones.
+	auxPrefix := lc.NamespcAuxiliary + "/"
+	qosParams := make(map[string]string)
+
+	for k, v := range existingVolume.Properties {
+		if rest, ok := strings.CutPrefix(k, auxPrefix); ok {
+			qosParams[rest] = v
+		}
+	}
+
+	limits, err := meta.ParseLimits(qosParams)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal,
+			"ControllerPublishVolume failed for %s: invalid stored IO QoS limits: %v", req.GetVolumeId(), err)
+	}
+
+	// Only attach the device, and thus emit QoS metadata, when limits are actually configured.
+	if limits != (meta.Limits{}) {
+		limits.Device = devPath
+	}
+
 	return &csi.ControllerPublishVolumeResponse{
 		PublishContext: (&PublishContext{
-			DevicePath: devPath,
-			FsType:     existingVolume.FsType,
+			DevicePath:  devPath,
+			FsType:      existingVolume.FsType,
+			IOQoSLimits: limits,
 		}).ToMap(),
 	}, nil
 }

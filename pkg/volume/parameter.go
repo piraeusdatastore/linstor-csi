@@ -12,6 +12,7 @@ import (
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/pborman/uuid"
+	"github.com/piraeusdatastore/nri-volume-qos/pkg/meta"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -118,6 +119,9 @@ type Parameters struct {
 	// NfsRecoveryVolumeSize sets the volume size (in bytes) of the recovery volume used by the NFS server.
 	// Defaults to 300MiB.
 	NfsRecoveryVolumeBytes int64
+	// IOQoSLimits holds the IO QoS limits parsed from the qos.linbit.com/* parameters. They are stored on
+	// the LINSTOR resource definition and passed to the nri-volume-qos plugin via VolumeAttachment metadata.
+	IOQoSLimits meta.Limits
 }
 
 const DefaultDisklessStoragePoolName = "DfltDisklessStorPool"
@@ -141,6 +145,13 @@ func NewParameters(params map[string]string, topologyPrefix string) (Parameters,
 		NfsSquash:              "no_root_squash",
 		NfsRecoveryVolumeBytes: 300 * 1024 * 1024,
 	}
+
+	limits, err := meta.ParseLimits(params)
+	if err != nil {
+		return p, fmt.Errorf("invalid IO QoS limits: %w", err)
+	}
+
+	p.IOQoSLimits = limits
 
 	for k, v := range params {
 		parts := strings.SplitN(k, "/", 2)
