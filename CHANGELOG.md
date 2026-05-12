@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- IO QoS limits via the `qos.linbit.com/{rbps,wbps,riops,wiops}` StorageClass
+  parameters. The limits are stored on the LINSTOR resource definition and
+  surfaced in the VolumeAttachment metadata for the nri-volume-qos plugin to
+  enforce.
 - `snap.linstor.csi.linbit.com/max-increments` and
   `snap.linstor.csi.linbit.com/full-snapshot-after` snapshot class parameters to
   bound the length / age of incremental S3 backup chains, forcing a fresh full
