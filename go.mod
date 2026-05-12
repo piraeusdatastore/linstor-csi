@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/LINBIT/golinstor v0.60.0
+	github.com/LINBIT/golinstor v0.61.0
 	github.com/container-storage-interface/spec v1.12.0
 	github.com/coreos/go-systemd/v22 v22.7.0
 	github.com/kubernetes-csi/csi-test/v5 v5.4.0
@@ -13,7 +13,7 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.20.0
-	golang.org/x/sys v0.43.0
+	golang.org/x/sys v0.44.0
 	golang.org/x/time v0.15.0
 	google.golang.org/grpc v1.81.0
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
@@ -66,12 +66,12 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/mod v0.35.0 // indirect
-	golang.org/x/net v0.53.0 // indirect
+	golang.org/x/mod v0.36.0 // indirect
+	golang.org/x/net v0.54.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/term v0.42.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
-	golang.org/x/tools v0.44.0 // indirect
+	golang.org/x/term v0.43.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
+	golang.org/x/tools v0.45.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260226221140-a57be14db171 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
