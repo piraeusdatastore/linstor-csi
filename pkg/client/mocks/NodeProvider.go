@@ -6,7 +6,6 @@ import (
 	context "context"
 
 	client "github.com/LINBIT/golinstor/client"
-
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -160,7 +159,7 @@ func (_m *NodeProvider) DeleteStoragePool(ctx context.Context, nodeName string, 
 }
 
 // Evacuate provides a mock function with given fields: ctx, nodeName, evacuate
-func (_m *NodeProvider) Evacuate(ctx context.Context, nodeName string, evacuate *client.NodeEvacuate) error {
+func (_m *NodeProvider) Evacuate(ctx context.Context, nodeName string, evacuate client.NodeEvacuate) error {
 	ret := _m.Called(ctx, nodeName, evacuate)
 
 	if len(ret) == 0 {
@@ -168,7 +167,7 @@ func (_m *NodeProvider) Evacuate(ctx context.Context, nodeName string, evacuate 
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, *client.NodeEvacuate) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string, client.NodeEvacuate) error); ok {
 		r0 = rf(ctx, nodeName, evacuate)
 	} else {
 		r0 = ret.Error(0)
