@@ -235,6 +235,33 @@ func TestValidateRWXBlockAttachmentPVNotFound(t *testing.T) {
 	assert.Empty(t, vmName)
 }
 
+func TestValidateRWXBlockAttachmentFindsPVByVolumeHandle(t *testing.T) {
+	scheme := runtime.NewScheme()
+
+	pv := createUnstructuredPV("different-pv-name", "default", "test-pvc")
+	pv.Object["spec"].(map[string]interface{})["csi"].(map[string]interface{})["volumeHandle"] = "test-volume-id"
+
+	objects := []runtime.Object{
+		pv,
+		createUnstructuredPod("virt-launcher-vm1-abc", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+		createUnstructuredPod("virt-launcher-vm2-xyz", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm2"}, "Running"),
+	}
+
+	gvrToListKind := map[schema.GroupVersionResource]string{
+		PodGVR: "PodList",
+		PVGVR:  "PersistentVolumeList",
+	}
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme, gvrToListKind, objects...)
+
+	logger := logrus.NewEntry(logrus.New())
+	logger.Logger.SetLevel(logrus.DebugLevel)
+
+	vmName, err := ValidateRWXBlockAttachment(context.Background(), client, logger, "test-volume-id")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "different VMs")
+	assert.Empty(t, vmName)
+}
+
 // createUnstructuredPod creates an unstructured pod object for testing.
 func createUnstructuredPod(name, namespace, pvcName string, labels map[string]string, phase string) *unstructured.Unstructured {
 	pod := &unstructured.Unstructured{
