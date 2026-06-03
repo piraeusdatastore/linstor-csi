@@ -1033,10 +1033,27 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume
 		}
 
 		if info == nil {
+			incremental := params.AllowIncremental
+
+			// Bound the chain length/age when requested: forcing a fresh full
+			// starts a new chain so older backups eventually become reclaimable.
+			if incremental && (params.MaxIncrements > 0 || params.FullSnapshotAfter > 0) {
+				forceFull, err := s.backupChainExhausted(ctx, params, sourceVolId)
+				if err != nil {
+					return nil, err
+				}
+
+				if forceFull {
+					log.WithField("resource", sourceVolId).Info("incremental backup chain limit reached, forcing a full backup")
+
+					incremental = false
+				}
+			}
+
 			_, err := s.client.Backup.Create(ctx, params.RemoteName, lapi.BackupCreate{
 				RscName:     sourceVolId,
 				SnapName:    id,
-				Incremental: params.AllowIncremental,
+				Incremental: incremental,
 			})
 			if err != nil {
 				return nil, fmt.Errorf("error creating S3 backup: %w", err)
@@ -1095,6 +1112,128 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume
 	default:
 		return nil, fmt.Errorf("unsupported snapshot type '%s', don't know how to create a backup", params.Type)
 	}
+}
+
+// backupChainExhausted reports whether the next S3 backup of rscName should be a
+// full backup instead of an incremental, based on the MaxIncrements and
+// FullSnapshotAfter snapshot parameters. It reconstructs the current incremental
+// chain from the backups already present on the remote (following based_on_id)
+// and returns true once the chain has at least MaxIncrements increments or its
+// full backup is older than FullSnapshotAfter. It returns false when there are
+// no backups yet (the next backup is full regardless).
+func (s *Linstor) backupChainExhausted(ctx context.Context, params *volume.SnapshotParameters, rscName string) (bool, error) {
+	backups, err := s.client.Backup.GetAll(ctx, params.RemoteName, rscName, "")
+	if err != nil {
+		if lapi.IsApiCallError(err, lapiconsts.FailInvldRemoteName) {
+			// No remote yet -> nothing to base an incremental on.
+			return false, nil
+		}
+
+		return false, fmt.Errorf("failed to list backups while determining incremental chain length: %w", err)
+	}
+
+	if backups == nil || len(backups.Linstor) == 0 {
+		return false, nil
+	}
+
+	increments, fullStart := incrementChainLength(backups.Linstor, rscName)
+
+	if params.MaxIncrements > 0 && increments >= params.MaxIncrements {
+		return true, nil
+	}
+
+	if params.FullSnapshotAfter > 0 && !fullStart.IsZero() && time.Since(fullStart) >= params.FullSnapshotAfter {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// referencedBackupIDs returns the set of backup IDs that are the base of another
+// (newer) incremental backup in byID. A backup in this set must not be deleted
+// on its own, as the increment based on it would be left dangling.
+//
+// Note that "based_on_id" carries a ".meta" suffix that the backup ID / map key
+// does not, so it has to be stripped before comparing (a quirk of the LINSTOR
+// backup REST API).
+func referencedBackupIDs(byID map[string]lapi.Backup) map[string]bool {
+	referenced := make(map[string]bool, len(byID))
+
+	for id := range byID {
+		if base := byID[id].BasedOnId; base != "" {
+			referenced[strings.TrimSuffix(base, ".meta")] = true
+		}
+	}
+
+	return referenced
+}
+
+// incrementChainLength reconstructs the current incremental backup chain for
+// rscName from byID and returns the number of increments in it (0 for a
+// full-only chain) together with the start time of the chain's full backup. A
+// new backup is based on the most recently completed backup, so the chain is
+// walked back from there following based_on_id.
+func incrementChainLength(byID map[string]lapi.Backup, rscName string) (int, time.Time) {
+	var (
+		leafID string
+		leafTS time.Time
+	)
+
+	for id := range byID {
+		b := byID[id]
+		// Only consider completed backups of this resource: a new incremental is
+		// based on the most recent successful backup, so in-progress or failed
+		// entries must not be picked as the chain leaf or skew its length.
+		if b.OriginRsc != rscName || !b.Success {
+			continue
+		}
+
+		ts := backupTimestamp(&b)
+		if leafID == "" || ts.After(leafTS) {
+			leafID, leafTS = id, ts
+		}
+	}
+
+	if leafID == "" {
+		return 0, time.Time{}
+	}
+
+	increments := 0
+	fullStart := time.Time{}
+	seen := make(map[string]bool, len(byID))
+
+	for cur := leafID; cur != "" && !seen[cur]; {
+		seen[cur] = true
+
+		b, ok := byID[cur]
+		if !ok {
+			break
+		}
+
+		if b.BasedOnId == "" {
+			fullStart = backupTimestamp(&b)
+			break
+		}
+
+		increments++
+		cur = strings.TrimSuffix(b.BasedOnId, ".meta")
+	}
+
+	return increments, fullStart
+}
+
+// backupTimestamp returns the most meaningful timestamp for ordering backups,
+// preferring the finished time and falling back to the start time.
+func backupTimestamp(b *lapi.Backup) time.Time {
+	if b.FinishedTimestamp != nil {
+		return b.FinishedTimestamp.Time
+	}
+
+	if b.StartTimestamp != nil {
+		return b.StartTimestamp.Time
+	}
+
+	return time.Time{}
 }
 
 func (s *Linstor) ReconcileRemote(ctx context.Context, params *volume.SnapshotParameters) error {
@@ -1174,13 +1313,22 @@ func (s *Linstor) SnapDelete(ctx context.Context, snap *volume.SnapshotId) error
 	if snap.Type == volume.SnapshotTypeS3 {
 		log.WithField("remote", snap.Remote).Debug("deleting backup from remote")
 
-		backups, err := s.client.Backup.GetAll(ctx, snap.Remote, snap.SourceName, snap.SnapshotName)
+		// List all backups for the resource (not just this snapshot's): an
+		// incremental is "based on" an earlier backup, and LINSTOR refuses to
+		// delete one another increment still depends on, so we need the full set.
+		backups, err := s.client.Backup.GetAll(ctx, snap.Remote, snap.SourceName, "")
 		if err != nil && !lapi.IsApiCallError(err, lapiconsts.FailInvldRemoteName) {
 			// Ignore errors caused by missing remotes: no remote -> no snapshots to delete.
 			return fmt.Errorf("failed to list backups for snapshot %s: %w", snap.String(), err)
 		}
 
 		if backups != nil {
+			// Build the set of backup IDs that are the base of another (newer)
+			// incremental backup.
+			referenced := referencedBackupIDs(backups.Linstor)
+
+			// Collect the backups belonging to the snapshot we are deleting.
+			var ownIDs []string
 			for id := range backups.Linstor {
 				// LINSTOR may return some extra results
 				if backups.Linstor[id].OriginRsc != snap.SourceName || backups.Linstor[id].OriginSnap != snap.SnapshotName {
@@ -1188,6 +1336,24 @@ func (s *Linstor) SnapDelete(ctx context.Context, snap *volume.SnapshotId) error
 					continue
 				}
 
+				ownIDs = append(ownIDs, id)
+			}
+
+			// If a backup is still the base of another increment, deleting it
+			// would need a cascade that also drops the increments we want to keep.
+			// Defer instead by returning a retryable error (this also skips the
+			// local cleanup below); the external-snapshotter retries until the
+			// dependents are gone and the chain drains newest-first.
+			for _, id := range ownIDs {
+				if referenced[id] {
+					log.WithField("remote_id", id).Info("backup is still the base of a newer incremental backup, deferring deletion")
+
+					return fmt.Errorf("backup %s for snapshot %s is still the base of a newer incremental backup; "+
+						"deferring deletion until the dependent backups are removed", id, snap.String())
+				}
+			}
+
+			for _, id := range ownIDs {
 				err := s.client.Backup.DeleteAll(ctx, snap.Remote, lapi.BackupDeleteOpts{
 					ID: id,
 				})

@@ -3,6 +3,7 @@ package volume_test
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -50,6 +51,41 @@ func TestNewSnapshotParameters(t *testing.T) {
 				S3SecretKey:      "password",
 				S3UsePathStyle:   true,
 			},
+		},
+		{
+			name: "s3-with-chain-bounds",
+			rawParameters: map[string]string{
+				linstor.SnapshotParameterNamespace + "/type":                "S3",
+				linstor.SnapshotParameterNamespace + "/allow-incremental":   "true",
+				linstor.SnapshotParameterNamespace + "/remote-name":         "my-remote",
+				linstor.SnapshotParameterNamespace + "/max-increments":      "10",
+				linstor.SnapshotParameterNamespace + "/full-snapshot-after": "168h",
+			},
+			expected: &volume.SnapshotParameters{
+				Type:              volume.SnapshotTypeS3,
+				RemoteName:        "my-remote",
+				AllowIncremental:  true,
+				MaxIncrements:     10,
+				FullSnapshotAfter: 168 * time.Hour,
+			},
+		},
+		{
+			name: "s3-invalid-max-increments",
+			rawParameters: map[string]string{
+				linstor.SnapshotParameterNamespace + "/type":           "S3",
+				linstor.SnapshotParameterNamespace + "/remote-name":    "my-remote",
+				linstor.SnapshotParameterNamespace + "/max-increments": "-1",
+			},
+			expectedErr: fmt.Sprintf("%s/max-increments must not be negative", linstor.SnapshotParameterNamespace),
+		},
+		{
+			name: "s3-invalid-full-snapshot-after",
+			rawParameters: map[string]string{
+				linstor.SnapshotParameterNamespace + "/type":                "S3",
+				linstor.SnapshotParameterNamespace + "/remote-name":         "my-remote",
+				linstor.SnapshotParameterNamespace + "/full-snapshot-after": "not-a-duration",
+			},
+			expectedErr: fmt.Sprintf("invalid %s/full-snapshot-after: time: invalid duration \"not-a-duration\"", linstor.SnapshotParameterNamespace),
 		},
 		{
 			name: "s3-without-name",
