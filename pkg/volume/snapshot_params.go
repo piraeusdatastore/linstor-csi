@@ -35,6 +35,7 @@ type SnapshotParameters struct {
 	LinstorTargetUrl         string       `json:"linstor-target-url,omitempty"`
 	LinstorTargetClusterID   string       `json:"linstor-target-cluster-id,omitempty"`
 	LinstorTargetStoragePool string       `json:"linstor-target-storage-pool,omitempty"`
+	RelocateAfterRestore     bool         `json:"relocate-after-restore,omitempty"`
 }
 
 func NewSnapshotParameters(params, secrets map[string]string) (*SnapshotParameters, error) {
@@ -91,6 +92,13 @@ func NewSnapshotParameters(params, secrets map[string]string) (*SnapshotParamete
 			p.LinstorTargetClusterID = v
 		case "/linstor-target-storage-pool":
 			p.LinstorTargetStoragePool = v
+		case "/relocateAfterRestore":
+			b, err := strconv.ParseBool(v)
+			if err != nil {
+				return nil, err
+			}
+
+			p.RelocateAfterRestore = b
 		default:
 			log.WithField("key", k).Warn("ignoring unknown snapshot parameter key")
 		}
