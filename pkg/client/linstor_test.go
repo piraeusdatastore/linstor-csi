@@ -24,6 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	lapiconsts "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
@@ -574,6 +575,126 @@ func TestGetSnapshotRemoteAndReadiness(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, tcase.expectedRemote, remote)
 			assert.Equal(t, tcase.expectedReady, ready)
+		})
+	}
+}
+
+// backup is a small helper to build a completed lapi.Backup with the fields the
+// chain logic cares about. finished is minutes since an arbitrary epoch.
+func backup(id, rsc, basedOn string, finishedMin int) lapi.Backup {
+	ts := time.Date(2026, 1, 1, 0, finishedMin, 0, 0, time.UTC)
+
+	return lapi.Backup{
+		Id:                id,
+		OriginRsc:         rsc,
+		BasedOnId:         basedOn,
+		Success:           true,
+		FinishedTimestamp: &lapi.TimeStampMs{Time: ts},
+	}
+}
+
+func TestReferencedBackupIDs(t *testing.T) {
+	t.Parallel()
+
+	const rsc = "pvc-1"
+
+	// full <- inc1 <- inc2. based_on_id carries a ".meta" suffix the id does not.
+	full := backup("pvc-1_back_001^snapA", rsc, "", 0)
+	inc1 := backup("pvc-1_back_002^snapB", rsc, "pvc-1_back_001^snapA.meta", 1)
+	inc2 := backup("pvc-1_back_003^snapC", rsc, "pvc-1_back_002^snapB.meta", 2)
+
+	byID := map[string]lapi.Backup{full.Id: full, inc1.Id: inc1, inc2.Id: inc2}
+
+	referenced := referencedBackupIDs(byID)
+
+	assert.True(t, referenced[full.Id], "full is the base of inc1, must be referenced")
+	assert.True(t, referenced[inc1.Id], "inc1 is the base of inc2, must be referenced")
+	assert.False(t, referenced[inc2.Id], "inc2 is the leaf, must not be referenced")
+	assert.Len(t, referenced, 2)
+}
+
+func TestReferencedBackupIDs_FullOnly(t *testing.T) {
+	t.Parallel()
+
+	full := backup("pvc-1_back_001^snapA", "pvc-1", "", 0)
+	referenced := referencedBackupIDs(map[string]lapi.Backup{full.Id: full})
+
+	assert.Empty(t, referenced, "a lone full backup references nothing")
+}
+
+func TestIncrementChainLength(t *testing.T) {
+	t.Parallel()
+
+	const rsc = "pvc-1"
+
+	full := backup("pvc-1_back_001^snapA", rsc, "", 0)
+	inc1 := backup("pvc-1_back_002^snapB", rsc, "pvc-1_back_001^snapA.meta", 5)
+	inc2 := backup("pvc-1_back_003^snapC", rsc, "pvc-1_back_002^snapB.meta", 10)
+
+	cases := []struct {
+		name           string
+		byID           map[string]lapi.Backup
+		wantIncrements int
+		wantFull       bool
+	}{
+		{
+			name:           "empty",
+			byID:           map[string]lapi.Backup{},
+			wantIncrements: 0,
+			wantFull:       false,
+		},
+		{
+			name:           "full only",
+			byID:           map[string]lapi.Backup{full.Id: full},
+			wantIncrements: 0,
+			wantFull:       true,
+		},
+		{
+			name:           "full + 1 increment",
+			byID:           map[string]lapi.Backup{full.Id: full, inc1.Id: inc1},
+			wantIncrements: 1,
+			wantFull:       true,
+		},
+		{
+			name:           "full + 2 increments",
+			byID:           map[string]lapi.Backup{full.Id: full, inc1.Id: inc1, inc2.Id: inc2},
+			wantIncrements: 2,
+			wantFull:       true,
+		},
+		{
+			name:           "other resource ignored",
+			byID:           map[string]lapi.Backup{full.Id: full, "other": backup("other_back_001^x", "pvc-2", "", 99)},
+			wantIncrements: 0,
+			wantFull:       true,
+		},
+		{
+			name: "in-progress backup ignored as leaf",
+			byID: map[string]lapi.Backup{
+				full.Id: full,
+				inc1.Id: inc1,
+				// A newer but not-yet-successful incremental must not be counted.
+				"pvc-1_back_999^snapInflight": func() lapi.Backup {
+					b := backup("pvc-1_back_999^snapInflight", rsc, "pvc-1_back_002^snapB.meta", 60)
+					b.Success = false
+					b.Shipping = true
+
+					return b
+				}(),
+			},
+			wantIncrements: 1,
+			wantFull:       true,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			increments, fullStart := incrementChainLength(tt.byID, rsc)
+			assert.Equal(t, tt.wantIncrements, increments)
+			assert.Equal(t, tt.wantFull, !fullStart.IsZero(), "full start time present")
+
+			if tt.wantFull {
+				assert.Equal(t, full.FinishedTimestamp.Time, fullStart)
+			}
 		})
 	}
 }

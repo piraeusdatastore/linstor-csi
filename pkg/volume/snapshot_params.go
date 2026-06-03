@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -22,19 +23,21 @@ const (
 )
 
 type SnapshotParameters struct {
-	Type                     SnapshotType `json:"type,omitempty"`
-	AllowIncremental         bool         `json:"allow-incremental"`
-	RemoteName               string       `json:"remote-name,omitempty"`
-	DeleteLocal              bool         `json:"delete-local,omitempty"`
-	S3Endpoint               string       `json:"s3-endpoint,omitempty"`
-	S3Bucket                 string       `json:"s3-bucket,omitempty"`
-	S3SigningRegion          string       `json:"s3-signing-region,omitempty"`
-	S3UsePathStyle           bool         `json:"s3-use-path-style"`
-	S3AccessKey              string       `json:"-"`
-	S3SecretKey              string       `json:"-"`
-	LinstorTargetUrl         string       `json:"linstor-target-url,omitempty"`
-	LinstorTargetClusterID   string       `json:"linstor-target-cluster-id,omitempty"`
-	LinstorTargetStoragePool string       `json:"linstor-target-storage-pool,omitempty"`
+	Type                     SnapshotType  `json:"type,omitempty"`
+	AllowIncremental         bool          `json:"allow-incremental"`
+	MaxIncrements            int           `json:"max-increments,omitempty"`
+	FullSnapshotAfter        time.Duration `json:"full-snapshot-after,omitempty"`
+	RemoteName               string        `json:"remote-name,omitempty"`
+	DeleteLocal              bool          `json:"delete-local,omitempty"`
+	S3Endpoint               string        `json:"s3-endpoint,omitempty"`
+	S3Bucket                 string        `json:"s3-bucket,omitempty"`
+	S3SigningRegion          string        `json:"s3-signing-region,omitempty"`
+	S3UsePathStyle           bool          `json:"s3-use-path-style"`
+	S3AccessKey              string        `json:"-"`
+	S3SecretKey              string        `json:"-"`
+	LinstorTargetUrl         string        `json:"linstor-target-url,omitempty"`
+	LinstorTargetClusterID   string        `json:"linstor-target-cluster-id,omitempty"`
+	LinstorTargetStoragePool string        `json:"linstor-target-storage-pool,omitempty"`
 }
 
 func NewSnapshotParameters(params, secrets map[string]string) (*SnapshotParameters, error) {
@@ -70,6 +73,28 @@ func NewSnapshotParameters(params, secrets map[string]string) (*SnapshotParamete
 			}
 
 			p.AllowIncremental = b
+		case "/max-increments":
+			n, err := strconv.Atoi(v)
+			if err != nil {
+				return nil, fmt.Errorf("invalid %s%s: %w", linstor.SnapshotParameterNamespace, k, err)
+			}
+
+			if n < 0 {
+				return nil, fmt.Errorf("%s%s must not be negative", linstor.SnapshotParameterNamespace, k)
+			}
+
+			p.MaxIncrements = n
+		case "/full-snapshot-after":
+			d, err := time.ParseDuration(v)
+			if err != nil {
+				return nil, fmt.Errorf("invalid %s%s: %w", linstor.SnapshotParameterNamespace, k, err)
+			}
+
+			if d < 0 {
+				return nil, fmt.Errorf("%s%s must not be negative", linstor.SnapshotParameterNamespace, k)
+			}
+
+			p.FullSnapshotAfter = d
 		case "/remote-name":
 			p.RemoteName = v
 		case "/s3-endpoint":
@@ -115,6 +140,8 @@ func (s *SnapshotParameters) String() string {
 	return fmt.Sprint(SnapshotParameters{
 		Type:                     s.Type,
 		AllowIncremental:         s.AllowIncremental,
+		MaxIncrements:            s.MaxIncrements,
+		FullSnapshotAfter:        s.FullSnapshotAfter,
 		RemoteName:               s.RemoteName,
 		S3Endpoint:               s.S3Endpoint,
 		S3Bucket:                 s.S3Bucket,

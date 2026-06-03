@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `snap.linstor.csi.linbit.com/max-increments` and
+  `snap.linstor.csi.linbit.com/full-snapshot-after` snapshot class parameters to
+  bound the length / age of incremental S3 backup chains, forcing a fresh full
+  backup so that older backups become reclaimable.
+
+### Fixed
+
+- Deletion of incremental S3 backups no longer fails permanently when a backup
+  is still the base of a newer increment. The delete is deferred and retried so
+  the chain drains newest-first instead of leaking backups forever.
+
 ## [1.11.2] - 2026-05-12
 
 ### Changed
