@@ -37,7 +37,6 @@ func TestDriver(t *testing.T) {
 	}
 
 	driver, err := NewDriver(
-		Endpoint(*csiEndpoint),
 		LogLevel(*logLevel),
 		LogOut(logFile),
 		Name("linstor.csi.linbit.com-test"),
@@ -95,9 +94,16 @@ func TestDriver(t *testing.T) {
 		}
 	}
 
-	// run your driver
+	// Bind the socket synchronously so the sanity suite cannot race the
+	// server startup: once Listen returns, the socket accepts connections.
+	listener, err := Listen(*csiEndpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// t.Context() is cancelled when the test finishes, stopping the server.
 	//nolint:errcheck
-	go driver.Run()
+	go driver.Serve(t.Context(), listener)
 
 	mntDir, err := ioutil.TempDir("", "mnt")
 	if err != nil {

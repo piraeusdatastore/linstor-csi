@@ -19,12 +19,15 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	linstor "github.com/LINBIT/golinstor"
@@ -142,7 +145,6 @@ func main() {
 
 	opts := []func(*driver.Driver) error{
 		driver.Assignments(linstorClient),
-		driver.Endpoint(*csiEndpoint),
 		driver.LogLevel(*logLevel),
 		driver.LogOut(logOut),
 		driver.Mounter(linstorClient),
@@ -179,10 +181,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	//nolint:errcheck
-	defer drv.Stop()
+	listener, err := driver.Listen(*csiEndpoint)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	if err := drv.Run(); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	if err := drv.Serve(ctx, listener); err != nil {
 		log.Fatal(err)
 	}
 }

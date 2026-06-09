@@ -69,15 +69,11 @@ type Driver struct {
 	NodeInformer  volume.NodeInformer
 	kubeClient    dynamic.Interface
 	nfsExporter   *NfsExporter
-	cancel        context.CancelFunc
-	srv           *grpc.Server
 	log           *logrus.Entry
 	version       string
 	// name distingushes the driver from other drivers and is used to mark
 	// volumes so that volumes provisioned by another driver are not interfered with.
 	name string
-	// endpoint is the socket over which all CSI calls are requested and responded to.
-	endpoint string
 	// nodeID is the hostname of the node where this plugin is running locally.
 	nodeID string
 	// topologyPrefix is the name
@@ -117,8 +113,6 @@ func NewDriver(options ...func(*Driver) error) (*Driver, error) {
 
 	d.log.Logger.SetOutput(ioutil.Discard)
 	d.log.Logger.SetFormatter(&logrus.TextFormatter{})
-
-	d.endpoint = fmt.Sprintf("unix:///var/lib/kubelet/plugins/%s/csi.sock", d.name)
 
 	// Run options functions.
 	for _, opt := range options {
@@ -197,14 +191,6 @@ func NodeInformer(n volume.NodeInformer) func(*Driver) error {
 func NodeID(nodeID string) func(*Driver) error {
 	return func(d *Driver) error {
 		d.nodeID = nodeID
-		return nil
-	}
-}
-
-// Endpoint configures the driver name.
-func Endpoint(ep string) func(*Driver) error {
-	return func(d *Driver) error {
-		d.endpoint = ep
 		return nil
 	}
 }
@@ -1440,13 +1426,13 @@ func AggregateGroupSnapshot(id string, snapshots ...*volume.Snapshot) *csi.Volum
 	}
 }
 
-// Run the server.
-func (d *Driver) Run() error {
-	d.log.Debug("Preparing to start server")
-
-	u, err := url.Parse(d.endpoint)
+// Listen creates a listener for the given CSI endpoint, which must be a unix
+// domain socket URL. A stale socket file from a previous run is removed first.
+// Binding before Serve runs avoids racing clients against server startup.
+func Listen(endpoint string) (net.Listener, error) {
+	u, err := url.Parse(endpoint)
 	if err != nil {
-		return fmt.Errorf("unable to parse address: %q", err)
+		return nil, fmt.Errorf("unable to parse address: %w", err)
 	}
 
 	addr := path.Join(u.Host, filepath.FromSlash(u.Path))
@@ -1456,16 +1442,19 @@ func (d *Driver) Run() error {
 
 	// csi plugins talk only over unix sockets currently
 	if u.Scheme != "unix" {
-		return fmt.Errorf("currently only unix domain sockets are supported, have: %s", u.Scheme)
+		return nil, fmt.Errorf("currently only unix domain sockets are supported, have: %s", u.Scheme)
 	}
 	if err = os.Remove(addr); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove previously used unix domain socket file %s, error: %v", addr, err)
+		return nil, fmt.Errorf("failed to remove previously used unix domain socket file %s, error: %w", addr, err)
 	}
 
-	listener, err := net.Listen(u.Scheme, addr)
-	if err != nil {
-		return fmt.Errorf("failed to listen: %v", err)
-	}
+	return net.Listen(u.Scheme, addr)
+}
+
+// Serve handles CSI requests on listener, blocking until ctx is cancelled (the
+// server is then stopped gracefully) or a fatal error occurs.
+func (d *Driver) Serve(ctx context.Context, listener net.Listener) error {
+	d.log.Debug("Preparing to start server")
 
 	// type UnaryServerInterceptor func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err error)
 	errHandler := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
@@ -1488,9 +1477,6 @@ func (d *Driver) Run() error {
 		return resp, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	d.cancel = cancel
-
 	if d.kubeClient != nil && d.resyncAfter > 0 {
 		err := ReconcileVolumeSnapshotClass(ctx, d.kubeClient, d.Snapshots, d.log, d.resyncAfter)
 		if err != nil {
@@ -1498,23 +1484,21 @@ func (d *Driver) Run() error {
 		}
 	}
 
-	d.srv = grpc.NewServer(grpc.UnaryInterceptor(errHandler))
-	csi.RegisterIdentityServer(d.srv, d)
-	csi.RegisterControllerServer(d.srv, d)
-	csi.RegisterNodeServer(d.srv, d)
-	csi.RegisterGroupControllerServer(d.srv, d)
+	srv := grpc.NewServer(grpc.UnaryInterceptor(errHandler))
+	csi.RegisterIdentityServer(srv, d)
+	csi.RegisterControllerServer(srv, d)
+	csi.RegisterNodeServer(srv, d)
+	csi.RegisterGroupControllerServer(srv, d)
+
+	// Stop the server gracefully once the caller cancels the context.
+	stop := context.AfterFunc(ctx, srv.GracefulStop)
+	defer stop()
 
 	d.log.WithFields(logrus.Fields{
-		"address": addr,
+		"address": listener.Addr(),
 	}).Info("server started")
-	return d.srv.Serve(listener)
-}
 
-// Stop the server.
-func (d *Driver) Stop() error {
-	d.srv.GracefulStop()
-	d.cancel()
-	return nil
+	return srv.Serve(listener)
 }
 
 func (d *Driver) createNewVolume(ctx context.Context, info *volume.Info, params *volume.Parameters, req *csi.CreateVolumeRequest, nfsExport bool) (*csi.CreateVolumeResponse, error) {
