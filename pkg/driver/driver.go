@@ -315,7 +315,7 @@ func DisableRWXBlockValidation() func(*Driver) error {
 }
 
 // GetPluginInfo https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#getplugininfo
-func (d Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
+func (d *Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	return &csi.GetPluginInfoResponse{
 		Name:          d.name,
 		VendorVersion: d.version,
@@ -323,7 +323,7 @@ func (d Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest
 }
 
 // GetPluginCapabilities https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#getplugincapabilities
-func (d Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
+func (d *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
 	return &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
 			{Type: &csi.PluginCapability_Service_{
@@ -351,22 +351,22 @@ func (d Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCap
 }
 
 // Probe https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#probe
-func (d Driver) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
+func (d *Driver) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
 	return &csi.ProbeResponse{}, nil
 }
 
 // NodeStageVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#nodestagevolume
-func (d Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
+func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "")
 }
 
 // NodeUnstageVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#nodeunstagevolume
-func (d Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
+func (d *Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "")
 }
 
 // NodePublishVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#nodepublishvolume
-func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
+func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	if req.GetVolumeId() == "" {
 		return &csi.NodePublishVolumeResponse{}, missingAttr("NodePublishVolume", req.GetVolumeId(), "VolumeId")
 	}
@@ -465,7 +465,7 @@ func (d Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolum
 }
 
 // NodeUnpublishVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#nodeunpublishvolume
-func (d Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
+func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	if req.GetVolumeId() == "" {
 		return nil, missingAttr("NodeUnpublishVolume", req.GetVolumeId(), "VolumeId")
 	}
@@ -483,7 +483,7 @@ func (d Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishV
 }
 
 // NodeGetVolumeStats https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#nodegetvolumestats
-func (d Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
+func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
 	if req.GetVolumeId() == "" {
 		return nil, missingAttr("NodeGetVolumeStats", req.GetVolumeId(), "VolumeId")
 	}
@@ -525,7 +525,7 @@ func (d Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeSt
 }
 
 // NodeGetCapabilities https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#nodegetcapabilities
-func (d Driver) NodeGetCapabilities(context.Context, *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
+func (d *Driver) NodeGetCapabilities(context.Context, *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
 	return &csi.NodeGetCapabilitiesResponse{
 		Capabilities: []*csi.NodeServiceCapability{
 			{
@@ -547,7 +547,7 @@ func (d Driver) NodeGetCapabilities(context.Context, *csi.NodeGetCapabilitiesReq
 }
 
 // NodeGetInfo https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#nodegetinfo
-func (d Driver) NodeGetInfo(ctx context.Context, _ *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
+func (d *Driver) NodeGetInfo(ctx context.Context, _ *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	topology, err := d.NodeInformer.GetNodeTopologies(ctx, d.nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve node topology: %w", err)
@@ -561,7 +561,7 @@ func (d Driver) NodeGetInfo(ctx context.Context, _ *csi.NodeGetInfoRequest) (*cs
 }
 
 // CreateVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#createvolume
-func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
+func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	if req.GetName() == "" {
 		return nil, missingAttr("CreateVolume", req.GetName(), "Name")
 	}
@@ -711,7 +711,7 @@ func (d Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) 
 }
 
 // DeleteVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#deletevolume
-func (d Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
+func (d *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
 	if req.GetVolumeId() == "" {
 		return nil, missingAttr("DeleteVolume", req.GetVolumeId(), "VolumeId")
 	}
@@ -730,7 +730,7 @@ func (d Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) 
 }
 
 // ControllerPublishVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#controllerpublishvolume
-func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
+func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
 	if req.GetVolumeId() == "" {
 		return nil, missingAttr("ControllerPublishVolume", req.GetVolumeId(), "VolumeId")
 	}
@@ -800,7 +800,7 @@ func (d Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controller
 }
 
 // ControllerUnpublishVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#controllerunpublishvolume
-func (d Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
+func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
 	if req.GetVolumeId() == "" {
 		return nil, missingAttr("ControllerUnpublishVolume", req.GetVolumeId(), "VolumeId")
 	}
@@ -817,7 +817,7 @@ func (d Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Controll
 }
 
 // ValidateVolumeCapabilities https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#validatevolumecapabilities
-func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
+func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 	if req.GetVolumeId() == "" {
 		return nil, missingAttr("ValidateVolumeCapabilities", req.GetVolumeId(), "volumeId")
 	}
@@ -864,7 +864,7 @@ func (d Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Validat
 }
 
 // ListVolumes https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#listvolumes
-func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
+func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
 	volumes, err := d.Storage.ListAllWithStatus(ctx)
 	if err != nil {
 		return &csi.ListVolumesResponse{}, status.Errorf(codes.Aborted, "ListVolumes failed: %v", err)
@@ -915,7 +915,7 @@ func (d Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*
 }
 
 // GetCapacity https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#getcapacity
-func (d Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
+func (d *Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
 	params, err := volume.NewParameters(req.GetParameters(), d.topologyPrefix)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid parameters: %v", err)
@@ -950,7 +950,7 @@ func (d Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*
 }
 
 // ControllerGetCapabilities https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#controllergetcapabilities
-func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
+func (d *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
 	return &csi.ControllerGetCapabilitiesResponse{
 		Capabilities: []*csi.ControllerServiceCapability{
 			// Tell the CO we can create and delete volumes.
@@ -1020,7 +1020,7 @@ func (d Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Controll
 }
 
 // CreateSnapshot https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#createsnapshot
-func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
+func (d *Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
 	// Delegate to the group snapshot implementation
 	resp, err := d.CreateVolumeGroupSnapshot(ctx, &csi.CreateVolumeGroupSnapshotRequest{
 		Name:            req.GetName(),
@@ -1042,7 +1042,7 @@ func (d Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotReque
 }
 
 // DeleteSnapshot https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#deletesnapshot
-func (d Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
+func (d *Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
 	if req.GetSnapshotId() == "" {
 		return nil, missingAttr("DeleteSnapshot", req.GetSnapshotId(), "SnapshotId")
 	}
@@ -1068,7 +1068,7 @@ func (d Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotReque
 }
 
 // ListSnapshots https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#listsnapshots
-func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
+func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
 	limit := int(req.GetMaxEntries())
 	start, err := parseAsInt(req.GetStartingToken())
 	if err != nil {
@@ -1133,7 +1133,7 @@ func (d Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest
 }
 
 // NodeExpandVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#nodeexpandvolume
-func (d Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
+func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
 	d.log.WithFields(logrus.Fields{
 		"NodeExpandVolume": fmt.Sprintf("%+v", req),
 	}).Debug("Node expand volume")
@@ -1159,7 +1159,7 @@ func (d Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeR
 }
 
 // ControllerExpandVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#controllerexpandvolume
-func (d Driver) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
+func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
 	if req.GetVolumeId() == "" {
 		return nil, missingAttr("ControllerExpandVolume", req.GetVolumeId(), "VolumeId")
 	}
@@ -1209,7 +1209,7 @@ func (d Driver) ControllerExpandVolume(ctx context.Context, req *csi.ControllerE
 }
 
 // ControllerGetVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#controllergetvolume
-func (d Driver) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
+func (d *Driver) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
 	vol, err := d.Storage.FindByID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to find volume '%s': %v", req.GetVolumeId(), err)
@@ -1236,12 +1236,12 @@ func (d Driver) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetV
 }
 
 // ControllerModifyVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#controllermodifyvolume
-func (d Driver) ControllerModifyVolume(ctx context.Context, req *csi.ControllerModifyVolumeRequest) (*csi.ControllerModifyVolumeResponse, error) {
+func (d *Driver) ControllerModifyVolume(ctx context.Context, req *csi.ControllerModifyVolumeRequest) (*csi.ControllerModifyVolumeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "")
 }
 
 // GroupControllerGetCapabilities https://github.com/container-storage-interface/spec/blob/v1.11.0/spec.md#groupcontrollergetcapabilities
-func (d Driver) GroupControllerGetCapabilities(ctx context.Context, in *csi.GroupControllerGetCapabilitiesRequest) (*csi.GroupControllerGetCapabilitiesResponse, error) {
+func (d *Driver) GroupControllerGetCapabilities(ctx context.Context, in *csi.GroupControllerGetCapabilitiesRequest) (*csi.GroupControllerGetCapabilitiesResponse, error) {
 	return &csi.GroupControllerGetCapabilitiesResponse{
 		Capabilities: []*csi.GroupControllerServiceCapability{
 			{
@@ -1256,7 +1256,7 @@ func (d Driver) GroupControllerGetCapabilities(ctx context.Context, in *csi.Grou
 }
 
 // CreateVolumeGroupSnapshot https://github.com/container-storage-interface/spec/blob/v1.11.0/spec.md#createvolumegroupsnapshot
-func (d Driver) CreateVolumeGroupSnapshot(ctx context.Context, req *csi.CreateVolumeGroupSnapshotRequest) (*csi.CreateVolumeGroupSnapshotResponse, error) {
+func (d *Driver) CreateVolumeGroupSnapshot(ctx context.Context, req *csi.CreateVolumeGroupSnapshotRequest) (*csi.CreateVolumeGroupSnapshotResponse, error) {
 	if req.GetName() == "" {
 		return nil, missingAttr("CreateVolumeGroupSnapshot", req.GetName(), "Name")
 	}
@@ -1373,7 +1373,7 @@ func (d Driver) CreateVolumeGroupSnapshot(ctx context.Context, req *csi.CreateVo
 }
 
 // DeleteVolumeGroupSnapshot https://github.com/container-storage-interface/spec/blob/v1.11.0/spec.md#deletevolumegroupsnapshot
-func (d Driver) DeleteVolumeGroupSnapshot(ctx context.Context, req *csi.DeleteVolumeGroupSnapshotRequest) (*csi.DeleteVolumeGroupSnapshotResponse, error) {
+func (d *Driver) DeleteVolumeGroupSnapshot(ctx context.Context, req *csi.DeleteVolumeGroupSnapshotRequest) (*csi.DeleteVolumeGroupSnapshotResponse, error) {
 	if req.GetGroupSnapshotId() == "" {
 		return nil, missingAttr("DeleteVolumeGroupSnapshot", req.GetGroupSnapshotId(), "GroupSnapshotId")
 	}
@@ -1393,7 +1393,7 @@ func (d Driver) DeleteVolumeGroupSnapshot(ctx context.Context, req *csi.DeleteVo
 }
 
 // GetVolumeGroupSnapshot https://github.com/container-storage-interface/spec/blob/v1.11.0/spec.md#getvolumegroupsnapshot
-func (d Driver) GetVolumeGroupSnapshot(ctx context.Context, req *csi.GetVolumeGroupSnapshotRequest) (*csi.GetVolumeGroupSnapshotResponse, error) {
+func (d *Driver) GetVolumeGroupSnapshot(ctx context.Context, req *csi.GetVolumeGroupSnapshotRequest) (*csi.GetVolumeGroupSnapshotResponse, error) {
 	if req.GetGroupSnapshotId() == "" {
 		return nil, missingAttr("GetVolumeGroupSnapshot", req.GetGroupSnapshotId(), "GroupSnapshotId")
 	}
@@ -1441,7 +1441,7 @@ func AggregateGroupSnapshot(id string, snapshots ...*volume.Snapshot) *csi.Volum
 }
 
 // Run the server.
-func (d Driver) Run() error {
+func (d *Driver) Run() error {
 	d.log.Debug("Preparing to start server")
 
 	u, err := url.Parse(d.endpoint)
@@ -1511,13 +1511,13 @@ func (d Driver) Run() error {
 }
 
 // Stop the server.
-func (d Driver) Stop() error {
+func (d *Driver) Stop() error {
 	d.srv.GracefulStop()
 	d.cancel()
 	return nil
 }
 
-func (d Driver) createNewVolume(ctx context.Context, info *volume.Info, params *volume.Parameters, req *csi.CreateVolumeRequest, nfsExport bool) (*csi.CreateVolumeResponse, error) {
+func (d *Driver) createNewVolume(ctx context.Context, info *volume.Info, params *volume.Parameters, req *csi.CreateVolumeRequest, nfsExport bool) (*csi.CreateVolumeResponse, error) {
 	logger := d.log.WithFields(logrus.Fields{
 		"volume": info.ID,
 	})
@@ -1659,7 +1659,7 @@ func findMatchingSnapshotClassName(snapId string, contents ...unstructured.Unstr
 	return ""
 }
 
-func (d Driver) maybeGetSnapshotParameters(ctx context.Context, snapshotID string) (*volume.SnapshotParameters, error) {
+func (d *Driver) maybeGetSnapshotParameters(ctx context.Context, snapshotID string) (*volume.SnapshotParameters, error) {
 	if d.kubeClient == nil {
 		return nil, nil
 	}
@@ -1693,7 +1693,7 @@ func (d Driver) maybeGetSnapshotParameters(ctx context.Context, snapshotID strin
 
 // maybeDeleteLocalSnapshot deletes the local portion of a snapshot according to their volume.SnapshotParameters.
 // It will not delete a snapshot that is not ready, does not have a remote target, or where local deletion is disabled.
-func (d Driver) maybeDeleteLocalSnapshot(ctx context.Context, snap *volume.Snapshot, params *volume.SnapshotParameters) error {
+func (d *Driver) maybeDeleteLocalSnapshot(ctx context.Context, snap *volume.Snapshot, params *volume.SnapshotParameters) error {
 	if !snap.ReadyToUse {
 		return nil
 	}
@@ -1737,7 +1737,7 @@ func parseAsInt(s string) (int, error) {
 // failpathDelete deletes volumes and logs if that fails. Mostly useful
 // in error paths where we need to report the original error and not the
 // possible error from trying to clean up from that original error.
-func (d Driver) failpathDelete(ctx context.Context, volId string) {
+func (d *Driver) failpathDelete(ctx context.Context, volId string) {
 	if err := d.Storage.Delete(ctx, volId); err != nil {
 		d.log.WithFields(logrus.Fields{
 			"volume": volId,
@@ -1749,7 +1749,7 @@ func (d Driver) failpathDelete(ctx context.Context, volId string) {
 // * The fsType for the volume, or "" for block volumes
 // * If this volume should be exported via NFS or not
 // * validation errors
-func (d Driver) validateCapabilities(caps []*csi.VolumeCapability) (string, bool, error) {
+func (d *Driver) validateCapabilities(caps []*csi.VolumeCapability) (string, bool, error) {
 	var mountCaps, blockCaps []*csi.VolumeCapability
 
 	for _, capability := range caps {
