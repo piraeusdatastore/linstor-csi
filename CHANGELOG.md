@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deletion of incremental S3 backups no longer fails permanently when a backup
   is still the base of a newer increment. The delete is deferred and retried so
   the chain drains newest-first instead of leaking backups forever.
+- `ControllerExpandVolume` no longer reports success based on the volume
+  definition size alone. A previous expand attempt may update the volume
+  definition while resizing the deployed DRBD devices fails (for example
+  because a replica was not UpToDate at that moment); the retried call then
+  found a matching volume definition and reported success, leaving the block
+  device at its old size while the CO considered the volume expanded. The
+  retry now verifies the usable size reported by the deployed volumes and
+  keeps failing until the devices have actually been resized.
 
 ## [1.11.2] - 2026-05-12
 

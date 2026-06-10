@@ -2759,7 +2759,7 @@ func (s *Linstor) ControllerExpand(ctx context.Context, vol *volume.Info) error 
 	}
 
 	if volumeDefinitionModify.SizeKib == volumeDefinitions[0].SizeKib {
-		return nil
+		return s.verifyExpandedSize(ctx, vol.ID, volumeDefinitionModify.SizeKib)
 	}
 
 	if volumeDefinitionModify.SizeKib < volumeDefinitions[0].SizeKib {
@@ -2769,6 +2769,43 @@ func (s *Linstor) ControllerExpand(ctx context.Context, vol *volume.Info) error 
 	err = s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, vol.ID, 0, volumeDefinitionModify)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// verifyExpandedSize checks that the deployed volumes of a resource actually report
+// the expected usable size.
+//
+// The size of the volume definition and the size of the deployed (DRBD) devices can
+// disagree: a previous expand attempt may have updated the volume definition while
+// resizing the deployed devices failed, for example because a replica was not
+// UpToDate at that moment. ControllerExpandVolume is retried by the CO with the same
+// arguments, so returning success based on the volume definition alone would
+// silently leave the block device at its old size while the CO considers the volume
+// expanded. Returning an error instead keeps the CO retrying until LINSTOR has
+// resized the devices on all nodes.
+func (s *Linstor) verifyExpandedSize(ctx context.Context, volId string, expectedSizeKib uint64) error {
+	view, err := s.client.Resources.GetResourceView(ctx, &lapi.ListOpts{Resource: []string{volId}})
+	if err != nil {
+		return fmt.Errorf("failed to verify deployed sizes of %s: %w", volId, err)
+	}
+
+	for i := range view {
+		for j := range view[i].Volumes {
+			deployed := &view[i].Volumes[j]
+			if deployed.VolumeNumber != 0 {
+				continue
+			}
+
+			// A reported size of 0 means the satellite could not report a device size
+			// (node offline, device not deployed). Skip those instead of blocking the
+			// expand operation forever.
+			if deployed.UsableSizeKib != 0 && uint64(deployed.UsableSizeKib) < expectedSizeKib {
+				return fmt.Errorf("volume %s on node %s reports a usable size of %d KiB, expected at least %d KiB: expansion has not completed on all nodes",
+					volId, view[i].NodeName, deployed.UsableSizeKib, expectedSizeKib)
+			}
+		}
 	}
 
 	return nil

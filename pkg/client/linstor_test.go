@@ -23,6 +23,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -697,4 +698,100 @@ func TestIncrementChainLength(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLinstor_ControllerExpand(t *testing.T) {
+	t.Parallel()
+
+	const expandedSizeKib = 10 * 1024 * 1024 // 10 GiB
+	expandedVol := &volume.Info{ID: ExampleResourceID, DeviceBytes: map[int]int64{0: expandedSizeKib * 1024}}
+
+	resourceView := func(usableSizesKib ...int64) []lapi.ResourceWithVolumes {
+		view := make([]lapi.ResourceWithVolumes, len(usableSizesKib))
+		for i, size := range usableSizesKib {
+			view[i] = lapi.ResourceWithVolumes{
+				Resource: lapi.Resource{Name: ExampleResourceID, NodeName: fmt.Sprintf("node-%d", i+1)},
+				Volumes:  []lapi.Volume{{VolumeNumber: 0, UsableSizeKib: size}},
+			}
+		}
+
+		return view
+	}
+
+	t.Run("fresh expand modifies the volume definition", func(t *testing.T) {
+		rd := mocks.ResourceDefinitionProvider{}
+		rd.ExpectedCalls = []*mock.Call{
+			{Method: "GetVolumeDefinitions", Arguments: mock.Arguments{mock.Anything, ExampleResourceID}, ReturnArguments: mock.Arguments{[]lapi.VolumeDefinition{{SizeKib: 4 * 1024 * 1024}}, nil}},
+			{Method: "ModifyVolumeDefinition", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, 0, lapi.VolumeDefinitionModify{SizeKib: expandedSizeKib}}, ReturnArguments: mock.Arguments{nil}},
+		}
+		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{ResourceDefinitions: &rd}}, log: logrus.WithField("test", t.Name())}
+
+		err := cl.ControllerExpand(context.Background(), expandedVol)
+		assert.NoError(t, err)
+		rd.AssertExpectations(t)
+	})
+
+	t.Run("retry succeeds when all devices report the expanded size", func(t *testing.T) {
+		rd := mocks.ResourceDefinitionProvider{}
+		rd.ExpectedCalls = []*mock.Call{
+			{Method: "GetVolumeDefinitions", Arguments: mock.Arguments{mock.Anything, ExampleResourceID}, ReturnArguments: mock.Arguments{[]lapi.VolumeDefinition{{SizeKib: expandedSizeKib}}, nil}},
+		}
+		r := mocks.ResourceProvider{}
+		r.ExpectedCalls = []*mock.Call{
+			{Method: "GetResourceView", Arguments: mock.Arguments{mock.Anything, &lapi.ListOpts{Resource: []string{ExampleResourceID}}}, ReturnArguments: mock.Arguments{resourceView(expandedSizeKib, expandedSizeKib+8, expandedSizeKib), nil}},
+		}
+		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{ResourceDefinitions: &rd, Resources: &r}}, log: logrus.WithField("test", t.Name())}
+
+		err := cl.ControllerExpand(context.Background(), expandedVol)
+		assert.NoError(t, err)
+		rd.AssertExpectations(t)
+		r.AssertExpectations(t)
+	})
+
+	t.Run("retry fails when a device was not resized", func(t *testing.T) {
+		rd := mocks.ResourceDefinitionProvider{}
+		rd.ExpectedCalls = []*mock.Call{
+			{Method: "GetVolumeDefinitions", Arguments: mock.Arguments{mock.Anything, ExampleResourceID}, ReturnArguments: mock.Arguments{[]lapi.VolumeDefinition{{SizeKib: expandedSizeKib}}, nil}},
+		}
+		r := mocks.ResourceProvider{}
+		r.ExpectedCalls = []*mock.Call{
+			{Method: "GetResourceView", Arguments: mock.Arguments{mock.Anything, &lapi.ListOpts{Resource: []string{ExampleResourceID}}}, ReturnArguments: mock.Arguments{resourceView(expandedSizeKib, 4*1024*1024), nil}},
+		}
+		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{ResourceDefinitions: &rd, Resources: &r}}, log: logrus.WithField("test", t.Name())}
+
+		err := cl.ControllerExpand(context.Background(), expandedVol)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "node-2")
+		rd.AssertExpectations(t)
+		r.AssertExpectations(t)
+	})
+
+	t.Run("devices without a reported size are ignored", func(t *testing.T) {
+		rd := mocks.ResourceDefinitionProvider{}
+		rd.ExpectedCalls = []*mock.Call{
+			{Method: "GetVolumeDefinitions", Arguments: mock.Arguments{mock.Anything, ExampleResourceID}, ReturnArguments: mock.Arguments{[]lapi.VolumeDefinition{{SizeKib: expandedSizeKib}}, nil}},
+		}
+		r := mocks.ResourceProvider{}
+		r.ExpectedCalls = []*mock.Call{
+			{Method: "GetResourceView", Arguments: mock.Arguments{mock.Anything, &lapi.ListOpts{Resource: []string{ExampleResourceID}}}, ReturnArguments: mock.Arguments{resourceView(expandedSizeKib, 0), nil}},
+		}
+		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{ResourceDefinitions: &rd, Resources: &r}}, log: logrus.WithField("test", t.Name())}
+
+		err := cl.ControllerExpand(context.Background(), expandedVol)
+		assert.NoError(t, err)
+		rd.AssertExpectations(t)
+		r.AssertExpectations(t)
+	})
+
+	t.Run("shrinking is rejected", func(t *testing.T) {
+		rd := mocks.ResourceDefinitionProvider{}
+		rd.ExpectedCalls = []*mock.Call{
+			{Method: "GetVolumeDefinitions", Arguments: mock.Arguments{mock.Anything, ExampleResourceID}, ReturnArguments: mock.Arguments{[]lapi.VolumeDefinition{{SizeKib: 2 * expandedSizeKib}}, nil}},
+		}
+		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{ResourceDefinitions: &rd}}, log: logrus.WithField("test", t.Name())}
+
+		err := cl.ControllerExpand(context.Background(), expandedVol)
+		assert.Error(t, err)
+		rd.AssertExpectations(t)
+	})
 }
