@@ -1,0 +1,3 @@
+linstor.csi.linbit.com/placementCount: "1"
+linstor.csi.linbit.com/storagePool: thin-pool
+linstor.csi.linbit.com/layerList: storage
