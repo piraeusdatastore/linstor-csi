@@ -61,13 +61,7 @@ var Version = "UNKNOWN"
 
 // Driver fullfils CSI controller, node, and indentity server interfaces.
 type Driver struct {
-	Storage       volume.CreateDeleter
-	Assignments   volume.AttacherDettacher
-	Mounter       volume.Mounter
-	Snapshots     volume.SnapshotCreateDeleter
-	VolumeStatter volume.VolumeStatter
-	Expander      volume.Expander
-	NodeInformer  volume.NodeInformer
+	linstorClient *client.Linstor
 	kubeClient    dynamic.Interface
 	nfsExporter   *NfsExporter
 	log           *logrus.Entry
@@ -91,22 +85,14 @@ type Driver struct {
 	csi.UnimplementedGroupControllerServer
 }
 
-// NewDriver builds up a driver.
-func NewDriver(options ...func(*Driver) error) (*Driver, error) {
-	// Set up default noop-ish storage backend.
-	mockStorage := client.NewMockStorage()
-
+// NewDriver builds up a driver, using the given LINSTOR client for all
+// volume operations.
+func NewDriver(linstorClient *client.Linstor, options ...func(*Driver) error) (*Driver, error) {
 	d := &Driver{
+		linstorClient:  linstorClient,
 		name:           linstor.DriverName,
 		version:        Version,
 		nodeID:         "localhost",
-		Storage:        mockStorage,
-		Assignments:    mockStorage,
-		Mounter:        mockStorage,
-		Snapshots:      mockStorage,
-		Expander:       mockStorage,
-		VolumeStatter:  mockStorage,
-		NodeInformer:   mockStorage,
 		log:            logrus.NewEntry(logrus.New()),
 		topologyPrefix: lc.NamespcAuxiliary,
 		resyncAfter:    5 * time.Minute,
@@ -132,60 +118,6 @@ func NewDriver(options ...func(*Driver) error) (*Driver, error) {
 	})
 
 	return d, nil
-}
-
-// Storage configures the volume service backend.
-func Storage(s volume.CreateDeleter) func(*Driver) error {
-	return func(d *Driver) error {
-		d.Storage = s
-		return nil
-	}
-}
-
-func Expander(s volume.Expander) func(*Driver) error {
-	return func(d *Driver) error {
-		d.Expander = s
-		return nil
-	}
-}
-
-// Assignments configures the volume attachment service backend.
-func Assignments(a volume.AttacherDettacher) func(*Driver) error {
-	return func(d *Driver) error {
-		d.Assignments = a
-		return nil
-	}
-}
-
-// Snapshots configures the volume snapshot service backend.
-func Snapshots(s volume.SnapshotCreateDeleter) func(*Driver) error {
-	return func(d *Driver) error {
-		d.Snapshots = s
-		return nil
-	}
-}
-
-// Mounter configures the volume mounting service backend.
-func Mounter(m volume.Mounter) func(*Driver) error {
-	return func(d *Driver) error {
-		d.Mounter = m
-		return nil
-	}
-}
-
-// VolumeStatter configures the volume stats service backend.
-func VolumeStatter(s volume.VolumeStatter) func(*Driver) error {
-	return func(d *Driver) error {
-		d.VolumeStatter = s
-		return nil
-	}
-}
-
-func NodeInformer(n volume.NodeInformer) func(*Driver) error {
-	return func(d *Driver) error {
-		d.NodeInformer = n
-		return nil
-	}
 }
 
 // NodeID configures the driver node ID.
@@ -372,7 +304,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 	}
 
 	if volCtx == nil {
-		params, err := d.Storage.GetLegacyVolumeParameters(ctx, req.GetVolumeId())
+		params, err := d.linstorClient.GetLegacyVolumeParameters(ctx, req.GetVolumeId())
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: could not find volume parameters in context or legacy LINSTOR property", req.GetVolumeId())
 		}
@@ -388,7 +320,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 
 	publishCtx := PublishContextFromMap(req.GetPublishContext())
 	if publishCtx == nil {
-		assignment, err := d.Assignments.FindAssignmentOnNode(ctx, req.GetVolumeId(), d.nodeID)
+		assignment, err := d.linstorClient.FindAssignmentOnNode(ctx, req.GetVolumeId(), d.nodeID)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
 		}
@@ -429,7 +361,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 
 	ro := req.GetReadonly() || req.GetVolumeCapability().GetAccessMode().GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
 
-	err = d.Mounter.Mount(ctx, publishCtx.DevicePath, req.GetTargetPath(), fsType, ro, volCtx.MountOptions)
+	err = d.linstorClient.Mount(ctx, publishCtx.DevicePath, req.GetTargetPath(), fsType, ro, volCtx.MountOptions)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
 	}
@@ -461,7 +393,7 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublish
 		return nil, missingAttr("NodeUnpublishVolume", req.GetVolumeId(), "TargetPath")
 	}
 
-	err := d.Mounter.Unmount(req.GetTargetPath())
+	err := d.linstorClient.Unmount(req.GetTargetPath())
 	if err != nil {
 		return nil, err
 	}
@@ -479,7 +411,7 @@ func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeS
 		return nil, missingAttr("NodeGetVolumeStats", req.GetVolumeId(), "VolumeId")
 	}
 
-	mounted, err := d.Mounter.IsMountPoint(req.GetVolumePath())
+	mounted, err := d.linstorClient.IsMountPoint(req.GetVolumePath())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodeGetVolumeStats failed for %s: failed to check if path %v is mounted: %v", req.GetVolumeId(), req.GetVolumePath(), err)
 	}
@@ -488,7 +420,7 @@ func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeS
 		return nil, status.Errorf(codes.NotFound, "NodeGetVolumeStats failed for %s: path %v is not mounted", req.GetVolumeId(), req.GetVolumePath())
 	}
 
-	stats, err := d.VolumeStatter.GetVolumeStats(req.GetVolumePath())
+	stats, err := d.linstorClient.GetVolumeStats(req.GetVolumePath())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodeGetVolumeStats failed for %s: failed to get stats: %v", req.GetVolumeId(), err)
 	}
@@ -535,7 +467,7 @@ func (d *Driver) NodeGetCapabilities(context.Context, *csi.NodeGetCapabilitiesRe
 
 // NodeGetInfo https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#nodegetinfo
 func (d *Driver) NodeGetInfo(ctx context.Context, _ *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
-	topology, err := d.NodeInformer.GetNodeTopologies(ctx, d.nodeID)
+	topology, err := d.linstorClient.GetNodeTopologies(ctx, d.nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve node topology: %w", err)
 	}
@@ -562,7 +494,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	}
 
 	// Determine how much storage we need to actually allocate for a given number of bytes.
-	requiredBytes, err := d.Storage.AllocationSize(req.GetCapacityRange().GetRequiredBytes(), req.GetCapacityRange().GetLimitBytes(), fsType)
+	requiredBytes, err := d.linstorClient.AllocationSize(req.GetCapacityRange().GetRequiredBytes(), req.GetCapacityRange().GetLimitBytes(), fsType)
 	if err != nil {
 		return nil, status.Errorf(
 			codes.Internal, "CreateVolume failed for %s: %v", req.Name, err)
@@ -578,7 +510,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	}
 
 	if nfsExport {
-		requiredBytes, err := d.Storage.AllocationSize(params.NfsRecoveryVolumeBytes, 0, fsType)
+		requiredBytes, err := d.linstorClient.AllocationSize(params.NfsRecoveryVolumeBytes, 0, fsType)
 		if err != nil {
 			return nil, status.Errorf(
 				codes.Internal, "CreateVolume failed for %s: %v", req.Name, err)
@@ -605,13 +537,13 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		pvcNameToUse = pvcName
 	}
 
-	volId := d.Storage.CompatibleVolumeId(req.GetName(), pvcNamespaceToUse, pvcNameToUse)
+	volId := d.linstorClient.CompatibleVolumeId(req.GetName(), pvcNamespaceToUse, pvcNameToUse)
 
 	log := d.log.WithField("volume", volId)
 	log.Infof("determined volume id for volume named '%s'", req.GetName())
 
 	// Handle case were a volume of the same name is already present.
-	existingVolume, err := d.Storage.FindByID(ctx, volId)
+	existingVolume, err := d.linstorClient.FindByID(ctx, volId)
 	if err != nil {
 		return nil, status.Errorf(
 			codes.Internal, "CreateVolume failed for %s: %v", req.Name, err)
@@ -642,7 +574,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 
 		log.Info("existing volume matches request")
 
-		topos, err := d.Storage.AccessibleTopologies(ctx, existingVolume.ID, &params)
+		topos, err := d.linstorClient.AccessibleTopologies(ctx, existingVolume.ID, &params)
 		if err != nil {
 			return nil, status.Errorf(
 				codes.Internal, "CreateVolume failed for %s: unable to determine volume topology: %v",
@@ -718,7 +650,7 @@ func (d *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest)
 		return nil, status.Errorf(codes.Internal, "failed to delete NFS export for %s: %v", req.GetVolumeId(), err)
 	}
 
-	err = d.Storage.Delete(ctx, req.GetVolumeId())
+	err = d.linstorClient.Delete(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to delete volume: %v", err)
 	}
@@ -739,7 +671,7 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	}
 
 	// Don't try to assign volumes that don't exist.
-	existingVolume, err := d.Storage.FindByID(ctx, req.GetVolumeId())
+	existingVolume, err := d.linstorClient.FindByID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err)
@@ -762,7 +694,7 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	}
 
 	// Don't even attempt to put it on nodes that aren't available.
-	if err := d.Assignments.NodeAvailable(ctx, req.GetNodeId()); err != nil {
+	if err := d.linstorClient.NodeAvailable(ctx, req.GetNodeId()); err != nil {
 		return nil, status.Errorf(codes.NotFound,
 			"ControllerPublishVolume failed for %s on node %s: %v", req.GetVolumeId(), req.GetNodeId(), err)
 	}
@@ -778,7 +710,7 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 		}
 	}
 
-	devPath, err := d.Assignments.Attach(ctx, req.GetVolumeId(), req.GetNodeId(), rwxBlock)
+	devPath, err := d.linstorClient.Attach(ctx, req.GetVolumeId(), req.GetNodeId(), rwxBlock)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err)
@@ -829,7 +761,7 @@ func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 		return nil, missingAttr("ControllerUnpublishVolume", req.GetNodeId(), "NodeId")
 	}
 
-	if err := d.Assignments.Detach(ctx, req.GetVolumeId(), req.GetNodeId()); err != nil {
+	if err := d.linstorClient.Detach(ctx, req.GetVolumeId(), req.GetNodeId()); err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"ControllerUnpublishVolume failed for %s: %v", req.GetVolumeId(), err)
 	}
@@ -847,7 +779,7 @@ func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Valida
 		return nil, missingAttr("ValidateVolumeCapabilities", req.GetVolumeId(), "VolumeCapabilities")
 	}
 
-	existingVolume, err := d.Storage.FindByID(ctx, req.GetVolumeId())
+	existingVolume, err := d.linstorClient.FindByID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"ValidateVolumeCapabilities failed for %s: %v", req.GetVolumeId(), err)
@@ -886,7 +818,7 @@ func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Valida
 
 // ListVolumes https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#listvolumes
 func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
-	volumes, err := d.Storage.ListAllWithStatus(ctx)
+	volumes, err := d.linstorClient.ListAllWithStatus(ctx)
 	if err != nil {
 		return &csi.ListVolumesResponse{}, status.Errorf(codes.Aborted, "ListVolumes failed: %v", err)
 	}
@@ -957,7 +889,7 @@ func (d *Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (
 	for _, segment := range accessibleSegments {
 		d.log.WithField("segment", segment).Debug("Checking capacity of segment")
 
-		bytes, err := d.Storage.CapacityBytes(ctx, params.StoragePools, params.OverProvision, segment)
+		bytes, err := d.linstorClient.CapacityBytes(ctx, params.StoragePools, params.OverProvision, segment)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "%v", err)
 		}
@@ -1068,7 +1000,7 @@ func (d *Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequ
 		return nil, missingAttr("DeleteSnapshot", req.GetSnapshotId(), "SnapshotId")
 	}
 
-	snaps, err := d.Snapshots.FindSnapsByID(ctx, req.GetSnapshotId())
+	snaps, err := d.linstorClient.FindSnapsByID(ctx, req.GetSnapshotId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "unable to find snapshot %s: %v",
 			req.GetSnapshotId(), err)
@@ -1079,7 +1011,7 @@ func (d *Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequ
 	}
 
 	for _, snap := range snaps {
-		if err := d.Snapshots.SnapDelete(ctx, &snap.SnapshotId); err != nil {
+		if err := d.linstorClient.SnapDelete(ctx, &snap.SnapshotId); err != nil {
 			return nil, status.Errorf(codes.Internal, "unable to delete snapshot %s: %v",
 				req.GetSnapshotId(), err)
 		}
@@ -1100,7 +1032,7 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 	switch {
 	// Handle case where a single snapshot is requested.
 	case req.GetSnapshotId() != "":
-		snaps, err := d.Snapshots.FindSnapsByID(ctx, req.GetSnapshotId())
+		snaps, err := d.linstorClient.FindSnapsByID(ctx, req.GetSnapshotId())
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to list snapshots: %v", err)
 		}
@@ -1109,7 +1041,7 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 
 		// Handle case where a single volumes snapshots are requested.
 	case req.GetSourceVolumeId() != "":
-		info, err := d.Storage.FindByID(ctx, req.GetSourceVolumeId())
+		info, err := d.linstorClient.FindByID(ctx, req.GetSourceVolumeId())
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to list snapshots for volume '%s': %v", req.GetSourceVolumeId(), err)
 		}
@@ -1118,7 +1050,7 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 			return &csi.ListSnapshotsResponse{}, nil
 		}
 
-		snaps, err := d.Snapshots.FindSnapsBySource(ctx, info, start, limit)
+		snaps, err := d.linstorClient.FindSnapsBySource(ctx, info, start, limit)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to list snapshots: %v", err)
 		}
@@ -1127,7 +1059,7 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 
 		// Regular list of all snapshots.
 	default:
-		snaps, err := d.Snapshots.ListSnaps(ctx, start, limit)
+		snaps, err := d.linstorClient.ListSnaps(ctx, start, limit)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to list snapshots: %v", err)
 		}
@@ -1167,7 +1099,7 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 		return nil, missingAttr("NodeExpandVolume", req.GetVolumeId(), "TargetPath")
 	}
 
-	err := d.Expander.NodeExpand(req.GetVolumePath())
+	err := d.linstorClient.NodeExpand(req.GetVolumePath())
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, status.Errorf(codes.NotFound, "NodePublishVolume failed for %s: mount not found", req.GetVolumeId())
@@ -1185,7 +1117,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		return nil, missingAttr("ControllerExpandVolume", req.GetVolumeId(), "VolumeId")
 	}
 
-	existingVolume, err := d.Storage.FindByID(ctx, req.GetVolumeId())
+	existingVolume, err := d.linstorClient.FindByID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "ControllerExpandVolume - get resource-definitions %s failed: %v", req.GetVolumeId(), err)
 	}
@@ -1198,7 +1130,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		"existingVolume": fmt.Sprintf("%+v", existingVolume),
 	}).Debug("found existing volume")
 
-	requiredBytes, err := d.Storage.AllocationSize(req.CapacityRange.GetRequiredBytes(), req.CapacityRange.GetLimitBytes(), existingVolume.FsType)
+	requiredBytes, err := d.linstorClient.AllocationSize(req.CapacityRange.GetRequiredBytes(), req.CapacityRange.GetLimitBytes(), existingVolume.FsType)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "ControllerExpandVolume - expand volume failed for volume id %s: %v", req.GetVolumeId(), err)
 	}
@@ -1210,7 +1142,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		"Size":                   requiredBytes,
 	}).Debug("controller expand volume")
 
-	err = d.Expander.ControllerExpand(ctx, existingVolume)
+	err = d.linstorClient.ControllerExpand(ctx, existingVolume)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"ControllerExpandVolume - expand volume failed for %v: %v", existingVolume, err)
@@ -1231,7 +1163,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 
 // ControllerGetVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#controllergetvolume
 func (d *Driver) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
-	vol, err := d.Storage.FindByID(ctx, req.GetVolumeId())
+	vol, err := d.linstorClient.FindByID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to find volume '%s': %v", req.GetVolumeId(), err)
 	}
@@ -1240,7 +1172,7 @@ func (d *Driver) ControllerGetVolume(ctx context.Context, req *csi.ControllerGet
 		return nil, status.Errorf(codes.NotFound, "no volume '%s' found", req.GetVolumeId())
 	}
 
-	condition, err := d.Assignments.Status(ctx, vol.ID)
+	condition, err := d.linstorClient.Status(ctx, vol.ID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to find nodes for volume '%s': %v", vol.ID, err)
 	}
@@ -1301,11 +1233,11 @@ func (d *Driver) CreateVolumeGroupSnapshot(ctx context.Context, req *csi.CreateV
 
 	d.log.WithField("params", params).Debug("got snapshot parameters")
 
-	id := d.Snapshots.CompatibleSnapshotId(req.GetName())
+	id := d.linstorClient.CompatibleSnapshotId(req.GetName())
 
 	d.log.WithField("snapshot id", id).Debug("using snapshot id")
 
-	existingSnaps, err := d.Snapshots.FindSnapsByID(ctx, id)
+	existingSnaps, err := d.linstorClient.FindSnapsByID(ctx, id)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to check for existing snapshot: %v", err)
 	}
@@ -1334,7 +1266,7 @@ func (d *Driver) CreateVolumeGroupSnapshot(ctx context.Context, req *csi.CreateV
 			var errs []error
 
 			for _, snap := range existingSnaps {
-				errs = append(errs, d.Snapshots.SnapDelete(ctx, &snap.SnapshotId))
+				errs = append(errs, d.linstorClient.SnapDelete(ctx, &snap.SnapshotId))
 			}
 
 			if err := errors.Join(errs...); err != nil {
@@ -1356,7 +1288,7 @@ func (d *Driver) CreateVolumeGroupSnapshot(ctx context.Context, req *csi.CreateV
 				if groupSnap.ReadyToUse {
 					d.log.WithField("snapshot id", id).Debug("snapshot ready, delete temporary ID mapping if it exists")
 
-					err := d.Snapshots.DeleteTemporarySnapshotID(ctx, id, params)
+					err := d.linstorClient.DeleteTemporarySnapshotID(ctx, id, params)
 					if err != nil {
 						return nil, status.Errorf(codes.Internal, "failed to delete temporary snapshot ID: %v", err)
 					}
@@ -1367,7 +1299,7 @@ func (d *Driver) CreateVolumeGroupSnapshot(ctx context.Context, req *csi.CreateV
 		}
 	}
 
-	snaps, err := d.Snapshots.SnapCreate(ctx, id, params, req.GetSourceVolumeIds()...)
+	snaps, err := d.linstorClient.SnapCreate(ctx, id, params, req.GetSourceVolumeIds()...)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create snapshot: %v", err)
 	}
@@ -1383,7 +1315,7 @@ func (d *Driver) CreateVolumeGroupSnapshot(ctx context.Context, req *csi.CreateV
 		if groupSnap.ReadyToUse {
 			d.log.WithField("snapshot id", id).Debug("snapshot ready, delete temporary ID mapping if it exists")
 
-			err := d.Snapshots.DeleteTemporarySnapshotID(ctx, id, params)
+			err := d.linstorClient.DeleteTemporarySnapshotID(ctx, id, params)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to delete temporary snapshot ID: %v", err)
 			}
@@ -1399,13 +1331,13 @@ func (d *Driver) DeleteVolumeGroupSnapshot(ctx context.Context, req *csi.DeleteV
 		return nil, missingAttr("DeleteVolumeGroupSnapshot", req.GetGroupSnapshotId(), "GroupSnapshotId")
 	}
 
-	snaps, err := d.Snapshots.FindSnapsByID(ctx, req.GetGroupSnapshotId())
+	snaps, err := d.linstorClient.FindSnapsByID(ctx, req.GetGroupSnapshotId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to list snapshots by group ID: %s", err)
 	}
 
 	for _, snap := range snaps {
-		if err := d.Snapshots.SnapDelete(ctx, &snap.SnapshotId); err != nil {
+		if err := d.linstorClient.SnapDelete(ctx, &snap.SnapshotId); err != nil {
 			return nil, status.Errorf(codes.Internal, "unable to delete snapshot %s: %v", snap, err)
 		}
 	}
@@ -1419,7 +1351,7 @@ func (d *Driver) GetVolumeGroupSnapshot(ctx context.Context, req *csi.GetVolumeG
 		return nil, missingAttr("GetVolumeGroupSnapshot", req.GetGroupSnapshotId(), "GroupSnapshotId")
 	}
 
-	snaps, err := d.Snapshots.FindSnapsByID(ctx, req.GetGroupSnapshotId())
+	snaps, err := d.linstorClient.FindSnapsByID(ctx, req.GetGroupSnapshotId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to list snapshots by group ID: %v", err)
 	}
@@ -1513,7 +1445,7 @@ func (d *Driver) Serve(ctx context.Context, listener net.Listener) error {
 	}
 
 	if d.kubeClient != nil && d.resyncAfter > 0 {
-		err := ReconcileVolumeSnapshotClass(ctx, d.kubeClient, d.Snapshots, d.log, d.resyncAfter)
+		err := ReconcileVolumeSnapshotClass(ctx, d.kubeClient, d.linstorClient, d.log, d.resyncAfter)
 		if err != nil {
 			return fmt.Errorf("failed to start volume snapshot class reconciler")
 		}
@@ -1556,7 +1488,7 @@ func (d *Driver) createNewVolume(ctx context.Context, info *volume.Info, params 
 			}
 			logger.Debugf("pre-populate volume from snapshot: %+v", snapshotID)
 
-			snaps, err := d.Snapshots.FindSnapsByID(ctx, snapshotID)
+			snaps, err := d.linstorClient.FindSnapsByID(ctx, snapshotID)
 			if err != nil {
 				return nil, status.Errorf(
 					codes.Internal, "CreateVolume failed for %s: %v", req.GetName(), err)
@@ -1579,7 +1511,7 @@ func (d *Driver) createNewVolume(ctx context.Context, info *volume.Info, params 
 				snapParams = nil
 			}
 
-			if err := d.Snapshots.VolFromSnap(ctx, snaps[0], info, params, snapParams, req.GetAccessibilityRequirements()); err != nil {
+			if err := d.linstorClient.VolFromSnap(ctx, snaps[0], info, params, snapParams, req.GetAccessibilityRequirements()); err != nil {
 				d.failpathDelete(ctx, info.ID)
 				return nil, status.Errorf(codes.Internal,
 					"CreateVolume failed for %s: %v", req.GetName(), err)
@@ -1594,7 +1526,7 @@ func (d *Driver) createNewVolume(ctx context.Context, info *volume.Info, params 
 
 			logger.Debugf("pre-populate volume from volume: %+v", volumeId)
 
-			sourceVol, err := d.Storage.FindByID(ctx, volumeId)
+			sourceVol, err := d.linstorClient.FindByID(ctx, volumeId)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal,
 					"CreateVolume failed for %s: %v", req.GetName(), err)
@@ -1604,7 +1536,7 @@ func (d *Driver) createNewVolume(ctx context.Context, info *volume.Info, params 
 					"CreateVolume failed for %s: source volume not found in storage backend", req.GetName())
 			}
 
-			err = d.Storage.Clone(ctx, info, sourceVol, params, req.GetAccessibilityRequirements())
+			err = d.linstorClient.Clone(ctx, info, sourceVol, params, req.GetAccessibilityRequirements())
 			if err != nil {
 				d.failpathDelete(ctx, info.ID)
 				return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", info.ID, err)
@@ -1615,7 +1547,7 @@ func (d *Driver) createNewVolume(ctx context.Context, info *volume.Info, params 
 		}
 		// Regular new volume.
 	} else {
-		err := d.Storage.Create(ctx, info, params, req.GetAccessibilityRequirements())
+		err := d.linstorClient.Create(ctx, info, params, req.GetAccessibilityRequirements())
 		if err != nil {
 			d.failpathDelete(ctx, info.ID)
 			return nil, status.Errorf(codes.Internal,
@@ -1623,7 +1555,7 @@ func (d *Driver) createNewVolume(ctx context.Context, info *volume.Info, params 
 		}
 	}
 
-	topos, err := d.Storage.AccessibleTopologies(ctx, info.ID, params)
+	topos, err := d.linstorClient.AccessibleTopologies(ctx, info.ID, params)
 	if err != nil {
 		return nil, status.Errorf(
 			codes.Internal, "CreateVolume failed for %s: unable to determine volume topology: %v",
@@ -1726,7 +1658,7 @@ func (d *Driver) maybeDeleteLocalSnapshot(ctx context.Context, snap *volume.Snap
 	}
 
 	// Create a new, local only snapshot ID (no remote set!), so we don't accidentally delete the remote backup
-	return d.Snapshots.SnapDelete(ctx, &volume.SnapshotId{
+	return d.linstorClient.SnapDelete(ctx, &volume.SnapshotId{
 		Type:         volume.SnapshotTypeInCluster,
 		SnapshotName: snap.SnapshotName,
 		SourceName:   snap.SourceName,
@@ -1757,7 +1689,7 @@ func parseAsInt(s string) (int, error) {
 // in error paths where we need to report the original error and not the
 // possible error from trying to clean up from that original error.
 func (d *Driver) failpathDelete(ctx context.Context, volId string) {
-	if err := d.Storage.Delete(ctx, volId); err != nil {
+	if err := d.linstorClient.Delete(ctx, volId); err != nil {
 		d.log.WithFields(logrus.Fields{
 			"volume": volId,
 		}).WithError(err).Error("failed to clean up volume")
