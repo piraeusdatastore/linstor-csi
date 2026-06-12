@@ -16,12 +16,13 @@ import (
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/piraeusdatastore/linstor-csi/pkg/client"
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
-func ReconcileVolumeSnapshotClass(ctx context.Context, client dynamic.Interface, snapshotter volume.SnapshotCreateDeleter, log *logrus.Entry, resyncAfter time.Duration) error {
-	factory := dynamicinformer.NewDynamicSharedInformerFactory(client, resyncAfter)
+func ReconcileVolumeSnapshotClass(ctx context.Context, kubeClient dynamic.Interface, snapshotter *client.Linstor, log *logrus.Entry, resyncAfter time.Duration) error {
+	factory := dynamicinformer.NewDynamicSharedInformerFactory(kubeClient, resyncAfter)
 	volumeSnapshotClassIndexer := factory.ForResource(schema.GroupVersionResource{
 		Group:    "snapshot.storage.k8s.io",
 		Version:  "v1",
@@ -41,7 +42,7 @@ func ReconcileVolumeSnapshotClass(ctx context.Context, client dynamic.Interface,
 
 	_, err = volumeSnapshotClassIndexer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj any) {
-			params, err := snapshotParamsFromUnstructured(ctx, client, obj.(*unstructured.Unstructured))
+			params, err := snapshotParamsFromUnstructured(ctx, kubeClient, obj.(*unstructured.Unstructured))
 			if err != nil {
 				log.WithError(err).Warn("failed to parse unstructured object")
 				return
@@ -56,7 +57,7 @@ func ReconcileVolumeSnapshotClass(ctx context.Context, client dynamic.Interface,
 			}
 		},
 		UpdateFunc: func(_, newObj any) {
-			newParams, err := snapshotParamsFromUnstructured(ctx, client, newObj.(*unstructured.Unstructured))
+			newParams, err := snapshotParamsFromUnstructured(ctx, kubeClient, newObj.(*unstructured.Unstructured))
 			if err != nil {
 				log.WithError(err).Warn("failed to parse unstructured (new) object")
 				return

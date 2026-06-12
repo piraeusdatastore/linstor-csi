@@ -144,16 +144,9 @@ func main() {
 	}
 
 	opts := []func(*driver.Driver) error{
-		driver.Assignments(linstorClient),
 		driver.LogLevel(*logLevel),
 		driver.LogOut(logOut),
-		driver.Mounter(linstorClient),
 		driver.NodeID(*node),
-		driver.Snapshots(linstorClient),
-		driver.Storage(linstorClient),
-		driver.VolumeStatter(linstorClient),
-		driver.Expander(linstorClient),
-		driver.NodeInformer(linstorClient),
 		driver.TopologyPrefix(*propNs),
 		driver.ConfigureKubernetesIfAvailable(),
 		driver.ResyncAfter(*resyncAfter),
@@ -176,7 +169,7 @@ func main() {
 		opts = append(opts, driver.DisableRWXBlockValidation())
 	}
 
-	drv, err := driver.NewDriver(opts...)
+	drv, err := driver.NewDriver(linstorClient, opts...)
 	if err != nil {
 		log.Fatal(err)
 	}

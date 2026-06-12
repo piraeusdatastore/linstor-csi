@@ -7,7 +7,6 @@ require (
 	github.com/LINBIT/golinstor v0.61.1
 	github.com/container-storage-interface/spec v1.12.0
 	github.com/coreos/go-systemd/v22 v22.7.0
-	github.com/kubernetes-csi/csi-test/v5 v5.4.0
 	github.com/kubernetes-csi/external-snapshotter/v8 v8.6.0
 	github.com/pborman/uuid v1.2.1
 	github.com/piraeusdatastore/nri-volume-qos v0.1.1
@@ -55,6 +54,7 @@ require (
 	github.com/google/pprof v0.0.0-20260402051712-545e8a4df936 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/kubernetes-csi/csi-test/v5 v5.4.0 // indirect
 	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.6.0 // indirect
 	github.com/moby/sys/mountinfo v0.7.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect

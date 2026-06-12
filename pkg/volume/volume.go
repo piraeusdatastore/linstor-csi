@@ -19,7 +19,6 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 package volume
 
 import (
-	"context"
 	"fmt"
 	"net/url"
 	"strings"
@@ -104,71 +103,6 @@ type Snapshot struct {
 	ReadyToUse   bool
 }
 
-// CreateDeleter handles the creation and deletion of volumes.
-type CreateDeleter interface {
-	Querier
-	CompatibleVolumeId(name, pvcNamespace, pvcName string) string
-	Create(ctx context.Context, vol *Info, params *Parameters, topologies *csi.TopologyRequirement) error
-	Clone(ctx context.Context, vol, src *Info, params *Parameters, topologies *csi.TopologyRequirement) error
-	Delete(ctx context.Context, volId string) error
-
-	// AccessibleTopologies returns the list of key value pairs volume topologies
-	// for the volume or nil if not applicable.
-	AccessibleTopologies(ctx context.Context, volId string, params *Parameters) ([]*csi.Topology, error)
-
-	// GetLegacyVolumeContext tries to fetch the volume context from legacy properties.
-	GetLegacyVolumeParameters(ctx context.Context, volId string) (*Parameters, error)
-}
-
-// SnapshotCreateDeleter handles the creation and deletion of snapshots.
-type SnapshotCreateDeleter interface {
-	// CompatibleSnapshotId returns an ID unique to the suggested name
-	CompatibleSnapshotId(name string) string
-	SnapCreate(ctx context.Context, id string, params *SnapshotParameters, sourceVolIds ...string) ([]*Snapshot, error)
-	SnapDelete(ctx context.Context, snap *SnapshotId) error
-	// FindSnapsByID lists all snapshots in the backend matching the given ID
-	FindSnapsByID(ctx context.Context, id string) ([]*Snapshot, error)
-	FindSnapsBySource(ctx context.Context, sourceVol *Info, start, limit int) ([]*Snapshot, error)
-	// ListSnaps should return a sorted list of snapshots.
-	ListSnaps(ctx context.Context, start, limit int) ([]*Snapshot, error)
-	// VolFromSnap creates a new volume based on the provided snapshot.
-	VolFromSnap(ctx context.Context, snap *Snapshot, vol *Info, params *Parameters, snapParams *SnapshotParameters, topologies *csi.TopologyRequirement) error
-	// DeleteTemporarySnapshotID deletes the temporary snapshot ID.
-	DeleteTemporarySnapshotID(ctx context.Context, id string, snapParams *SnapshotParameters) error
-	// ReconcileRemote creates or updates a remote based on the given snapshot parameters.
-	ReconcileRemote(ctx context.Context, params *SnapshotParameters) error
-}
-
-// AttacherDettacher handles operations relating to volume accessiblity on nodes.
-type AttacherDettacher interface {
-	Querier
-	Attach(ctx context.Context, volId, node string, rwxBlock bool) (string, error)
-	Detach(ctx context.Context, volId, node string) error
-	NodeAvailable(ctx context.Context, node string) error
-	FindAssignmentOnNode(ctx context.Context, volId, node string) (*Assignment, error)
-	// Status returns the current condition of the given volume
-	Status(ctx context.Context, volId string) (*csi.VolumeCondition, error)
-}
-
-// Querier retrives various states of volumes.
-type Querier interface {
-	// ListAllWithStatus returns a sorted list of volume and their status.
-	ListAllWithStatus(ctx context.Context) ([]VolumeStatus, error)
-	// FindByID returns nil when volume is not found.
-	FindByID(ctx context.Context, ID string) (*Info, error)
-	// AllocationSize returns the allocation size in bytes required to provision required bytes, keeping within the limit.
-	AllocationSize(requiredBytes, limitBytes int64, fsType string) (int64, error)
-	// CapacityBytes returns the amount of free space, in bytes, in the storage pool specified by the params and topology.
-	CapacityBytes(ctx context.Context, pools []string, overProvision *float64, segments map[string]string) (int64, error)
-}
-
-// Mounter handles the filesystems located on volumes.
-type Mounter interface {
-	Mount(ctx context.Context, source, target, fsType string, readonly bool, mntOpts []string) error
-	Unmount(target string) error
-	IsMountPoint(target string) (bool, error)
-}
-
 // VolumeStats provides details about filesystem usage.
 type VolumeStats struct {
 	AvailableBytes  int64
@@ -182,24 +116,6 @@ type VolumeStats struct {
 type VolumeStatus struct {
 	Info
 	Conditions *csi.VolumeCondition
-}
-
-// VolumeStatter provides info about volume/filesystem usage.
-type VolumeStatter interface {
-	// GetVolumeStats determines filesystem usage.
-	GetVolumeStats(path string) (VolumeStats, error)
-}
-
-type NodeInformer interface {
-	GetNodeTopologies(ctx context.Context, nodename string) (*csi.Topology, error)
-}
-
-// Expander handles the resizing operations for volumes.
-type Expander interface {
-	// NodeExpand runs the appropriate resize operation on the target path.
-	// Must return os.ErrNotExist if the path does not exist or is not a valid mount point.
-	NodeExpand(target string) error
-	ControllerExpand(ctx context.Context, vol *Info) error
 }
 
 // Add the given prefix to the property name.
