@@ -227,11 +227,9 @@ func findPersistentVolumeByVolumeID(ctx context.Context, kubeClient dynamic.Inte
 
 	for i := range pvList.Items {
 		volumeHandle, found, nestedErr := unstructured.NestedString(pvList.Items[i].Object, "spec", "csi", "volumeHandle")
-		if nestedErr != nil || !found || volumeHandle != volumeID {
-			continue
-		}
-
-		return &pvList.Items[i], nil
+	if volumeHandle == volumeID {
+	     return &pvList.Items[i], nil
+	}
 	}
 
 	return nil, fmt.Errorf("persistentvolume with volumeHandle %q not found", volumeID)
