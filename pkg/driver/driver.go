@@ -49,6 +49,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
@@ -179,27 +180,17 @@ func LogLevel(s string) func(*Driver) error {
 	}
 }
 
-func ConfigureKubernetesIfAvailable() func(*Driver) error {
+// KubeClient sets the dynamic Kubernetes client used to read PVC/PV objects. It is built once in main
+// (nil when not running in Kubernetes); callers that need Kubernetes access guard on a nil client.
+func KubeClient(client dynamic.Interface) func(*Driver) error {
 	return func(d *Driver) error {
-		_, dyn, err := utils.KubernetesClient()
-		if err != nil {
-			// Not running in kubernetes
-			return nil
-		}
-
-		d.kubeClient = dyn
-
+		d.kubeClient = client
 		return nil
 	}
 }
 
-func ConfigureRWX(namespace, reactorConfigMap string) func(*Driver) error {
+func ConfigureRWX(cl kubernetes.Interface, namespace, reactorConfigMap string) func(*Driver) error {
 	return func(d *Driver) error {
-		cl, _, err := utils.KubernetesClient()
-		if err != nil {
-			return fmt.Errorf("RWX support requires running in Kubernetes: %w", err)
-		}
-
 		d.nfsExporter = &NfsExporter{
 			cl:               cl,
 			namespace:        namespace,

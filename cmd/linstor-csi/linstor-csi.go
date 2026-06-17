@@ -39,6 +39,7 @@ import (
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
 	"github.com/piraeusdatastore/linstor-csi/pkg/driver"
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
+	"github.com/piraeusdatastore/linstor-csi/pkg/utils"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
@@ -143,16 +144,24 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Build the Kubernetes clients once. They are nil when not running in Kubernetes; features that need
+	// them (RWX, snapshot-class syncing, RWX-block validation) handle their absence.
+	kubeTyped, kubeDynamic, kubeErr := utils.KubernetesClient()
+
 	opts := []func(*driver.Driver) error{
 		driver.LogLevel(*logLevel),
 		driver.LogOut(logOut),
 		driver.NodeID(*node),
 		driver.TopologyPrefix(*propNs),
-		driver.ConfigureKubernetesIfAvailable(),
+		driver.KubeClient(kubeDynamic),
 		driver.ResyncAfter(*resyncAfter),
 	}
 
 	if *enableRWX {
+		if kubeErr != nil {
+			log.Fatalf("RWX support requires running in Kubernetes: %s", kubeErr)
+		}
+
 		if *namespace == "" {
 			content, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 			if err != nil {
@@ -162,7 +171,7 @@ func main() {
 			*namespace = strings.TrimSpace(string(content))
 		}
 
-		opts = append(opts, driver.ConfigureRWX(*namespace, *reactorConfigMapName))
+		opts = append(opts, driver.ConfigureRWX(kubeTyped, *namespace, *reactorConfigMapName))
 	}
 
 	if *disableRWXBlockValidation {
