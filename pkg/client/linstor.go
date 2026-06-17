@@ -263,7 +263,6 @@ func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinitionWithV
 		return nil
 	}
 
-	fsType := resDef.Props[lapiconsts.NamespcFilesystem+"/"+lapiconsts.KeyFsType]
 	props := make(map[string]string)
 
 	for k, v := range resDef.Props {
@@ -274,9 +273,19 @@ func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinitionWithV
 
 	deviceBytes := map[int]int64{}
 
+	// Legacy FS-Type set on the RD level
+	fsType := resDef.Props[lapiconsts.NamespcFilesystem+"/"+lapiconsts.KeyFsType]
+
 	for i := range resDef.VolumeDefinitions {
 		vd := &resDef.VolumeDefinitions[i]
 		deviceBytes[int(*vd.VolumeNumber)] = int64(vd.SizeKib) * KiB
+
+		// Per-VD FS properties should be the same on all VDs, but 0 is the "main" one we care about.
+		if *vd.VolumeNumber == 0 {
+			if vdFsType := vd.Props[lapiconsts.NamespcFilesystem+"/"+lapiconsts.KeyFsType]; vdFsType != "" {
+				fsType = vdFsType
+			}
+		}
 	}
 
 	if _, ok := deviceBytes[0]; !ok {
@@ -356,7 +365,7 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, params *volume.P
 
 	logger.Debug("reconcile resource definition for volume")
 
-	_, err = s.reconcileResourceDefinition(ctx, vol.ID, rGroup.Name, vol.FsType, params.FSOpts)
+	_, err = s.reconcileResourceDefinition(ctx, vol.ID, rGroup.Name)
 	if err != nil {
 		logger.Debugf("reconcile resource definition failed: %v", err)
 		return err
@@ -364,7 +373,7 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, params *volume.P
 
 	logger.Debug("reconcile volume definition for volume")
 
-	err = s.reconcileVolumeDefinition(ctx, vol)
+	err = s.reconcileVolumeDefinition(ctx, vol, params.FSOpts)
 	if err != nil {
 		logger.Debugf("reconcile volume definition failed: %v", err)
 		return err
@@ -446,7 +455,7 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 
 	logger.Debug("reconcile volume definition for volume")
 
-	err = s.reconcileVolumeDefinition(ctx, vol)
+	err = s.reconcileVolumeDefinition(ctx, vol, params.FSOpts)
 	if err != nil {
 		logger.Debugf("reconcile volume definition failed: %v", err)
 		return err
@@ -1421,7 +1430,7 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *v
 
 	logger.Debug("reconcile resource definition for volume")
 
-	rDef, err := s.reconcileResourceDefinition(ctx, vol.ID, rGroup.Name, vol.FsType, params.FSOpts)
+	rDef, err := s.reconcileResourceDefinition(ctx, vol.ID, rGroup.Name)
 	if err != nil {
 		return err
 	}
@@ -1449,7 +1458,7 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *v
 
 	logger.Debug("reconcile volume definition from request (may expand volume)")
 
-	err = s.reconcileVolumeDefinition(ctx, vol)
+	err = s.reconcileVolumeDefinition(ctx, vol, params.FSOpts)
 	if err != nil {
 		return err
 	}
@@ -1744,7 +1753,7 @@ func (s *Linstor) reconcileResourceGroup(ctx context.Context, params *volume.Par
 	return &rg, nil
 }
 
-func (s *Linstor) reconcileResourceDefinition(ctx context.Context, volId, rgName, fsType, mkfsOpts string) (*lapi.ResourceDefinition, error) {
+func (s *Linstor) reconcileResourceDefinition(ctx context.Context, volId, rgName string) (*lapi.ResourceDefinition, error) {
 	logger := s.log.WithFields(logrus.Fields{
 		"volume": volId,
 	})
@@ -1761,13 +1770,6 @@ func (s *Linstor) reconcileResourceDefinition(ctx context.Context, volId, rgName
 				Name:              volId,
 				ResourceGroupName: rgName,
 			},
-		}
-
-		if fsType != "" {
-			rdCreate.ResourceDefinition.Props = map[string]string{
-				lapiconsts.NamespcFilesystem + "/" + lapiconsts.KeyFsType:           fsType,
-				lapiconsts.NamespcFilesystem + "/" + lapiconsts.KeyFsMkfsparameters: mkfsOpts,
-			}
 		}
 
 		err = s.client.ResourceDefinitions.Create(ctx, rdCreate)
@@ -1793,7 +1795,7 @@ func (s *Linstor) reconcileResourceDefinition(ctx context.Context, volId, rgName
 	return &rd, nil
 }
 
-func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.Info) error {
+func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.Info, mkfsOpts string) error {
 	logger := s.log.WithFields(logrus.Fields{
 		"volume": info.ID,
 	})
@@ -1806,10 +1808,21 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 
 		vDef, err := s.client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ID, vn)
 		if errors.Is(err, lapi.NotFoundError) {
+			var props map[string]string
+
+			// "" indicates this is a block volume, so no FS should get created
+			if info.FsType != "" {
+				props = map[string]string{
+					lapiconsts.NamespcFilesystem + "/" + lapiconsts.KeyFsType:           info.FsType,
+					lapiconsts.NamespcFilesystem + "/" + lapiconsts.KeyFsMkfsparameters: mkfsOpts,
+				}
+			}
+
 			vdCreate := lapi.VolumeDefinitionCreate{
 				VolumeDefinition: lapi.VolumeDefinition{
 					VolumeNumber: ptr.To(int32(vn)),
 					SizeKib:      expectedSizeKiB,
+					Props:        props,
 				},
 			}
 
