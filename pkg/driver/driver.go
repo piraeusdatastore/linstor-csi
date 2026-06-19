@@ -294,8 +294,13 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: invalid volume context: %v", req.GetVolumeId(), err)
 	}
 
+	volId, err := volume.ParseVolumeId(req.GetVolumeId())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to parse volume id: %v", err)
+	}
+
 	if volCtx == nil {
-		params, err := d.linstorClient.GetLegacyVolumeParameters(ctx, req.GetVolumeId())
+		params, err := d.linstorClient.GetLegacyVolumeParameters(ctx, volId)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: could not find volume parameters in context or legacy LINSTOR property", req.GetVolumeId())
 		}
@@ -311,7 +316,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 
 	publishCtx := PublishContextFromMap(req.GetPublishContext())
 	if publishCtx == nil {
-		assignment, err := d.linstorClient.FindAssignmentOnNode(ctx, req.GetVolumeId(), d.nodeID)
+		assignment, err := d.linstorClient.FindAssignmentOnNode(ctx, volId, d.nodeID)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", req.GetVolumeId(), err)
 		}
@@ -588,8 +593,8 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
-				VolumeId:           existingVolume.ID,
-				CapacityBytes:      existingVolume.DeviceBytes[0],
+				VolumeId:           existingVolume.String(),
+				CapacityBytes:      existingVolume.Size(),
 				ContentSource:      req.GetVolumeContentSource(),
 				AccessibleTopology: topos,
 				VolumeContext:      volCtx,
@@ -618,7 +623,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	return d.createNewVolume(
 		ctx,
 		&volume.Info{
-			ID:            volId,
+			ID:            volume.ID{ResourceName: volId, VolumeNumber: 0},
 			DeviceBytes:   volumeBytes,
 			ResourceGroup: params.ResourceGroup,
 			FsType:        fsType,
@@ -636,12 +641,17 @@ func (d *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest)
 		return nil, missingAttr("DeleteVolume", req.GetVolumeId(), "VolumeId")
 	}
 
-	err := d.nfsExporter.Unexport(ctx, req.GetVolumeId())
+	volId, err := volume.ParseVolumeId(req.GetVolumeId())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to parse volume id: %v", err)
+	}
+
+	err = d.nfsExporter.Unexport(ctx, volId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to delete NFS export for %s: %v", req.GetVolumeId(), err)
 	}
 
-	err = d.linstorClient.Delete(ctx, req.GetVolumeId())
+	err = d.linstorClient.Delete(ctx, volId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to delete volume: %v", err)
 	}
@@ -701,7 +711,12 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 		}
 	}
 
-	devPath, err := d.linstorClient.Attach(ctx, req.GetVolumeId(), req.GetNodeId(), rwxBlock)
+	volId, err := volume.ParseVolumeId(req.GetVolumeId())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to parse volume id: %v", err)
+	}
+
+	devPath, err := d.linstorClient.Attach(ctx, volId, req.GetNodeId(), rwxBlock)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err)
@@ -752,7 +767,12 @@ func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 		return nil, missingAttr("ControllerUnpublishVolume", req.GetNodeId(), "NodeId")
 	}
 
-	if err := d.linstorClient.Detach(ctx, req.GetVolumeId(), req.GetNodeId()); err != nil {
+	volId, err := volume.ParseVolumeId(req.GetVolumeId())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to parse volume id: %v", err)
+	}
+
+	if err := d.linstorClient.Detach(ctx, volId, req.GetNodeId()); err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"ControllerUnpublishVolume failed for %s: %v", req.GetVolumeId(), err)
 	}
@@ -843,8 +863,8 @@ func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (
 	for i, vol := range volumes {
 		entries[i] = &csi.ListVolumesResponse_Entry{
 			Volume: &csi.Volume{
-				VolumeId:      vol.ID,
-				CapacityBytes: vol.DeviceBytes[0],
+				VolumeId:      vol.String(),
+				CapacityBytes: vol.Size(),
 				// NB: Topology is specifically excluded here. For topology we would need the volume context, which
 				// we don't have here. This might not be strictly to spec, but current consumers don't do anything with
 				// the information, so it should be fine.
@@ -1126,7 +1146,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		return nil, status.Errorf(codes.Internal, "ControllerExpandVolume - expand volume failed for volume id %s: %v", req.GetVolumeId(), err)
 	}
 
-	existingVolume.DeviceBytes[0] = requiredBytes
+	existingVolume.DeviceBytes[existingVolume.VolumeNumber] = requiredBytes
 
 	d.log.WithFields(logrus.Fields{
 		"ControllerExpandVolume": fmt.Sprintf("%+v", req),
@@ -1144,7 +1164,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		req.GetVolumeCapability().GetAccessMode().GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
 
 	return &csi.ControllerExpandVolumeResponse{
-		CapacityBytes: existingVolume.DeviceBytes[0],
+		CapacityBytes: existingVolume.Size(),
 		// Skip node expansion for:
 		// * block volumes: normal LINSTOR resize is enough
 		// * NFS export, handled by the NFS exporter
@@ -1170,8 +1190,8 @@ func (d *Driver) ControllerGetVolume(ctx context.Context, req *csi.ControllerGet
 
 	return &csi.ControllerGetVolumeResponse{
 		Volume: &csi.Volume{
-			VolumeId:      vol.ID,
-			CapacityBytes: vol.DeviceBytes[0],
+			VolumeId:      vol.String(),
+			CapacityBytes: vol.Size(),
 		},
 		Status: &csi.ControllerGetVolumeResponse_VolumeStatus{
 			VolumeCondition: condition,
@@ -1290,7 +1310,18 @@ func (d *Driver) CreateVolumeGroupSnapshot(ctx context.Context, req *csi.CreateV
 		}
 	}
 
-	snaps, err := d.linstorClient.SnapCreate(ctx, id, params, req.GetSourceVolumeIds()...)
+	sources := make([]volume.ID, 0, len(req.GetSourceVolumeIds()))
+
+	for _, id := range req.GetSourceVolumeIds() {
+		volId, err := volume.ParseVolumeId(id)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "failed to parse volume id: %v", err)
+		}
+
+		sources = append(sources, volId)
+	}
+
+	snaps, err := d.linstorClient.SnapCreate(ctx, id, params, sources...)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create snapshot: %v", err)
 	}
@@ -1465,7 +1496,7 @@ func (d *Driver) createNewVolume(ctx context.Context, info *volume.Info, params 
 	})
 
 	logger.WithFields(logrus.Fields{
-		"size": info.DeviceBytes[0],
+		"size": info.Size(),
 	}).Debug("creating new volume")
 
 	// We're cloning from a volume or snapshot.
@@ -1569,9 +1600,9 @@ func (d *Driver) createNewVolume(ctx context.Context, info *volume.Info, params 
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			VolumeId:           info.ID,
+			VolumeId:           info.String(),
 			ContentSource:      req.GetVolumeContentSource(),
-			CapacityBytes:      info.DeviceBytes[0],
+			CapacityBytes:      info.Size(),
 			AccessibleTopology: topos,
 			VolumeContext:      volCtx,
 		},
@@ -1679,7 +1710,7 @@ func parseAsInt(s string) (int, error) {
 // failpathDelete deletes volumes and logs if that fails. Mostly useful
 // in error paths where we need to report the original error and not the
 // possible error from trying to clean up from that original error.
-func (d *Driver) failpathDelete(ctx context.Context, volId string) {
+func (d *Driver) failpathDelete(ctx context.Context, volId volume.ID) {
 	if err := d.linstorClient.Delete(ctx, volId); err != nil {
 		d.log.WithFields(logrus.Fields{
 			"volume": volId,

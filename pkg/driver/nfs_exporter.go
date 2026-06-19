@@ -73,7 +73,7 @@ func (n *NfsExporter) Export(ctx context.Context, info *volume.Info, params *vol
 	var port uint16
 
 	if i := slices.IndexFunc(svc.Spec.Ports, func(p corev1.ServicePort) bool {
-		return p.Name == info.ID
+		return p.Name == info.ResourceName
 	}); i != -1 {
 		log.Debug("service port exists")
 
@@ -100,7 +100,7 @@ func (n *NfsExporter) Export(ctx context.Context, info *volume.Info, params *vol
 		}
 
 		svc.Spec.Ports = slices.Insert(svc.Spec.Ports, insertAt, corev1.ServicePort{
-			Name:        info.ID,
+			Name:        info.ResourceName,
 			Port:        previous + 1,
 			AppProtocol: ptr.To("nfs"),
 			Protocol:    corev1.ProtocolTCP,
@@ -118,7 +118,7 @@ func (n *NfsExporter) Export(ctx context.Context, info *volume.Info, params *vol
 
 	cfg := ReactorConfig{
 		Promoters: []PromoterConfig{{ResourceConfig: map[string]ResourceConfig{
-			info.ID: {
+			info.ResourceName: {
 				Metadata: NfsMetadata{
 					ServiceName:        params.NfsServiceName,
 					ConfigTemplatePath: params.NfsConfigTemplatePath,
@@ -131,14 +131,14 @@ func (n *NfsExporter) Export(ctx context.Context, info *volume.Info, params *vol
 				TargetAs:           "BindsTo",
 				DependenciesAs:     "BindsTo",
 				Start: []string{
-					fmt.Sprintf("prepare-device-links@%s.service", unit.UnitNameEscape(info.ID)),
-					fmt.Sprintf("clean-nfs-endpoint@%s.service", unit.UnitNameEscape(info.ID)),
-					fmt.Sprintf("mount-recovery@%s.service", unit.UnitNameEscape(info.ID)),
-					fmt.Sprintf("mount-export@%s.service", unit.UnitNameEscape(info.ID)),
+					fmt.Sprintf("prepare-device-links@%s.service", unit.UnitNameEscape(info.ResourceName)),
+					fmt.Sprintf("clean-nfs-endpoint@%s.service", unit.UnitNameEscape(info.ResourceName)),
+					fmt.Sprintf("mount-recovery@%s.service", unit.UnitNameEscape(info.ResourceName)),
+					fmt.Sprintf("mount-export@%s.service", unit.UnitNameEscape(info.ResourceName)),
 					fmt.Sprintf("growfs@%s.timer", unit.UnitNamePathEscape(fmt.Sprintf("/srv/exports/%s", info.ID))),
 					fmt.Sprintf("chmod@%s.service", unit.UnitNamePathEscape(fmt.Sprintf("/srv/exports/%s", info.ID))),
-					fmt.Sprintf("nfs-ganesha@%s.service", unit.UnitNameEscape(info.ID)),
-					fmt.Sprintf("advertise-nfs-endpoint@%s.service", unit.UnitNameEscape(info.ID)),
+					fmt.Sprintf("nfs-ganesha@%s.service", unit.UnitNameEscape(info.ResourceName)),
+					fmt.Sprintf("advertise-nfs-endpoint@%s.service", unit.UnitNameEscape(info.ResourceName)),
 				},
 			},
 		}}},
@@ -158,26 +158,26 @@ func (n *NfsExporter) Export(ctx context.Context, info *volume.Info, params *vol
 		configMap.Data = make(map[string]string)
 	}
 
-	if configMap.Data[info.ID+".toml"] != string(raw) {
-		log.WithField("config", info.ID+".toml").Debug("updating config map data")
-		configMap.Data[info.ID+".toml"] = string(raw)
+	if configMap.Data[info.ResourceName+".toml"] != string(raw) {
+		log.WithField("config", info.ResourceName+".toml").Debug("updating config map data")
+		configMap.Data[info.ResourceName+".toml"] = string(raw)
 
 		_, err = n.cl.CoreV1().ConfigMaps(n.namespace).Update(ctx, configMap, metav1.UpdateOptions{FieldManager: linstor.DriverName})
 		if err != nil {
 			return nil, fmt.Errorf("failed to update config map for export '%s': %w", info.ID, err)
 		}
 	} else {
-		log.WithField("config", info.ID+".toml").Debug("config exists")
+		log.WithField("config", info.ResourceName+".toml").Debug("config exists")
 	}
 
 	return &url.URL{
 		Scheme: "nfs",
 		Host:   fmt.Sprintf("%s.%s.svc:%d", params.NfsServiceName, n.namespace, port),
-		Path:   "/" + info.ID,
+		Path:   "/" + info.ResourceName,
 	}, nil
 }
 
-func (n *NfsExporter) Unexport(ctx context.Context, export string) error {
+func (n *NfsExporter) Unexport(ctx context.Context, export volume.ID) error {
 	if !n.Enabled() {
 		return nil
 	}
@@ -196,7 +196,7 @@ func (n *NfsExporter) Unexport(ctx context.Context, export string) error {
 		return fmt.Errorf("failed to get config map for export '%s': %w", export, err)
 	}
 
-	content, ok := configMap.Data[export+".toml"]
+	content, ok := configMap.Data[export.ResourceName+".toml"]
 	if !ok {
 		log.Debug("Config map has no matching entry, nothing to unexport")
 		return nil
@@ -213,7 +213,7 @@ func (n *NfsExporter) Unexport(ctx context.Context, export string) error {
 		return fmt.Errorf("unexpected number of promoter configuration, expected 1, got %d", len(reactorConfig.Promoters))
 	}
 
-	config, ok := reactorConfig.Promoters[0].ResourceConfig[export]
+	config, ok := reactorConfig.Promoters[0].ResourceConfig[export.ResourceName]
 	if !ok {
 		return fmt.Errorf("expected resource '%s' to exist in config, got [%s] instead", export, slices.Collect(maps.Keys(reactorConfig.Promoters[0].ResourceConfig)))
 	}
@@ -231,7 +231,7 @@ func (n *NfsExporter) Unexport(ctx context.Context, export string) error {
 
 		log.WithField("svc", svc).WithField("port", export).Info("removing export port")
 		svc.Spec.Ports = slices.DeleteFunc(svc.Spec.Ports, func(port corev1.ServicePort) bool {
-			return port.Name == export
+			return port.Name == export.ResourceName
 		})
 		log.WithField("svc", svc).Info("removed export port")
 
@@ -247,7 +247,7 @@ func (n *NfsExporter) Unexport(ctx context.Context, export string) error {
 
 	log.Debug("removing reactor config from config map")
 
-	delete(configMap.Data, export+".toml")
+	delete(configMap.Data, export.ResourceName+".toml")
 
 	_, err = n.cl.CoreV1().ConfigMaps(configMap.Namespace).Update(ctx, configMap, metav1.UpdateOptions{
 		FieldManager: linstor.DriverName,

@@ -21,6 +21,7 @@ package volume
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,7 +31,7 @@ import (
 
 // Info provides everything needed to manipulate volumes.
 type Info struct {
-	ID string
+	ID
 	// The device sizes in bytes associated with this volume.
 	// A valid Info always has at least a 0th volume.
 	DeviceBytes   map[int]int64
@@ -40,12 +41,62 @@ type Info struct {
 	UseQuorum     bool
 }
 
+func (i *Info) Size() int64 {
+	return i.DeviceBytes[i.VolumeNumber]
+}
+
 // Assignment represents a volume situated on a particular node.
 type Assignment struct {
 	// Node is the node that the assignment is valid for.
 	Node string
 	// Path is a location on the Node's filesystem where the volume may be accessed.
 	Path string
+}
+
+// MaxVolumesPerResource is the maximum number of volumes a single resource can
+// hold. DRBD (and therefore LINSTOR) uses a 16-bit volume number, so valid
+// volume numbers fall in the range [0, MaxVolumesPerResource).
+const MaxVolumesPerResource = 1 << 16
+
+type ID struct {
+	ResourceName string
+	VolumeNumber int
+}
+
+func (i ID) String() string {
+	if i.VolumeNumber == 0 {
+		return i.ResourceName
+	}
+
+	return fmt.Sprintf("%s/%d", i.ResourceName, i.VolumeNumber)
+}
+
+func ParseVolumeId(id string) (ID, error) {
+	if id == "" {
+		return ID{}, fmt.Errorf("empty string is not a valid volume id")
+	}
+
+	volNr := 0
+
+	parts := strings.SplitN(id, "/", 2)
+	if parts[0] == "" {
+		return ID{}, fmt.Errorf("volume id is missing a resource name: '%s'", id)
+	}
+
+	if len(parts) == 2 {
+		v, err := strconv.Atoi(parts[1])
+		if err != nil {
+			return ID{}, fmt.Errorf("failed to parse volume id: %w", err)
+		}
+
+		if v < 0 || v >= MaxVolumesPerResource {
+			return ID{}, fmt.Errorf("volume number out of range [0, %d): '%s'", MaxVolumesPerResource, id)
+		}
+
+		volNr = v
+	}
+
+	return ID{ResourceName: parts[0], VolumeNumber: volNr}, nil
 }
 
 type SnapshotId struct {

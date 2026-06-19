@@ -99,6 +99,327 @@ func TestDisklessFlag(t *testing.T) {
 	}
 }
 
+func TestParseVolumeId(t *testing.T) {
+	testcases := []struct {
+		name     string
+		id       string
+		expected volume.ID
+		isError  bool
+	}{
+		{
+			name:     "resource-only",
+			id:       "pvc-1234",
+			expected: volume.ID{ResourceName: "pvc-1234", VolumeNumber: 0},
+		},
+		{
+			name:     "explicit-volume-zero",
+			id:       "pvc-1234/0",
+			expected: volume.ID{ResourceName: "pvc-1234", VolumeNumber: 0},
+		},
+		{
+			name:     "explicit-volume-number",
+			id:       "pvc-1234/1",
+			expected: volume.ID{ResourceName: "pvc-1234", VolumeNumber: 1},
+		},
+		{
+			name:     "multi-digit-volume-number",
+			id:       "pvc-1234/42",
+			expected: volume.ID{ResourceName: "pvc-1234", VolumeNumber: 42},
+		},
+		{
+			name:     "max-volume-number",
+			id:       "pvc-1234/65535",
+			expected: volume.ID{ResourceName: "pvc-1234", VolumeNumber: 65535},
+		},
+		{
+			name:    "empty-string",
+			id:      "",
+			isError: true,
+		},
+		{
+			name:    "missing-resource-name",
+			id:      "/5",
+			isError: true,
+		},
+		{
+			name:    "only-separator",
+			id:      "/",
+			isError: true,
+		},
+		{
+			name:    "negative-volume-number",
+			id:      "pvc-1234/-1",
+			isError: true,
+		},
+		{
+			name:    "non-numeric-volume-number",
+			id:      "pvc-1234/abc",
+			isError: true,
+		},
+		{
+			name:    "missing-volume-number",
+			id:      "pvc-1234/",
+			isError: true,
+		},
+		{
+			name:    "extra-path-component",
+			id:      "pvc-1234/1/2",
+			isError: true,
+		},
+		{
+			name:    "volume-number-too-large",
+			id:      "pvc-1234/65536",
+			isError: true,
+		},
+		{
+			name:    "volume-number-overflows-int",
+			id:      "pvc-1234/99999999999999999999",
+			isError: true,
+		},
+	}
+
+	t.Parallel()
+
+	for i := range testcases {
+		tcase := testcases[i]
+		t.Run(tcase.name, func(t *testing.T) {
+			t.Parallel()
+
+			actual, err := volume.ParseVolumeId(tcase.id)
+			if tcase.isError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tcase.expected, actual)
+			}
+		})
+	}
+}
+
+func TestID_String(t *testing.T) {
+	testcases := []struct {
+		name     string
+		id       volume.ID
+		expected string
+	}{
+		{
+			name:     "volume-zero-omits-number",
+			id:       volume.ID{ResourceName: "pvc-1234", VolumeNumber: 0},
+			expected: "pvc-1234",
+		},
+		{
+			name:     "non-zero-volume-number",
+			id:       volume.ID{ResourceName: "pvc-1234", VolumeNumber: 1},
+			expected: "pvc-1234/1",
+		},
+		{
+			name:     "multi-digit-volume-number",
+			id:       volume.ID{ResourceName: "pvc-1234", VolumeNumber: 42},
+			expected: "pvc-1234/42",
+		},
+	}
+
+	t.Parallel()
+
+	for i := range testcases {
+		tcase := testcases[i]
+		t.Run(tcase.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tcase.expected, tcase.id.String())
+		})
+	}
+}
+
+func TestVolumeIdRoundTrip(t *testing.T) {
+	ids := []volume.ID{
+		{ResourceName: "pvc-1234", VolumeNumber: 0},
+		{ResourceName: "pvc-1234", VolumeNumber: 1},
+		{ResourceName: "pvc-1234", VolumeNumber: 42},
+	}
+
+	t.Parallel()
+
+	for i := range ids {
+		id := ids[i]
+		t.Run(id.String(), func(t *testing.T) {
+			t.Parallel()
+
+			parsed, err := volume.ParseVolumeId(id.String())
+			assert.NoError(t, err)
+			assert.Equal(t, id, parsed)
+		})
+	}
+}
+
+func TestParseSnapshotId(t *testing.T) {
+	testcases := []struct {
+		name     string
+		id       string
+		expected *volume.SnapshotId
+		isError  bool
+	}{
+		{
+			name: "s3-backup",
+			id:   "s3://remote-1/source-vol/snap-1",
+			expected: &volume.SnapshotId{
+				Type:         volume.SnapshotTypeS3,
+				Remote:       "remote-1",
+				SourceName:   "source-vol",
+				SnapshotName: "snap-1",
+			},
+		},
+		{
+			name: "linstor-l2l-backup",
+			id:   "linstor://remote-2/source-vol/snap-2",
+			expected: &volume.SnapshotId{
+				Type:         volume.SnapshotTypeLinstor,
+				Remote:       "remote-2",
+				SourceName:   "source-vol",
+				SnapshotName: "snap-2",
+			},
+		},
+		{
+			name: "in-cluster-without-remote",
+			id:   "incluster:///source-vol/snap-3",
+			expected: &volume.SnapshotId{
+				Type:         volume.SnapshotTypeInCluster,
+				Remote:       "",
+				SourceName:   "source-vol",
+				SnapshotName: "snap-3",
+			},
+		},
+		{
+			name: "scheme-is-case-insensitive",
+			id:   "S3://remote-1/source-vol/snap-1",
+			expected: &volume.SnapshotId{
+				Type:         volume.SnapshotTypeS3,
+				Remote:       "remote-1",
+				SourceName:   "source-vol",
+				SnapshotName: "snap-1",
+			},
+		},
+		{
+			name: "explicit-unknown-scheme",
+			id:   "unknown://remote-1/source-vol/snap-1",
+			expected: &volume.SnapshotId{
+				Type:         volume.SnapshotTypeUnknown,
+				Remote:       "remote-1",
+				SourceName:   "source-vol",
+				SnapshotName: "snap-1",
+			},
+		},
+		{
+			name: "legacy-snapshot-without-scheme",
+			id:   "snap-legacy",
+			expected: &volume.SnapshotId{
+				Type:         volume.SnapshotTypeUnknown,
+				SnapshotName: "snap-legacy",
+			},
+		},
+		{
+			name:    "unrecognized-scheme",
+			id:      "ftp://remote-1/source-vol/snap-1",
+			isError: true,
+		},
+		{
+			name:    "too-few-path-components",
+			id:      "s3://remote-1/only-one",
+			isError: true,
+		},
+		{
+			name:    "too-many-path-components",
+			id:      "s3://remote-1/source-vol/snap-1/extra",
+			isError: true,
+		},
+		{
+			name:    "missing-path",
+			id:      "s3://remote-1",
+			isError: true,
+		},
+		{
+			name:    "malformed-url",
+			id:      "s3://remote-1:notaport/source-vol/snap-1",
+			isError: true,
+		},
+	}
+
+	t.Parallel()
+
+	for i := range testcases {
+		tcase := testcases[i]
+		t.Run(tcase.name, func(t *testing.T) {
+			t.Parallel()
+
+			actual, err := volume.ParseSnapshotId(tcase.id)
+			if tcase.isError {
+				assert.Error(t, err)
+				assert.Nil(t, actual)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tcase.expected, actual)
+			}
+		})
+	}
+}
+
+func TestSnapshotId_String(t *testing.T) {
+	testcases := []struct {
+		name     string
+		snap     volume.SnapshotId
+		expected string
+	}{
+		{
+			name:     "s3-backup",
+			snap:     volume.SnapshotId{Type: volume.SnapshotTypeS3, Remote: "remote-1", SourceName: "source-vol", SnapshotName: "snap-1"},
+			expected: "S3://remote-1/source-vol/snap-1",
+		},
+		{
+			name:     "linstor-l2l-backup",
+			snap:     volume.SnapshotId{Type: volume.SnapshotTypeLinstor, Remote: "remote-2", SourceName: "source-vol", SnapshotName: "snap-2"},
+			expected: "Linstor://remote-2/source-vol/snap-2",
+		},
+		{
+			name:     "in-cluster",
+			snap:     volume.SnapshotId{Type: volume.SnapshotTypeInCluster, SourceName: "source-vol", SnapshotName: "snap-3"},
+			expected: "InCluster:///source-vol/snap-3",
+		},
+	}
+
+	t.Parallel()
+
+	for i := range testcases {
+		tcase := testcases[i]
+		t.Run(tcase.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tcase.expected, tcase.snap.String())
+		})
+	}
+}
+
+func TestSnapshotIdRoundTrip(t *testing.T) {
+	// Legacy snapshots (type Unknown, only a snapshot name) are intentionally
+	// excluded: they are a read-only compatibility path and do not round-trip
+	// through String().
+	ids := []volume.SnapshotId{
+		{Type: volume.SnapshotTypeS3, Remote: "remote-1", SourceName: "source-vol", SnapshotName: "snap-1"},
+		{Type: volume.SnapshotTypeLinstor, Remote: "remote-2", SourceName: "source-vol", SnapshotName: "snap-2"},
+		{Type: volume.SnapshotTypeInCluster, SourceName: "source-vol", SnapshotName: "snap-3"},
+	}
+
+	t.Parallel()
+
+	for i := range ids {
+		id := ids[i]
+		t.Run(id.String(), func(t *testing.T) {
+			t.Parallel()
+
+			parsed, err := volume.ParseSnapshotId(id.String())
+			assert.NoError(t, err)
+			assert.Equal(t, &id, parsed)
+		})
+	}
+}
+
 func TestParameters_ToResourceGroupModify(t *testing.T) {
 	testcases := []struct {
 		name            string

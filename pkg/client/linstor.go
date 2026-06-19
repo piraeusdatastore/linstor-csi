@@ -198,17 +198,18 @@ func (s *Linstor) ListAllWithStatus(ctx context.Context) ([]volume.VolumeStatus,
 	}
 
 	for _, rd := range resDefs {
-		vol := s.resourceDefinitionToVolume(rd)
+		// Listing operates per resource, which maps to the implicit 0th volume of each resource.
+		vol := s.volumeInfoFromResourceDefinition(volume.ID{ResourceName: rd.Name}, rd)
 		if vol != nil {
 			vols = append(vols, volume.VolumeStatus{
 				Info:       *vol,
-				Conditions: ConditionFromResources(resourcesByName[vol.ID]),
+				Conditions: ConditionFromResources(resourcesByName[vol.ResourceName]),
 			})
 		}
 	}
 
 	sort.Slice(vols, func(i, j int) bool {
-		return vols[i].ID < vols[j].ID
+		return vols[i].String() < vols[j].String()
 	})
 
 	return vols, nil
@@ -255,9 +256,11 @@ func (s *Linstor) AllocationSize(requiredBytes, limitBytes int64, fsType string)
 	return volumeSizeKiB * KiB, nil
 }
 
-// resourceDefinitionToVolume reads the serialized volume info on the lapi.ResourceDefinitionWithVolumeDefinition
-// and constructs a pointer to a volume.Info from it.
-func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinitionWithVolumeDefinition) *volume.Info {
+// volumeInfoFromResourceDefinition reads the serialized volume info on the
+// lapi.ResourceDefinitionWithVolumeDefinition and constructs a pointer to the
+// volume.Info identified by id. Returns nil if the resource does not contain the
+// requested volume (i.e. it is not a CSI volume).
+func (s *Linstor) volumeInfoFromResourceDefinition(id volume.ID, resDef lapi.ResourceDefinitionWithVolumeDefinition) *volume.Info {
 	if slices.Contains(resDef.Flags, lapiconsts.FlagCloning) {
 		// Volume is not yet ready
 		return nil
@@ -280,21 +283,21 @@ func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinitionWithV
 		vd := &resDef.VolumeDefinitions[i]
 		deviceBytes[int(*vd.VolumeNumber)] = int64(vd.SizeKib) * KiB
 
-		// Per-VD FS properties should be the same on all VDs, but 0 is the "main" one we care about.
-		if *vd.VolumeNumber == 0 {
+		// Per-VD FS properties should be the same on all VDs, but the one matching the volume id is authoritative.
+		if int(*vd.VolumeNumber) == id.VolumeNumber {
 			if vdFsType := vd.Props[lapiconsts.NamespcFilesystem+"/"+lapiconsts.KeyFsType]; vdFsType != "" {
 				fsType = vdFsType
 			}
 		}
 	}
 
-	if _, ok := deviceBytes[0]; !ok {
+	if _, ok := deviceBytes[id.VolumeNumber]; !ok {
 		// Not a CSI enabled volume
 		return nil
 	}
 
 	return &volume.Info{
-		ID:            resDef.Name,
+		ID:            id,
 		DeviceBytes:   deviceBytes,
 		ResourceGroup: resDef.ResourceGroupName,
 		FsType:        fsType,
@@ -305,22 +308,27 @@ func (s *Linstor) resourceDefinitionToVolume(resDef lapi.ResourceDefinitionWithV
 
 // FindByID retrieves a volume.Info that has an id that matches the CSI volume
 // id. Matches the LINSTOR resource name.
-func (s *Linstor) FindByID(ctx context.Context, id string) (*volume.Info, error) {
+func (s *Linstor) FindByID(ctx context.Context, csiVolumeID string) (*volume.Info, error) {
 	s.log.WithFields(logrus.Fields{
-		"csiVolumeID": id,
+		"csiVolumeID": csiVolumeID,
 	}).Debug("looking up resource by CSI volume id")
 
-	res, err := s.client.ResourceDefinitions.Get(ctx, id)
+	id, err := volume.ParseVolumeId(csiVolumeID)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := s.client.ResourceDefinitions.Get(ctx, id.ResourceName)
 	if err != nil {
 		return nil, nil404(err)
 	}
 
-	vds, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, id)
+	vds, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, id.ResourceName)
 	if err != nil {
 		return nil, nil404(err)
 	}
 
-	return s.resourceDefinitionToVolume(lapi.ResourceDefinitionWithVolumeDefinition{
+	return s.volumeInfoFromResourceDefinition(id, lapi.ResourceDefinitionWithVolumeDefinition{
 		ResourceDefinition: res,
 		VolumeDefinitions:  vds,
 	}), nil
@@ -365,7 +373,7 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, params *volume.P
 
 	logger.Debug("reconcile resource definition for volume")
 
-	_, err = s.reconcileResourceDefinition(ctx, vol.ID, rGroup.Name)
+	_, err = s.reconcileResourceDefinition(ctx, vol.ResourceName, rGroup.Name)
 	if err != nil {
 		logger.Debugf("reconcile resource definition failed: %v", err)
 		return err
@@ -389,7 +397,7 @@ func (s *Linstor) Create(ctx context.Context, vol *volume.Info, params *volume.P
 
 	logger.Debug("reconcile extra properties")
 
-	err = s.client.ResourceDefinitions.Modify(ctx, vol.ID, lapi.GenericPropsModify{OverrideProps: vol.Properties})
+	err = s.client.ResourceDefinitions.Modify(ctx, vol.ResourceName, lapi.GenericPropsModify{OverrideProps: vol.Properties})
 	if err != nil {
 		logger.Debugf("reconcile extra properties failed: %v", err)
 		return err
@@ -414,13 +422,13 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 
 	logger.Debugf("check for clone status")
 
-	status, err := s.client.ResourceDefinitions.CloneStatus(ctx, src.ID, vol.ID)
+	status, err := s.client.ResourceDefinitions.CloneStatus(ctx, src.ResourceName, vol.ResourceName)
 	if err != nil {
 		if errors.Is(err, lapi.NotFoundError) {
 			logger.Debugf("create new cloned volume")
 
-			_, err := s.client.ResourceDefinitions.Clone(ctx, src.ID, lapi.ResourceDefinitionCloneRequest{
-				Name:               vol.ID,
+			_, err := s.client.ResourceDefinitions.Clone(ctx, src.ResourceName, lapi.ResourceDefinitionCloneRequest{
+				Name:               vol.ResourceName,
 				LayerList:          params.LayerList,
 				ResourceGroup:      rGroup.Name,
 				GenericPropsModify: lapi.GenericPropsModify{DeleteProps: []string{linstor.PropertyProvisioningCompletedBy}},
@@ -430,7 +438,7 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 				return err
 			}
 
-			status, err = s.client.ResourceDefinitions.CloneStatus(ctx, src.ID, vol.ID)
+			status, err = s.client.ResourceDefinitions.CloneStatus(ctx, src.ResourceName, vol.ResourceName)
 			if err != nil {
 				logger.Debugf("clone status failed: %v", err)
 				return err
@@ -446,7 +454,7 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 
 		time.Sleep(5 * time.Second)
 
-		status, err = s.client.ResourceDefinitions.CloneStatus(ctx, src.ID, vol.ID)
+		status, err = s.client.ResourceDefinitions.CloneStatus(ctx, src.ResourceName, vol.ResourceName)
 		if err != nil {
 			logger.Debugf("clone status failed: %v", err)
 			return err
@@ -471,7 +479,7 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 
 	logger.Debug("reconcile extra properties")
 
-	err = s.client.ResourceDefinitions.Modify(ctx, vol.ID, lapi.GenericPropsModify{OverrideProps: vol.Properties})
+	err = s.client.ResourceDefinitions.Modify(ctx, vol.ResourceName, lapi.GenericPropsModify{OverrideProps: vol.Properties})
 	if err != nil {
 		logger.Debugf("reconcile extra properties failed: %v", err)
 		return err
@@ -485,13 +493,13 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 // In order to support Snapshots living longer than their volumes, we have to keep the resource definition around while
 // the actual resources are gone. An elegant way to go about this is by simply deleting the volume definition. This
 // hides
-func (s *Linstor) Delete(ctx context.Context, volId string) error {
+func (s *Linstor) Delete(ctx context.Context, id volume.ID) error {
 	s.log.WithFields(logrus.Fields{
-		"volume": volId,
+		"volume": id,
 	}).Info("deleting volume")
 
 	// Disable the BalanceResourceTask for this resource during deletion.
-	err := s.client.ResourceDefinitions.Modify(ctx, volId, lapi.GenericPropsModify{
+	err := s.client.ResourceDefinitions.Modify(ctx, id.ResourceName, lapi.GenericPropsModify{
 		OverrideProps: map[string]string{lapiconsts.KeyBalanceResourcesEnabled: lapiconsts.ValFalse},
 	})
 	if err != nil {
@@ -501,7 +509,7 @@ func (s *Linstor) Delete(ctx context.Context, volId string) error {
 	var resources []lapi.Resource
 
 	for {
-		resources, err = s.client.Resources.GetAll(ctx, volId)
+		resources, err = s.client.Resources.GetAll(ctx, id.ResourceName)
 		if err != nil {
 			return nil404(err)
 		}
@@ -523,14 +531,14 @@ func (s *Linstor) Delete(ctx context.Context, volId string) error {
 	})
 
 	for _, res := range resources {
-		err := s.client.Resources.Delete(ctx, volId, res.NodeName)
+		err := s.client.Resources.Delete(ctx, id.ResourceName, res.NodeName)
 		if err != nil {
 			// If two deletions run in parallel, one could get a 404 message, which we treat as "everything finished"
 			return nil404(err)
 		}
 	}
 
-	vds, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, volId)
+	vds, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, id.ResourceName)
 	if err != nil {
 		return nil404(err)
 	}
@@ -542,7 +550,7 @@ func (s *Linstor) Delete(ctx context.Context, volId string) error {
 
 	for _, vd := range vds {
 		// Delete the volume definition. This indicates the normal deletion is complete.
-		err = s.client.ResourceDefinitions.DeleteVolumeDefinition(ctx, volId, int(*vd.VolumeNumber))
+		err = s.client.ResourceDefinitions.DeleteVolumeDefinition(ctx, id.ResourceName, int(*vd.VolumeNumber))
 		if nil404(err) != nil {
 			// We continue with the cleanup on 404, maybe the previous cleanup was interrupted
 			return err
@@ -550,14 +558,14 @@ func (s *Linstor) Delete(ctx context.Context, volId string) error {
 	}
 
 	// Reset BalanceResourceTask for the case the resource definition is in use by a snapshot.
-	err = s.client.ResourceDefinitions.Modify(ctx, volId, lapi.GenericPropsModify{
+	err = s.client.ResourceDefinitions.Modify(ctx, id.ResourceName, lapi.GenericPropsModify{
 		DeleteProps: []string{lapiconsts.KeyBalanceResourcesEnabled},
 	})
 	if err != nil {
 		return nil404(err)
 	}
 
-	err = s.deleteResourceDefinitionAndGroupIfUnused(ctx, volId)
+	err = s.deleteResourceDefinitionAndGroupIfUnused(ctx, id.ResourceName)
 	if err != nil {
 		return err
 	}
@@ -567,13 +575,13 @@ func (s *Linstor) Delete(ctx context.Context, volId string) error {
 
 // AccessibleTopologies returns a list of pointers to csi.Topology from where the
 // volume is reachable, based on the localStoragePolicy reported by the volume.
-func (s *Linstor) AccessibleTopologies(ctx context.Context, volId string, params *volume.Parameters) ([]*csi.Topology, error) {
+func (s *Linstor) AccessibleTopologies(ctx context.Context, id volume.ID, params *volume.Parameters) ([]*csi.Topology, error) {
 	volumeScheduler, err := s.schedulerByPlacementPolicy(params.PlacementPolicy)
 	if err != nil {
 		return nil, err
 	}
 
-	return volumeScheduler.AccessibleTopologies(ctx, volId, params.AllowRemoteVolumeAccess)
+	return volumeScheduler.AccessibleTopologies(ctx, id.ResourceName, params.AllowRemoteVolumeAccess)
 }
 
 func (s *Linstor) schedulerByPlacementPolicy(policy topology.PlacementPolicy) (scheduler.Interface, error) {
@@ -593,8 +601,8 @@ func (s *Linstor) schedulerByPlacementPolicy(policy topology.PlacementPolicy) (s
 	}
 }
 
-func (s *Linstor) GetLegacyVolumeParameters(ctx context.Context, volId string) (*volume.Parameters, error) {
-	rd, err := s.client.ResourceDefinitions.Get(ctx, volId)
+func (s *Linstor) GetLegacyVolumeParameters(ctx context.Context, id volume.ID) (*volume.Parameters, error) {
+	rd, err := s.client.ResourceDefinitions.Get(ctx, id.ResourceName)
 	if err != nil {
 		return nil, err
 	}
@@ -622,13 +630,13 @@ func (s *Linstor) GetLegacyVolumeParameters(ctx context.Context, volId string) (
 }
 
 // Attach idempotently creates a resource on the given node.
-func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool) (string, error) {
+func (s *Linstor) Attach(ctx context.Context, id volume.ID, node string, rwxBlock bool) (string, error) {
 	s.log.WithFields(logrus.Fields{
-		"volume":     volId,
+		"volume":     id,
 		"targetNode": node,
 	}).Info("attaching volume")
 
-	ress, err := s.client.Resources.GetAll(ctx, volId)
+	ress, err := s.client.Resources.GetAll(ctx, id.ResourceName)
 	if err != nil {
 		return "", err
 	}
@@ -664,7 +672,7 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 			linstor.PropertyAllowTwoPrimaries: "yes",
 		}}
 
-		err = s.client.ResourceDefinitions.Modify(ctx, volId, rdPropsModify)
+		err = s.client.ResourceDefinitions.Modify(ctx, id.ResourceName, rdPropsModify)
 		if err != nil {
 			return "", err
 		}
@@ -674,7 +682,7 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 
 	// If the resource is already on the node, don't worry about attaching, unless we also need to activate it.
 	if existingRes == nil || slices.Contains(existingRes.Flags, lapiconsts.FlagRscInactive) {
-		err := s.client.Resources.MakeAvailable(ctx, volId, node, lapi.ResourceMakeAvailable{Diskful: false})
+		err := s.client.Resources.MakeAvailable(ctx, id.ResourceName, node, lapi.ResourceMakeAvailable{Diskful: false})
 
 		if errors.Is(err, lapi.NotFoundError) {
 			// Make-available honors replica-on-same and replicas-on-different. We do not, as the import parts of that
@@ -686,7 +694,7 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 			}
 
 			rCreate := lapi.ResourceCreate{Resource: lapi.Resource{
-				Name:     volId,
+				Name:     id.ResourceName,
 				NodeName: node,
 				Flags:    []string{disklessFlag},
 			}}
@@ -702,7 +710,7 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 			overrideProps[linstor.PropertyCreatedFor] = linstor.CreatedForTemporaryDisklessAttach
 		}
 
-		newRsc, err := s.client.Resources.Get(ctx, volId, node)
+		newRsc, err := s.client.Resources.Get(ctx, id.ResourceName, node)
 		if err != nil {
 			return "", err
 		}
@@ -711,7 +719,7 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 	}
 
 	if len(overrideProps) > 0 {
-		err = s.client.Resources.ModifyVolume(ctx, volId, node, 0, lapi.GenericPropsModify{
+		err = s.client.Resources.ModifyVolume(ctx, id.ResourceName, node, id.VolumeNumber, lapi.GenericPropsModify{
 			OverrideProps: overrideProps,
 		})
 		if err != nil {
@@ -723,11 +731,11 @@ func (s *Linstor) Attach(ctx context.Context, volId, node string, rwxBlock bool)
 		return "", &DeleteInProgressError{
 			Operation: "attach volume",
 			Kind:      "resource",
-			Name:      volId,
+			Name:      id.ResourceName,
 		}
 	}
 
-	vol, err := s.client.Resources.GetVolume(ctx, volId, node, 0)
+	vol, err := s.client.Resources.GetVolume(ctx, id.ResourceName, node, id.VolumeNumber)
 	if err != nil {
 		return "", err
 	}
@@ -761,13 +769,13 @@ func getDisklessFlag(resource *lapi.Resource) string {
 }
 
 // Detach removes a volume from the node.
-func (s *Linstor) Detach(ctx context.Context, volId, node string) error {
+func (s *Linstor) Detach(ctx context.Context, id volume.ID, node string) error {
 	log := s.log.WithFields(logrus.Fields{
-		"volume":     volId,
+		"volume":     id,
 		"targetNode": node,
 	})
 
-	ress, err := s.client.Resources.GetAll(ctx, volId)
+	ress, err := s.client.Resources.GetAll(ctx, id.ResourceName)
 	if err != nil {
 		return nil404(err)
 	}
@@ -785,13 +793,13 @@ func (s *Linstor) Detach(ctx context.Context, volId, node string) error {
 			linstor.PropertyAllowTwoPrimaries,
 		}}
 
-		err = s.client.ResourceDefinitions.Modify(ctx, volId, rdPropsModify)
+		err = s.client.ResourceDefinitions.Modify(ctx, id.ResourceName, rdPropsModify)
 		if err != nil {
 			return nil404(err)
 		}
 	}
 
-	vol, err := s.client.Resources.GetVolume(ctx, volId, node, 0)
+	vol, err := s.client.Resources.GetVolume(ctx, id.ResourceName, node, id.VolumeNumber)
 	if err != nil {
 		return nil404(err)
 	}
@@ -809,7 +817,7 @@ func (s *Linstor) Detach(ctx context.Context, volId, node string) error {
 
 	log.Info("removing temporary resource")
 
-	return nil404(s.client.Resources.Delete(ctx, volId, node))
+	return nil404(s.client.Resources.Delete(ctx, id.ResourceName, node))
 }
 
 // CapacityBytes returns the amount of free space in the storage pool specified by the params and topology.
@@ -946,7 +954,7 @@ func (s *Linstor) CompatibleSnapshotId(name string) string {
 }
 
 // SnapCreate calls LINSTOR to create a new snapshot name "id" or backup of the volume "sourceVolId".
-func (s *Linstor) SnapCreate(ctx context.Context, id string, params *volume.SnapshotParameters, sourceVolIds ...string) ([]*volume.Snapshot, error) {
+func (s *Linstor) SnapCreate(ctx context.Context, id string, params *volume.SnapshotParameters, sourceVolIds ...volume.ID) ([]*volume.Snapshot, error) {
 	var lsnaps []lapi.Snapshot
 
 	var err error
@@ -982,7 +990,7 @@ func (s *Linstor) SnapCreate(ctx context.Context, id string, params *volume.Snap
 	return result, nil
 }
 
-func (s *Linstor) createInClusterSnapshots(ctx context.Context, id string, sourceVolIds ...string) ([]lapi.Snapshot, error) {
+func (s *Linstor) createInClusterSnapshots(ctx context.Context, id string, sourceVolIds ...volume.ID) ([]lapi.Snapshot, error) {
 	log := s.log.WithField("id", id)
 
 	log.Debug("Creating in-cluster snapshot")
@@ -991,7 +999,7 @@ func (s *Linstor) createInClusterSnapshots(ctx context.Context, id string, sourc
 	for _, sourceVolId := range sourceVolIds {
 		snapConfigs = append(snapConfigs, lapi.Snapshot{
 			Name:         id,
-			ResourceName: sourceVolId,
+			ResourceName: sourceVolId.ResourceName,
 		})
 	}
 
@@ -1015,7 +1023,7 @@ func (s *Linstor) createInClusterSnapshots(ctx context.Context, id string, sourc
 }
 
 // reconcileBackup ensure a backup exists at the given remote
-func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume.SnapshotParameters, sourceVolIds ...string) ([]lapi.Snapshot, error) {
+func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume.SnapshotParameters, sourceVolIds ...volume.ID) ([]lapi.Snapshot, error) {
 	log := s.log.WithField("id", id)
 
 	if len(sourceVolIds) != 1 {
@@ -1034,7 +1042,7 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume
 	switch params.Type {
 	case volume.SnapshotTypeS3:
 		info, err := s.client.Backup.Info(ctx, params.RemoteName, lapi.BackupInfoRequest{
-			SrcRscName:  sourceVolId,
+			SrcRscName:  sourceVolId.ResourceName,
 			SrcSnapName: id,
 		})
 		if nil404(err) != nil {
@@ -1047,7 +1055,7 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume
 			// Bound the chain length/age when requested: forcing a fresh full
 			// starts a new chain so older backups eventually become reclaimable.
 			if incremental && (params.MaxIncrements > 0 || params.FullSnapshotAfter > 0) {
-				forceFull, err := s.backupChainExhausted(ctx, params, sourceVolId)
+				forceFull, err := s.backupChainExhausted(ctx, params, sourceVolId.ResourceName)
 				if err != nil {
 					return nil, err
 				}
@@ -1060,7 +1068,7 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume
 			}
 
 			_, err := s.client.Backup.Create(ctx, params.RemoteName, lapi.BackupCreate{
-				RscName:     sourceVolId,
+				RscName:     sourceVolId.ResourceName,
 				SnapName:    id,
 				Incremental: incremental,
 			})
@@ -1069,7 +1077,7 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume
 			}
 		}
 
-		snap, err := s.client.Resources.GetSnapshot(ctx, sourceVolId, id)
+		snap, err := s.client.Resources.GetSnapshot(ctx, sourceVolId.ResourceName, id)
 		if err != nil {
 			return nil, fmt.Errorf("error fetching snapshot for backup: %w", err)
 		}
@@ -1087,8 +1095,8 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume
 			yes := true
 
 			snapName, err = s.client.Backup.Ship(ctx, params.RemoteName, lapi.BackupShipRequest{
-				SrcRscName:   sourceVolId,
-				DstRscName:   "backup-" + sourceVolId,
+				SrcRscName:   sourceVolId.ResourceName,
+				DstRscName:   "backup-" + sourceVolId.ResourceName,
 				DstStorPool:  params.LinstorTargetStoragePool,
 				DownloadOnly: &yes,
 			})
@@ -1112,7 +1120,7 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume
 			snapName = kv.Props[id]
 		}
 
-		snap, err := s.client.Resources.GetSnapshot(ctx, sourceVolId, snapName)
+		snap, err := s.client.Resources.GetSnapshot(ctx, sourceVolId.ResourceName, snapName)
 		if err != nil {
 			return nil, fmt.Errorf("error fetching snapshot for backup: %w", err)
 		}
@@ -1430,7 +1438,7 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *v
 
 	logger.Debug("reconcile resource definition for volume")
 
-	rDef, err := s.reconcileResourceDefinition(ctx, vol.ID, rGroup.Name)
+	rDef, err := s.reconcileResourceDefinition(ctx, vol.ResourceName, rGroup.Name)
 	if err != nil {
 		return err
 	}
@@ -1472,7 +1480,7 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *v
 
 	logger.Debug("reconcile extra properties")
 
-	err = s.client.ResourceDefinitions.Modify(ctx, vol.ID, lapi.GenericPropsModify{OverrideProps: vol.Properties})
+	err = s.client.ResourceDefinitions.Modify(ctx, vol.ResourceName, lapi.GenericPropsModify{OverrideProps: vol.Properties})
 	if err != nil {
 		logger.Debugf("reconcile extra properties failed: %v", err)
 		return err
@@ -1753,21 +1761,21 @@ func (s *Linstor) reconcileResourceGroup(ctx context.Context, params *volume.Par
 	return &rg, nil
 }
 
-func (s *Linstor) reconcileResourceDefinition(ctx context.Context, volId, rgName string) (*lapi.ResourceDefinition, error) {
+func (s *Linstor) reconcileResourceDefinition(ctx context.Context, rdName, rgName string) (*lapi.ResourceDefinition, error) {
 	logger := s.log.WithFields(logrus.Fields{
-		"volume": volId,
+		"volume": rdName,
 	})
 	logger.Info("reconcile resource definition for volume")
 
 	logger.Debugf("check if resource definition already exists")
 
-	rd, err := s.client.ResourceDefinitions.Get(ctx, volId)
+	rd, err := s.client.ResourceDefinitions.Get(ctx, rdName)
 	if errors.Is(err, lapi.NotFoundError) {
 		logger.Debugf("resource definition does not exist, create now")
 
 		rdCreate := lapi.ResourceDefinitionCreate{
 			ResourceDefinition: lapi.ResourceDefinition{
-				Name:              volId,
+				Name:              rdName,
 				ResourceGroupName: rgName,
 			},
 		}
@@ -1777,7 +1785,7 @@ func (s *Linstor) reconcileResourceDefinition(ctx context.Context, volId, rgName
 			return nil, err
 		}
 
-		rd, err = s.client.ResourceDefinitions.Get(ctx, volId)
+		rd, err = s.client.ResourceDefinitions.Get(ctx, rdName)
 	}
 
 	if err != nil {
@@ -1788,7 +1796,7 @@ func (s *Linstor) reconcileResourceDefinition(ctx context.Context, volId, rgName
 		return nil, &DeleteInProgressError{
 			Operation: "reconcile resource definition",
 			Kind:      "resource definition",
-			Name:      volId,
+			Name:      rdName,
 		}
 	}
 
@@ -1806,7 +1814,7 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 
 		logger.Debug("check if volume definition already exists")
 
-		vDef, err := s.client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ID, vn)
+		vDef, err := s.client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ResourceName, vn)
 		if errors.Is(err, lapi.NotFoundError) {
 			var props map[string]string
 
@@ -1826,12 +1834,12 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 				},
 			}
 
-			err = s.client.ResourceDefinitions.CreateVolumeDefinition(ctx, info.ID, vdCreate)
+			err = s.client.ResourceDefinitions.CreateVolumeDefinition(ctx, info.ResourceName, vdCreate)
 			if err != nil {
 				return err
 			}
 
-			vDef, err = s.client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ID, vn)
+			vDef, err = s.client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ResourceName, vn)
 		}
 
 		if err != nil {
@@ -1841,7 +1849,7 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 		// We don't support shrinking. This is mostly covered by the provisioner, but with backups there may be
 		// edge cases where the "no shrinking" rule cannot be enforced. So we only allow volume growth here.
 		if vDef.SizeKib < expectedSizeKiB {
-			err := s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, info.ID, vn, lapi.VolumeDefinitionModify{
+			err := s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, info.ResourceName, vn, lapi.VolumeDefinitionModify{
 				SizeKib: expectedSizeKiB,
 			})
 			if err != nil {
@@ -1865,7 +1873,7 @@ func (s *Linstor) reconcileResourcePlacement(ctx context.Context, vol *volume.In
 		return err
 	}
 
-	err = volumeScheduler.Create(ctx, vol.ID, params, topologies)
+	err = volumeScheduler.Create(ctx, vol.ResourceName, params, topologies)
 	if err != nil {
 		return err
 	}
@@ -2156,7 +2164,7 @@ func (s *Linstor) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info,
 		Limit:  limit,
 	}
 
-	snaps, err := s.client.Resources.GetSnapshots(ctx, sourceVol.ID, opts)
+	snaps, err := s.client.Resources.GetSnapshots(ctx, sourceVol.ResourceName, opts)
 	if nil404(err) != nil {
 		return nil, fmt.Errorf("failed to fetch list of snapshots: %w", err)
 	}
@@ -2339,13 +2347,13 @@ func (s *Linstor) NodeAvailable(ctx context.Context, node string) error {
 }
 
 // FindAssignmentOnNode returns a pointer to a volume.Assignment for a given node.
-func (s *Linstor) FindAssignmentOnNode(ctx context.Context, volId, node string) (*volume.Assignment, error) {
+func (s *Linstor) FindAssignmentOnNode(ctx context.Context, id volume.ID, node string) (*volume.Assignment, error) {
 	s.log.WithFields(logrus.Fields{
-		"volume":     volId,
+		"volume":     id,
 		"targetNode": node,
 	}).Debug("getting assignment info")
 
-	linVol, err := s.client.Resources.GetVolume(ctx, volId, node, 0)
+	linVol, err := s.client.Resources.GetVolume(ctx, id.ResourceName, node, id.VolumeNumber)
 	if err != nil {
 		return nil, nil404(err)
 	}
@@ -2362,14 +2370,14 @@ func (s *Linstor) FindAssignmentOnNode(ctx context.Context, volId, node string) 
 	return va, nil
 }
 
-func (s *Linstor) Status(ctx context.Context, volId string) (*csi.VolumeCondition, error) {
+func (s *Linstor) Status(ctx context.Context, id volume.ID) (*csi.VolumeCondition, error) {
 	s.log.WithFields(logrus.Fields{
-		"volume": volId,
+		"volume": id,
 	}).Debug("getting assignments")
 
-	ress, err := s.client.Resources.GetResourceView(ctx, &lapi.ListOpts{Resource: []string{volId}})
+	ress, err := s.client.Resources.GetResourceView(ctx, &lapi.ListOpts{Resource: []string{id.ResourceName}})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list resources for '%s': %w", volId, err)
+		return nil, fmt.Errorf("failed to list resources for '%s': %w", id.ResourceName, err)
 	}
 
 	return ConditionFromResources(ress), nil
@@ -2763,23 +2771,23 @@ func (s *Linstor) ControllerExpand(ctx context.Context, vol *volume.Info) error 
 	}).Info("controller expand volume")
 
 	volumeDefinitionModify := lapi.VolumeDefinitionModify{
-		SizeKib: uint64(vol.DeviceBytes[0] / KiB),
+		SizeKib: uint64(vol.Size() / KiB),
 	}
 
-	volumeDefinitions, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, vol.ID)
-	if err != nil || len(volumeDefinitions) < 1 {
-		return fmt.Errorf("get volumeDefinitions failed volumeInfo: %v, err: %v", vol, err)
+	volumeDefinition, err := s.client.ResourceDefinitions.GetVolumeDefinition(ctx, vol.ResourceName, vol.VolumeNumber)
+	if err != nil {
+		return fmt.Errorf("failed to get volume definition '%s' for resize: %w", &vol.ID, err)
 	}
 
-	if volumeDefinitionModify.SizeKib == volumeDefinitions[0].SizeKib {
+	if volumeDefinitionModify.SizeKib == volumeDefinition.SizeKib {
 		return nil
 	}
 
-	if volumeDefinitionModify.SizeKib < volumeDefinitions[0].SizeKib {
-		return fmt.Errorf("storage only support expand does not support reduce.volumeInfo: %v old: %d, new: %d", vol, volumeDefinitions[0].SizeKib, volumeDefinitionModify.SizeKib)
+	if volumeDefinitionModify.SizeKib < volumeDefinition.SizeKib {
+		return fmt.Errorf("storage only support expand does not support reduce.volumeInfo: %v old: %d, new: %d", vol, volumeDefinition.SizeKib, volumeDefinitionModify.SizeKib)
 	}
 
-	err = s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, vol.ID, 0, volumeDefinitionModify)
+	err = s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, vol.ResourceName, vol.VolumeNumber, volumeDefinitionModify)
 	if err != nil {
 		return err
 	}
