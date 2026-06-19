@@ -177,7 +177,7 @@ func TestLinstor_Attach(t *testing.T) {
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		path, err := cl.Attach(context.Background(), ExampleResourceID, "node-2", false)
+		path, err := cl.Attach(context.Background(), volume.ID{ResourceName: ExampleResourceID}, "node-2", false)
 		assert.NoError(t, err)
 		assert.Equal(t, "/dev/vol1", path)
 		m.AssertExpectations(t)
@@ -196,7 +196,7 @@ func TestLinstor_Attach(t *testing.T) {
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		path, err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false)
+		path, err := cl.Attach(context.Background(), volume.ID{ResourceName: ExampleResourceID}, "node-3", false)
 		assert.NoError(t, err)
 		assert.Equal(t, "/dev/vol1", path)
 		m.AssertExpectations(t)
@@ -216,7 +216,7 @@ func TestLinstor_Attach(t *testing.T) {
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		path, err := cl.Attach(context.Background(), ExampleResourceID, "node-3", false)
+		path, err := cl.Attach(context.Background(), volume.ID{ResourceName: ExampleResourceID}, "node-3", false)
 		assert.NoError(t, err)
 		assert.Equal(t, "/dev/vol1", path)
 		m.AssertExpectations(t)
@@ -234,7 +234,7 @@ func TestLinstor_Attach(t *testing.T) {
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
-		path, err := cl.Attach(context.Background(), ExampleResourceID, "node-2", false)
+		path, err := cl.Attach(context.Background(), volume.ID{ResourceName: ExampleResourceID}, "node-2", false)
 		assert.NoError(t, err)
 		assert.Equal(t, "/dev/vol1", path)
 		m.AssertExpectations(t)
@@ -470,7 +470,7 @@ func TestLinstor_Status(t *testing.T) {
 			r.On("GetResourceView", mock.Anything, &lapi.ListOpts{Resource: []string{tcase.name}}).Return(parsedResponse, nil)
 			cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: r}}, log: logrus.WithField("test", t.Name())}
 
-			actualCondition, err := cl.Status(context.Background(), tcase.name)
+			actualCondition, err := cl.Status(context.Background(), volume.ID{ResourceName: tcase.name, VolumeNumber: 0})
 			assert.NoError(t, err)
 			r.AssertExpectations(t)
 			assert.Equal(t, tcase.expectedCondition, actualCondition)
