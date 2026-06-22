@@ -977,6 +977,13 @@ func (s *Linstor) SnapCreate(ctx context.Context, id string, params *volume.Snap
 
 		if s != nil {
 			s.Type = params.Type
+
+			for _, sourceVolId := range sourceVolIds {
+				if sourceVolId.ResourceName == s.SourceName {
+					s.VolumeNumber = sourceVolId.VolumeNumber
+					break
+				}
+			}
 		}
 
 		result = append(result, s)
@@ -1892,6 +1899,8 @@ func (s *Linstor) FindSnapsByID(ctx context.Context, id string) ([]*volume.Snaps
 		return s.findInProgressOrLegacySnaps(ctx, id)
 	}
 
+	var snaps []*volume.Snapshot
+
 	switch snapshotId.Type {
 	case volume.SnapshotTypeInCluster, volume.SnapshotTypeLinstor:
 		lsnap, err := s.client.Resources.GetSnapshot(ctx, snapshotId.SourceName, snapshotId.SnapshotName)
@@ -1907,14 +1916,22 @@ func (s *Linstor) FindSnapsByID(ctx context.Context, id string) ([]*volume.Snaps
 
 		snap.Type = snapshotId.Type
 
-		return []*volume.Snapshot{snap}, nil
+		snaps = []*volume.Snapshot{snap}
 	case volume.SnapshotTypeS3:
-		return s.findS3Backup(ctx, snapshotId)
+		snaps, err = s.findS3Backup(ctx, snapshotId)
+		if err != nil {
+			return nil, err
+		}
 	default:
 		// Either, snapshot is not ready yet, or it is a "legacy" snapshot where we did not have this logic yet.
 	}
 
-	return nil, nil
+	// Set the correct volume number based on the requested source ID.
+	for _, snap := range snaps {
+		snap.VolumeNumber = snapshotId.VolumeNumber
+	}
+
+	return snaps, nil
 }
 
 type BackupWithRemote struct {
@@ -2179,6 +2196,9 @@ func (s *Linstor) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info,
 			log.WithError(err).Warn("failed to convert LINSTOR to CSI snapshot, skipping...")
 			continue
 		}
+
+		csiSnap.VolumeNumber = sourceVol.VolumeNumber
+
 		result = append(result, csiSnap)
 	}
 
@@ -2186,6 +2206,7 @@ func (s *Linstor) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info,
 }
 
 // ListSnaps returns list of snapshots available in the cluster, including those available in remote (S3) locations
+// This currently assumes all snapshots have just one relevant volume number 0.
 func (s *Linstor) ListSnaps(ctx context.Context, start, limit int) ([]*volume.Snapshot, error) {
 	log := s.log.WithFields(logrus.Fields{"start": start, "limit": limit})
 

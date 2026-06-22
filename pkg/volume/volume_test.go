@@ -289,6 +289,39 @@ func TestParseSnapshotId(t *testing.T) {
 			},
 		},
 		{
+			name: "explicit-volume-zero",
+			id:   "s3://remote-1/source-vol/0/snap-1",
+			expected: &volume.SnapshotId{
+				Type:         volume.SnapshotTypeS3,
+				Remote:       "remote-1",
+				SourceName:   "source-vol",
+				VolumeNumber: 0,
+				SnapshotName: "snap-1",
+			},
+		},
+		{
+			name: "non-zero-volume-number",
+			id:   "s3://remote-1/source-vol/2/snap-1",
+			expected: &volume.SnapshotId{
+				Type:         volume.SnapshotTypeS3,
+				Remote:       "remote-1",
+				SourceName:   "source-vol",
+				VolumeNumber: 2,
+				SnapshotName: "snap-1",
+			},
+		},
+		{
+			name: "in-cluster-with-volume-number",
+			id:   "incluster:///source-vol/3/snap-3",
+			expected: &volume.SnapshotId{
+				Type:         volume.SnapshotTypeInCluster,
+				Remote:       "",
+				SourceName:   "source-vol",
+				VolumeNumber: 3,
+				SnapshotName: "snap-3",
+			},
+		},
+		{
 			name: "scheme-is-case-insensitive",
 			id:   "S3://remote-1/source-vol/snap-1",
 			expected: &volume.SnapshotId{
@@ -328,7 +361,17 @@ func TestParseSnapshotId(t *testing.T) {
 		},
 		{
 			name:    "too-many-path-components",
-			id:      "s3://remote-1/source-vol/snap-1/extra",
+			id:      "s3://remote-1/source-vol/1/snap-1/extra",
+			isError: true,
+		},
+		{
+			name:    "non-numeric-volume-number",
+			id:      "s3://remote-1/source-vol/abc/snap-1",
+			isError: true,
+		},
+		{
+			name:    "volume-number-out-of-range",
+			id:      "s3://remote-1/source-vol/65536/snap-1",
 			isError: true,
 		},
 		{
@@ -383,6 +426,16 @@ func TestSnapshotId_String(t *testing.T) {
 			snap:     volume.SnapshotId{Type: volume.SnapshotTypeInCluster, SourceName: "source-vol", SnapshotName: "snap-3"},
 			expected: "InCluster:///source-vol/snap-3",
 		},
+		{
+			name:     "volume-zero-omits-number",
+			snap:     volume.SnapshotId{Type: volume.SnapshotTypeS3, Remote: "remote-1", SourceName: "source-vol", VolumeNumber: 0, SnapshotName: "snap-1"},
+			expected: "S3://remote-1/source-vol/snap-1",
+		},
+		{
+			name:     "non-zero-volume-number",
+			snap:     volume.SnapshotId{Type: volume.SnapshotTypeS3, Remote: "remote-1", SourceName: "source-vol", VolumeNumber: 2, SnapshotName: "snap-1"},
+			expected: "S3://remote-1/source-vol/2/snap-1",
+		},
 	}
 
 	t.Parallel()
@@ -404,6 +457,8 @@ func TestSnapshotIdRoundTrip(t *testing.T) {
 		{Type: volume.SnapshotTypeS3, Remote: "remote-1", SourceName: "source-vol", SnapshotName: "snap-1"},
 		{Type: volume.SnapshotTypeLinstor, Remote: "remote-2", SourceName: "source-vol", SnapshotName: "snap-2"},
 		{Type: volume.SnapshotTypeInCluster, SourceName: "source-vol", SnapshotName: "snap-3"},
+		{Type: volume.SnapshotTypeS3, Remote: "remote-1", SourceName: "source-vol", VolumeNumber: 2, SnapshotName: "snap-1"},
+		{Type: volume.SnapshotTypeInCluster, SourceName: "source-vol", VolumeNumber: 7, SnapshotName: "snap-3"},
 	}
 
 	t.Parallel()
