@@ -103,14 +103,20 @@ type SnapshotId struct {
 	Type         SnapshotType
 	Remote       string
 	SourceName   string
+	VolumeNumber int
 	SnapshotName string
 }
 
-func (s *SnapshotId) String() string {
+// Source returns the volume the snapshot was taken from.
+func (s SnapshotId) Source() ID {
+	return ID{ResourceName: s.SourceName, VolumeNumber: s.VolumeNumber}
+}
+
+func (s SnapshotId) String() string {
 	return (&url.URL{
 		Scheme: s.Type.String(),
 		Host:   s.Remote,
-		Path:   fmt.Sprintf("/%s/%s", s.SourceName, s.SnapshotName),
+		Path:   fmt.Sprintf("/%s/%s", s.Source().String(), s.SnapshotName),
 	}).String()
 }
 
@@ -134,15 +140,35 @@ func ParseSnapshotId(id string) (*SnapshotId, error) {
 	}
 
 	parts := strings.Split(u.Path, "/")
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("expected SnapshotId to contain two path components, got '%s' instead", u.Path)
+
+	var (
+		source   ID
+		snapName string
+	)
+
+	switch len(parts) {
+	case 3:
+		// "/<source>/<snapshot>": the volume number falls back to 0.
+		source = ID{ResourceName: parts[1]}
+		snapName = parts[2]
+	case 4:
+		// "/<source>/<volume number>/<snapshot>".
+		source, err = ParseVolumeId(parts[1] + "/" + parts[2])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse snapshot source volume: %w", err)
+		}
+
+		snapName = parts[3]
+	default:
+		return nil, fmt.Errorf("expected SnapshotId to contain a source and snapshot name, got '%s' instead", u.Path)
 	}
 
 	return &SnapshotId{
 		Type:         ty,
 		Remote:       u.Host,
-		SourceName:   parts[1],
-		SnapshotName: parts[2],
+		SourceName:   source.ResourceName,
+		VolumeNumber: source.VolumeNumber,
+		SnapshotName: snapName,
 	}, nil
 }
 

@@ -1086,7 +1086,7 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 	for i, snap := range snapshots {
 		entries[i] = &csi.ListSnapshotsResponse_Entry{Snapshot: &csi.Snapshot{
 			SnapshotId:     snap.String(),
-			SourceVolumeId: snap.SourceName,
+			SourceVolumeId: snap.Source().String(),
 			CreationTime:   timestamppb.New(snap.CreationTime),
 			SizeBytes:      snap.SizeBytes,
 			ReadyToUse:     snap.ReadyToUse,
@@ -1400,7 +1400,7 @@ func AggregateGroupSnapshot(id string, snapshots ...*volume.Snapshot) *csi.Volum
 
 		csiSnapshots = append(csiSnapshots, &csi.Snapshot{
 			SnapshotId:     snap.String(),
-			SourceVolumeId: snap.SourceName,
+			SourceVolumeId: snap.Source().String(),
 			CreationTime:   timestamppb.New(snap.CreationTime),
 			ReadyToUse:     snap.ReadyToUse,
 			SizeBytes:      snap.SizeBytes,
@@ -1684,6 +1684,7 @@ func (d *Driver) maybeDeleteLocalSnapshot(ctx context.Context, snap *volume.Snap
 		Type:         volume.SnapshotTypeInCluster,
 		SnapshotName: snap.SnapshotName,
 		SourceName:   snap.SourceName,
+		VolumeNumber: snap.VolumeNumber,
 	})
 }
 
