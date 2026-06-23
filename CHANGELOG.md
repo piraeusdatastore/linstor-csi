@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deletion of incremental S3 backups no longer fails permanently when a backup
   is still the base of a newer increment. The delete is deferred and retried so
   the chain drains newest-first instead of leaking backups forever.
+- Deletion of diskless resource on detach now always preserves the tiebreaker.
 
 ## [1.11.2] - 2026-05-12
 
