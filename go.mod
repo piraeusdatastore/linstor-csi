@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/LINBIT/golinstor v0.61.1
+	github.com/LINBIT/golinstor v0.63.0
 	github.com/container-storage-interface/spec v1.12.0
 	github.com/coreos/go-systemd/v22 v22.7.0
 	github.com/kubernetes-csi/external-snapshotter/v8 v8.6.0

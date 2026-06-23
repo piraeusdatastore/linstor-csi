@@ -129,17 +129,24 @@ func (_m *ResourceProvider) Deactivate(ctx context.Context, resName string, node
 	return r0
 }
 
-// Delete provides a mock function with given fields: ctx, resName, nodeName
-func (_m *ResourceProvider) Delete(ctx context.Context, resName string, nodeName string) error {
-	ret := _m.Called(ctx, resName, nodeName)
+// Delete provides a mock function with given fields: ctx, resName, nodeName, opts
+func (_m *ResourceProvider) Delete(ctx context.Context, resName string, nodeName string, opts ...*client.ResourceDeleteOpts) error {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, resName, nodeName)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Delete")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
-		r0 = rf(ctx, resName, nodeName)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, ...*client.ResourceDeleteOpts) error); ok {
+		r0 = rf(ctx, resName, nodeName, opts...)
 	} else {
 		r0 = ret.Error(0)
 	}

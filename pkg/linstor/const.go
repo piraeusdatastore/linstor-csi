@@ -37,10 +37,6 @@ const (
 	// fully provisioned by this plugin.
 	PropertyProvisioningCompletedBy = lc.NamespcAuxiliary + "/csi-provisioning-completed-by"
 
-	// PropertyCreatedFor is the Aux props key in linstor used to identify why a specific object (for example, a
-	// resource) exists.
-	PropertyCreatedFor = lc.NamespcAuxiliary + "/csi-created-for"
-
 	// PropertyAllowTwoPrimaries is DRBD option to allow second primary. Mainly used for live-migration.
 	PropertyAllowTwoPrimaries = lc.NamespcDrbdNetOptions + "/allow-two-primaries"
 

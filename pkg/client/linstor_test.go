@@ -34,7 +34,6 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/client/mocks"
-	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
@@ -154,8 +153,6 @@ const (
 )
 
 func TestLinstor_Attach(t *testing.T) {
-	ResourceModifyReadWriteWithTemporaryAttach := lapi.GenericPropsModify{OverrideProps: map[string]string{linstor.PropertyCreatedFor: linstor.CreatedForTemporaryDisklessAttach}}
-
 	fromJson := func(s string) ([]lapi.Resource, error) {
 		var result []lapi.Resource
 
@@ -191,7 +188,6 @@ func TestLinstor_Attach(t *testing.T) {
 			{Method: "GetAll", Arguments: mock.Arguments{mock.Anything, ExampleResourceID}, ReturnArguments: mock.Arguments{rv, rvErr}},
 			{Method: "Get", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3"}, ReturnArguments: mock.Arguments{lapi.Resource{}, nil}},
 			{Method: "MakeAvailable", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", lapi.ResourceMakeAvailable{Diskful: false}}, ReturnArguments: mock.Arguments{nil}},
-			{Method: "ModifyVolume", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", 0, ResourceModifyReadWriteWithTemporaryAttach}, ReturnArguments: mock.Arguments{nil}},
 			{Method: "GetVolume", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", 0}, ReturnArguments: mock.Arguments{lapi.Volume{DevicePath: "/dev/vol1"}, nil}},
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
@@ -211,7 +207,6 @@ func TestLinstor_Attach(t *testing.T) {
 			{Method: "Get", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3"}, ReturnArguments: mock.Arguments{lapi.Resource{}, nil}},
 			{Method: "MakeAvailable", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", lapi.ResourceMakeAvailable{Diskful: false}}, ReturnArguments: mock.Arguments{lapi.NotFoundError}},
 			{Method: "Create", Arguments: mock.Arguments{mock.Anything, lapi.ResourceCreate{Resource: lapi.Resource{Name: ExampleResourceID, NodeName: "node-3", Flags: []string{lapiconsts.FlagDrbdDiskless}}}}, ReturnArguments: mock.Arguments{nil}},
-			{Method: "ModifyVolume", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", 0, ResourceModifyReadWriteWithTemporaryAttach}, ReturnArguments: mock.Arguments{nil}},
 			{Method: "GetVolume", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", 0}, ReturnArguments: mock.Arguments{lapi.Volume{DevicePath: "/dev/vol1"}, nil}},
 		}
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}

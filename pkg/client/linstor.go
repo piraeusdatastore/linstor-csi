@@ -531,7 +531,7 @@ func (s *Linstor) Delete(ctx context.Context, id volume.ID) error {
 	})
 
 	for _, res := range resources {
-		err := s.client.Resources.Delete(ctx, id.ResourceName, res.NodeName)
+		err := s.client.Resources.Delete(ctx, id.ResourceName, res.NodeName, &lapi.ResourceDeleteOpts{KeepTiebreaker: false})
 		if err != nil {
 			// If two deletions run in parallel, one could get a 404 message, which we treat as "everything finished"
 			return nil404(err)
@@ -678,8 +678,6 @@ func (s *Linstor) Attach(ctx context.Context, id volume.ID, node string, rwxBloc
 		}
 	}
 
-	overrideProps := map[string]string{}
-
 	// If the resource is already on the node, don't worry about attaching, unless we also need to activate it.
 	if existingRes == nil || slices.Contains(existingRes.Flags, lapiconsts.FlagRscInactive) {
 		err := s.client.Resources.MakeAvailable(ctx, id.ResourceName, node, lapi.ResourceMakeAvailable{Diskful: false})
@@ -706,25 +704,12 @@ func (s *Linstor) Attach(ctx context.Context, id volume.ID, node string, rwxBloc
 			return "", err
 		}
 
-		if existingRes == nil {
-			overrideProps[linstor.PropertyCreatedFor] = linstor.CreatedForTemporaryDisklessAttach
-		}
-
 		newRsc, err := s.client.Resources.Get(ctx, id.ResourceName, node)
 		if err != nil {
 			return "", err
 		}
 
 		existingRes = &newRsc
-	}
-
-	if len(overrideProps) > 0 {
-		err = s.client.Resources.ModifyVolume(ctx, id.ResourceName, node, id.VolumeNumber, lapi.GenericPropsModify{
-			OverrideProps: overrideProps,
-		})
-		if err != nil {
-			return "", err
-		}
 	}
 
 	if slices.Contains(existingRes.Flags, lapiconsts.FlagDelete) {
@@ -804,20 +789,14 @@ func (s *Linstor) Detach(ctx context.Context, id volume.ID, node string) error {
 		return nil404(err)
 	}
 
-	createdFor, ok := vol.Props[linstor.PropertyCreatedFor]
-	if !ok || createdFor != linstor.CreatedForTemporaryDisklessAttach {
-		log.Info("resource not temporary (not created by Attach) not deleting")
-		return nil
-	}
-
 	if vol.ProviderKind != lapi.DISKLESS {
-		log.Info("temporary resource created by Attach is now diskfull, not deleting")
+		log.Info("resource not a diskless, not deleting")
 		return nil
 	}
 
 	log.Info("removing temporary resource")
 
-	return nil404(s.client.Resources.Delete(ctx, id.ResourceName, node))
+	return nil404(s.client.Resources.Delete(ctx, id.ResourceName, node, &lapi.ResourceDeleteOpts{KeepTiebreaker: true}))
 }
 
 // CapacityBytes returns the amount of free space in the storage pool specified by the params and topology.
