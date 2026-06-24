@@ -56,8 +56,9 @@ func ValidateRWXBlockAttachment(ctx context.Context, kubeClient dynamic.Interfac
 		return "", nil
 	}
 
-	// Get PV to find PVC reference
-	pv, err := kubeClient.Resource(PVGVR).Get(ctx, volumeID, metav1.GetOptions{})
+	// Get PV to find PVC reference. The CSI volume handle is not guaranteed to match the PV object name,
+	// so fall back to scanning PVs for a matching spec.csi.volumeHandle.
+	pv, err := findPersistentVolumeByVolumeID(ctx, kubeClient, volumeID)
 	if err != nil {
 		log.WithError(err).Warn("cannot validate RWX attachment: failed to get PV")
 		return "", nil
@@ -209,6 +210,29 @@ func ValidateRWXBlockAttachment(ctx context.Context, kubeClient dynamic.Interfac
 	}).Debug("RWX block attachment validated: all pods belong to the same VM (likely live migration)")
 
 	return vmName, nil
+}
+
+func findPersistentVolumeByVolumeID(ctx context.Context, kubeClient dynamic.Interface, volumeID string) (*unstructured.Unstructured, error) {
+	pv, err := kubeClient.Resource(PVGVR).Get(ctx, volumeID, metav1.GetOptions{})
+	if err == nil {
+		if volumeHandle, found, nestedErr := unstructured.NestedString(pv.Object, "spec", "csi", "volumeHandle"); nestedErr == nil && found && volumeHandle == volumeID {
+			return pv, nil
+		}
+	}
+
+	pvList, err := kubeClient.Resource(PVGVR).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range pvList.Items {
+		volumeHandle, found, nestedErr := unstructured.NestedString(pvList.Items[i].Object, "spec", "csi", "volumeHandle")
+	if volumeHandle == volumeID {
+	     return &pvList.Items[i], nil
+	}
+	}
+
+	return nil, fmt.Errorf("persistentvolume with volumeHandle %q not found", volumeID)
 }
 
 // GetVMNameFromPod extracts the VM name from a pod, handling both regular virt-launcher pods
