@@ -1,5 +1,6 @@
 [Unit]
 Description=Ensures the expected NFS Units are managed by DRBD Reactor
+FailureAction=exit
 
 [Service]
 Type=simple
