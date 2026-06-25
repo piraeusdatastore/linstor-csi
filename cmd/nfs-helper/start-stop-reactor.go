@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/utils/env"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/utils"
 )
@@ -40,12 +41,17 @@ func startStopReactor(ctx context.Context, _ []string) error {
 		options.FieldSelector = fields.OneTermEqualSelector("metadata.name", os.Getenv("NODE_NAME")).String()
 	})
 
+	tolerateUnschedulable, err := env.GetBool("LINSTOR_CSI_TOLERATE_UNSCHEDULABLE", false)
+	if err != nil {
+		return fmt.Errorf("failed to parse LINSTOR_CSI_TOLERATE_UNSCHEDULABLE: %w", err)
+	}
+
 	_, err = nodeInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			startOrStopReactor(ctx, obj)
+			startOrStopReactor(ctx, obj, tolerateUnschedulable)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			startOrStopReactor(ctx, newObj)
+			startOrStopReactor(ctx, newObj, tolerateUnschedulable)
 		},
 	})
 	if err != nil {
@@ -84,14 +90,14 @@ func startStopReactor(ctx context.Context, _ []string) error {
 	return eg.Wait()
 }
 
-func startOrStopReactor(ctx context.Context, node any) {
+func startOrStopReactor(ctx context.Context, node any, tolerateUnschedulable bool) {
 	n, ok := node.(*corev1.Node)
 	if !ok {
 		log.Printf("node %v is not a Node\n", node)
 		return
 	}
 
-	if n.Spec.Unschedulable {
+	if !tolerateUnschedulable && n.Spec.Unschedulable {
 		if err := exec.CommandContext(ctx, "systemctl", "stop", "drbd-reactor.service").Run(); err != nil {
 			log.Printf("failed to stop drbd-reactor: %s\n", err)
 		}

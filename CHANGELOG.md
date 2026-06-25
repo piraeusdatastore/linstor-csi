@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `snap.linstor.csi.linbit.com/full-snapshot-after` snapshot class parameters to
   bound the length / age of incremental S3 backup chains, forcing a fresh full
   backup so that older backups become reclaimable.
+- Add option to keep running NFS on unschedulable nodes.
 
 ### Fixed
 
