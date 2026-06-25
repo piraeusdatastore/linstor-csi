@@ -645,20 +645,10 @@ func (s *Linstor) Attach(ctx context.Context, id volume.ID, node string, rwxBloc
 		return "", fmt.Errorf("failed to attach resource with no deployed replica")
 	}
 
-	var existingRes *lapi.Resource
-
-	disklessFlag := ""
 	otherResInUse := 0
 
 	for i := range ress {
-		flag := getDisklessFlag(&ress[i])
-		if flag != "" && disklessFlag == "" {
-			disklessFlag = flag
-		}
-
-		if ress[i].NodeName == node {
-			existingRes = &ress[i]
-		} else if ress[i].State != nil && ress[i].State.InUse != nil && *ress[i].State.InUse {
+		if ress[i].NodeName != node && ress[i].State != nil && ress[i].State.InUse != nil && *ress[i].State.InUse {
 			otherResInUse++
 		}
 	}
@@ -678,46 +668,9 @@ func (s *Linstor) Attach(ctx context.Context, id volume.ID, node string, rwxBloc
 		}
 	}
 
-	// If the resource is already on the node, don't worry about attaching, unless we also need to activate it.
-	if existingRes == nil || slices.Contains(existingRes.Flags, lapiconsts.FlagRscInactive) {
-		err := s.client.Resources.MakeAvailable(ctx, id.ResourceName, node, lapi.ResourceMakeAvailable{Diskful: false})
-
-		if errors.Is(err, lapi.NotFoundError) {
-			// Make-available honors replica-on-same and replicas-on-different. We do not, as the import parts of that
-			// are already covered in the allowed topology bits.
-			s.log.WithError(err).Info("fall back to manual diskless creation after make-available refused")
-
-			if disklessFlag == "" {
-				return "", fmt.Errorf("resource does not support diskless attachment")
-			}
-
-			rCreate := lapi.ResourceCreate{Resource: lapi.Resource{
-				Name:     id.ResourceName,
-				NodeName: node,
-				Flags:    []string{disklessFlag},
-			}}
-
-			err = s.client.Resources.Create(ctx, rCreate)
-		}
-
-		if err != nil {
-			return "", err
-		}
-
-		newRsc, err := s.client.Resources.Get(ctx, id.ResourceName, node)
-		if err != nil {
-			return "", err
-		}
-
-		existingRes = &newRsc
-	}
-
-	if slices.Contains(existingRes.Flags, lapiconsts.FlagDelete) {
-		return "", &DeleteInProgressError{
-			Operation: "attach volume",
-			Kind:      "resource",
-			Name:      id.ResourceName,
-		}
+	err = s.client.Resources.MakeAvailable(ctx, id.ResourceName, node, lapi.ResourceMakeAvailable{Diskful: false})
+	if err != nil {
+		return "", err
 	}
 
 	vol, err := s.client.Resources.GetVolume(ctx, id.ResourceName, node, id.VolumeNumber)
