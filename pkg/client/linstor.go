@@ -1080,7 +1080,7 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume
 func (s *Linstor) backupChainExhausted(ctx context.Context, params *volume.SnapshotParameters, rscName string) (bool, error) {
 	backups, err := s.client.Backup.GetAll(ctx, params.RemoteName, rscName, "")
 	if err != nil {
-		if lapi.IsApiCallError(err, lapiconsts.FailInvldRemoteName) {
+		if errors.Is(err, lapi.ApiCallRcErr(lapiconsts.FailInvldRemoteName)) {
 			// No remote yet -> nothing to base an incremental on.
 			return false, nil
 		}
@@ -1273,7 +1273,7 @@ func (s *Linstor) SnapDelete(ctx context.Context, snap *volume.SnapshotId) error
 		// incremental is "based on" an earlier backup, and LINSTOR refuses to
 		// delete one another increment still depends on, so we need the full set.
 		backups, err := s.client.Backup.GetAll(ctx, snap.Remote, snap.SourceName, "")
-		if err != nil && !lapi.IsApiCallError(err, lapiconsts.FailInvldRemoteName) {
+		if err != nil && !errors.Is(err, lapi.ApiCallRcErr(lapiconsts.FailInvldRemoteName)) {
 			// Ignore errors caused by missing remotes: no remote -> no snapshots to delete.
 			return fmt.Errorf("failed to list backups for snapshot %s: %w", snap.String(), err)
 		}
@@ -1574,6 +1574,11 @@ func (s *Linstor) reconcileSnapshotVolumeDefinitions(ctx context.Context, snapsh
 		restoreConf := lapi.SnapshotRestore{ToResource: targetRD}
 
 		err := s.client.Resources.RestoreVolumeDefinitionSnapshot(ctx, snapshot.SourceName, snapshot.SnapshotName, restoreConf)
+		if errors.Is(err, lapi.ApiCallRcErr(lapiconsts.FailExistsVlmDfn)) {
+			// A concurrent restore already created them; nothing left to do.
+			return nil
+		}
+
 		if err != nil {
 			return fmt.Errorf("could not restore volume definitions: %w", err)
 		}
@@ -1635,6 +1640,11 @@ func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *volu
 	restoreConf := lapi.SnapshotRestore{ToResource: targetRD, Nodes: []string{selectedNode}}
 
 	err = s.client.Resources.RestoreSnapshot(ctx, snapshot.SourceName, snapshot.SnapshotName, restoreConf)
+	if errors.Is(err, lapi.ApiCallRcErr(lapiconsts.FailExistsRsc)) {
+		// A concurrent restore already created the resource; nothing left to do.
+		return nil
+	}
+
 	if err != nil {
 		return fmt.Errorf("could not restore resources: %w", err)
 	}
@@ -1661,19 +1671,18 @@ func (s *Linstor) reconcileResourceGroup(ctx context.Context, params *volume.Par
 	// does the RG already exist?
 	rg, err := s.client.ResourceGroups.Get(ctx, rgName)
 	if errors.Is(err, lapi.NotFoundError) {
-		// just create the minimal RG/VG, we sync all the props then anyways.
+		// just create the minimal RG, we sync all the props then anyways.
 		resourceGroup := lapi.ResourceGroup{
 			Name:         rgName,
 			Props:        make(map[string]string),
 			SelectFilter: lapi.AutoSelectFilter{},
 		}
-		volumeGroup := lapi.VolumeGroup{}
-		if err := s.client.ResourceGroups.Create(ctx, resourceGroup); err != nil {
+
+		// A concurrent CreateVolume may have created it first.
+		if err := s.client.ResourceGroups.Create(ctx, resourceGroup); err != nil && !errors.Is(err, lapi.ApiCallRcErr(lapiconsts.FailExistsRscGrp)) {
 			return nil, err
 		}
-		if err := s.client.ResourceGroups.CreateVolumeGroup(ctx, rgName, volumeGroup); err != nil {
-			return nil, err
-		}
+
 		rg, err = s.client.ResourceGroups.Get(ctx, rgName)
 		if err != nil {
 			return nil, err
@@ -1719,8 +1728,9 @@ func (s *Linstor) reconcileResourceDefinition(ctx context.Context, rdName, rgNam
 			},
 		}
 
+		// A concurrent CreateVolume may have created it first.
 		err = s.client.ResourceDefinitions.Create(ctx, rdCreate)
-		if err != nil {
+		if err != nil && !errors.Is(err, lapi.ApiCallRcErr(lapiconsts.FailExistsRscDfn)) {
 			return nil, err
 		}
 
@@ -1773,8 +1783,9 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 				},
 			}
 
+			// A concurrent CreateVolume may have created it first.
 			err = s.client.ResourceDefinitions.CreateVolumeDefinition(ctx, info.ResourceName, vdCreate)
-			if err != nil {
+			if err != nil && !errors.Is(err, lapi.ApiCallRcErr(lapiconsts.FailExistsVlmDfn)) {
 				return err
 			}
 
@@ -2851,7 +2862,7 @@ func (s *Linstor) deleteResourceDefinitionAndGroupIfUnused(ctx context.Context, 
 
 	err = s.client.ResourceGroups.Delete(ctx, rDef.ResourceGroupName)
 	if err != nil {
-		if lapi.IsApiCallError(err, lapiconsts.FailExistsRscDfn) {
+		if errors.Is(err, lapi.ApiCallRcErr(lapiconsts.FailExistsRscDfn)) {
 			return nil
 		}
 
