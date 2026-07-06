@@ -2,6 +2,7 @@ package autoplacetopology
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -135,7 +136,7 @@ func (s *Scheduler) Create(ctx context.Context, volId string, params *volume.Par
 
 		err := s.Resources.Autoplace(ctx, volId, req)
 		if err != nil {
-			if lapi.IsApiCallError(err, linstor.FailNotEnoughNodes) {
+			if errors.Is(err, lapi.ApiCallRcErr(linstor.FailNotEnoughNodes)) {
 				// We need a special return code when the requisite could not be fulfilled
 				return status.Errorf(codes.ResourceExhausted, "failed to enough replicas on requisite nodes: %v", err)
 			}

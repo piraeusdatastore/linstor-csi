@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Concurrent `CreateVolume` requests that share a resource group, resource
+  definition, or volume definition no longer fail spuriously with "already
+  exists" errors. The reconcilers now treat these as success, so parallel
+  provisioning converges instead of relying on the external-provisioner retry.
 - Deletion of incremental S3 backups no longer fails permanently when a backup
   is still the base of a newer increment. The delete is deferred and retried so
   the chain drains newest-first instead of leaking backups forever.
