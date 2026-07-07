@@ -1,0 +1,14 @@
+# Snapshot VM 1's whole consistency group at once. The selector matches the PVCs labelled
+# linstor.csi.linbit.com/consistency-group: fedora-vm-1 (the same label the driver uses for membership);
+# because they share one LINSTOR resource, this becomes a SINGLE crash-consistent LINSTOR snapshot, surfaced
+# as one VolumeSnapshot per member. (Snapshot VM 2 by pointing the selector at fedora-vm-2.)
+apiVersion: groupsnapshot.storage.k8s.io/v1beta1
+kind: VolumeGroupSnapshot
+metadata:
+  name: fedora-vm-1-snapshot
+spec:
+  volumeGroupSnapshotClassName: linstor-cg-snapshots
+  source:
+    selector:
+      matchLabels:
+        linstor.csi.linbit.com/consistency-group: fedora-vm-1

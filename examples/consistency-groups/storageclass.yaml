@@ -1,0 +1,26 @@
+# StorageClass shared by every disk of both example VMs. All members of a consistency group MUST use the same
+# StorageClass (one resource group, one placement policy), so the root disk, the data disk, and both VMs all
+# reference this one class.
+#
+# cdi.kubevirt.io/clone-strategy: copy forces CDI to clone the golden image with a host-assisted copy instead of
+# a snapshot/CSI clone. That is what lets a cloned disk join a consistency group: a host-assisted copy provisions
+# the target as a FRESH volume (no VolumeContentSource, which the driver rejects on a group member) and streams
+# the golden data in afterwards. CDI feeds this annotation into the StorageClass's auto-created StorageProfile;
+# if it does not take effect, set it on the profile directly:
+#   kubectl patch storageprofile linstor-cg --type merge -p '{"spec":{"cloneStrategy":"copy"}}'
+#
+# No storagePool is pinned here, so LINSTOR picks one from the resource group's configuration; add
+# linstor.csi.linbit.com/storagePool if you need to target a specific pool. allow-two-primaries is intentionally
+# NOT set: the driver enables it on demand during KubeVirt live migration (see pkg/client/linstor.go), only
+# while the RWX-block volume is briefly open on two nodes.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: linstor-cg
+  annotations:
+    cdi.kubevirt.io/clone-strategy: copy
+provisioner: linstor.csi.linbit.com
+allowVolumeExpansion: true
+parameters:
+  linstor.csi.linbit.com/placementCount: "2"
+  linstor.csi.linbit.com/resourceGroup: linstor-cg

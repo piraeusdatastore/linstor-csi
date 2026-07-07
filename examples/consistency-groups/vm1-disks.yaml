@@ -1,0 +1,45 @@
+# The two disks of VM 1, both members of the consistency group "fedora-vm-1" (same
+# linstor.csi.linbit.com/consistency-group label) -> they become volume numbers of one shared LINSTOR resource,
+# so a VolumeGroupSnapshot across them is crash-consistent.
+#
+# The root disk is a CDI clone of the golden image. Because the StorageClass carries
+# cdi.kubevirt.io/clone-strategy: copy, CDI does a host-assisted copy: it provisions this PVC FRESH -- with no
+# VolumeContentSource -- and copies the golden data in afterwards. That is what lets a cloned disk join a
+# consistency group; a snapshot/CSI clone would be rejected. The data disk is blank.
+#
+# Block volumeMode + ReadWriteMany allows KubeVirt live migration (the driver turns on DRBD two-primaries on
+# demand for the duration of the migration). Use ReadWriteOnce if you never migrate.
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  name: fedora-vm-1-root
+  labels:
+    linstor.csi.linbit.com/consistency-group: fedora-vm-1
+spec:
+  source:
+    pvc:
+      name: fedora-golden
+      namespace: test
+  storage:
+    accessModes:
+      - ReadWriteMany
+    volumeMode: Block
+    storageClassName: linstor-cg
+    resources:
+      requests:
+        storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fedora-vm-1-data
+  labels:
+    linstor.csi.linbit.com/consistency-group: fedora-vm-1
+spec:
+  accessModes:
+    - ReadWriteMany
+  volumeMode: Block
+  storageClassName: linstor-cg
+  resources:
+    requests:
+      storage: 5Gi

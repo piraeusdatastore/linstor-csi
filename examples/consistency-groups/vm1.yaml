@@ -1,0 +1,60 @@
+# VM 1. Its two disks (vm1-disks.yaml) are the consistency-group volumes, so a group snapshot of them is a
+# crash-consistent snapshot of the whole VM. Log in on the serial console as user "fedora" with the password
+# "password":
+#   virtctl console fedora-vm-1
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: fedora-vm-1
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: fedora-vm-1
+    spec:
+      evictionStrategy: LiveMigrate
+      domain:
+        cpu:
+          cores: 2
+        devices:
+          disks:
+            - name: root
+              disk:
+                bus: virtio
+            - name: data
+              disk:
+                bus: virtio
+            # cloud-init drive that sets the login password (see the cloudinitdisk volume below). It is a small
+            # generated ISO, not a PVC, so it is intentionally not part of the consistency group.
+            - name: cloudinitdisk
+              disk:
+                bus: virtio
+          # Live migration (evictionStrategy: LiveMigrate, plus the driver's on-demand two-primaries) requires
+          # a migratable pod-network binding: masquerade. The default bridge binding cannot migrate.
+          interfaces:
+            - name: default
+              masquerade: {}
+        resources:
+          requests:
+            memory: 2Gi
+      networks:
+        - name: default
+          pod: {}
+      volumes:
+        - name: root
+          dataVolume:
+            name: fedora-vm-1-root
+        - name: data
+          persistentVolumeClaim:
+            claimName: fedora-vm-1-data
+        - name: cloudinitdisk
+          cloudInitNoCloud:
+            # Sets the password for the default "fedora" user. Change it before any real use -- and prefer a
+            # Secret referenced via userDataSecretRef over an inline password.
+            userData: |
+              #cloud-config
+              password: password
+              chpasswd:
+                expire: false
+              ssh_pwauth: true

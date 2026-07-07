@@ -1,0 +1,41 @@
+# The two disks of VM 2 -- a second, independent consistency group "fedora-vm-2". Its root disk clones the SAME
+# golden image (imported once, in golden-image.yaml), so a second VM costs no extra registry pull. Having two
+# independent groups lets you compare them: write different data to each, snapshot them separately, restore one
+# without touching the other.
+#
+# Same shape as vm1-disks.yaml: root is a host-assisted CDI clone of the golden (fresh PVC, so it can join the
+# group), data is blank; both carry the fedora-vm-2 group label.
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  name: fedora-vm-2-root
+  labels:
+    linstor.csi.linbit.com/consistency-group: fedora-vm-2
+spec:
+  source:
+    pvc:
+      name: fedora-golden
+      namespace: default # the namespace the golden was created in (same-namespace clone needs no extra RBAC)
+  storage:
+    accessModes:
+      - ReadWriteMany
+    volumeMode: Block
+    storageClassName: linstor-cg
+    resources:
+      requests:
+        storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fedora-vm-2-data
+  labels:
+    linstor.csi.linbit.com/consistency-group: fedora-vm-2
+spec:
+  accessModes:
+    - ReadWriteMany
+  volumeMode: Block
+  storageClassName: linstor-cg
+  resources:
+    requests:
+      storage: 5Gi

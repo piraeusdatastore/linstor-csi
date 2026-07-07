@@ -1,0 +1,24 @@
+# The CSI controller reads the linstor.csi.linbit.com/consistency-group label off each PVC, so its
+# ServiceAccount needs read access to PersistentVolumeClaims. Adjust the ServiceAccount name and namespace to
+# match your deployment (the piraeus-operator default is shown).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: linstor-csi-controller-consistency-groups
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: linstor-csi-controller-consistency-groups
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: linstor-csi-controller-consistency-groups
+subjects:
+  - kind: ServiceAccount
+    name: linstor-csi-controller
+    namespace: piraeus-datastore
