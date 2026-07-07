@@ -178,6 +178,8 @@ type Snapshot struct {
 	SizeBytes    int64
 	Failed       bool
 	ReadyToUse   bool
+	// PartOfConsistencyGroup marks a shared group snapshot, removable only via DeleteVolumeGroupSnapshot.
+	PartOfConsistencyGroup bool
 }
 
 // VolumeStats provides details about filesystem usage.
