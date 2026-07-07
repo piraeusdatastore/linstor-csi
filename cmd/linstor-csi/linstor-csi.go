@@ -62,6 +62,7 @@ func main() {
 		namespace                 = flag.String("nfs-service-namespace", "", "The namespace the NFS service is running in.")
 		reactorConfigMapName      = flag.String("nfs-reactor-config-map-name", "linstor-csi-nfs-reactor-config", "Name of the config map used to store promoter configuration")
 		disableRWXBlockValidation = flag.Bool("disable-rwx-block-validation", false, "Disable KubeVirt VM ownership validation for RWX block volumes.")
+		enableConsistencyGroups   = flag.Bool("enable-consistency-groups", false, "Place PVCs sharing a linstor.csi.linbit.com/consistency-group label as separate volumes of one LINSTOR resource (requires running in Kubernetes).")
 	)
 
 	flag.Var(&volume.DefaultRemoteAccessPolicy, "default-remote-access-policy", "")
@@ -176,6 +177,14 @@ func main() {
 
 	if *disableRWXBlockValidation {
 		opts = append(opts, driver.DisableRWXBlockValidation())
+	}
+
+	if *enableConsistencyGroups {
+		if kubeErr != nil {
+			log.Fatalf("consistency-group support requires running in Kubernetes: %s", kubeErr)
+		}
+
+		opts = append(opts, driver.ConfigureConsistencyGroups())
 	}
 
 	drv, err := driver.NewDriver(linstorClient, opts...)

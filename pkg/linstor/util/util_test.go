@@ -19,6 +19,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 package util
 
 import (
+	"slices"
 	"testing"
 
 	apiconst "github.com/LINBIT/golinstor"
@@ -168,6 +169,39 @@ func TestConsistencyGroupVolumes(t *testing.T) {
 	}
 
 	assert.Equal(t, want, got)
+}
+
+func TestConsistencyGroupVolumeFor(t *testing.T) {
+	vol := func(n int32) *int32 { return &n }
+
+	vds := []lapi.VolumeDefinition{
+		{
+			VolumeNumber: vol(0),
+			Props:        map[string]string{linstor.PropertyCSIVolumeName: "pvc-a"},
+		},
+		{
+			// Missing the CSI volume name -> not a consistency-group member.
+			VolumeNumber: vol(1),
+			Props:        map[string]string{"other": "prop"},
+		},
+		{
+			// No volume number -> skipped.
+			Props: map[string]string{linstor.PropertyCSIVolumeName: "pvc-b"},
+		},
+		{
+			VolumeNumber: vol(7),
+			Props:        map[string]string{linstor.PropertyCSIVolumeName: "pvc-c"},
+		},
+		{
+			// Repeat of pvc-c
+			VolumeNumber: vol(8),
+			Props:        map[string]string{linstor.PropertyCSIVolumeName: "pvc-c"},
+		},
+	}
+
+	assert.ElementsMatch(t, []int{0}, slices.Collect(ConsistencyGroupVolumeNumberFor("pvc-a", vds...)))
+	assert.ElementsMatch(t, []int{}, slices.Collect(ConsistencyGroupVolumeNumberFor("pvc-b", vds...)))
+	assert.ElementsMatch(t, []int{7, 8}, slices.Collect(ConsistencyGroupVolumeNumberFor("pvc-c", vds...)))
 }
 
 func TestConsistencyGroupVolumesIterContract(t *testing.T) {

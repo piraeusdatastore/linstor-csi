@@ -126,3 +126,16 @@ func ConsistencyGroupVolumes(vds ...lapi.VolumeDefinition) iter.Seq2[int, string
 		}
 	}
 }
+
+// ConsistencyGroupVolumeNumberFor yields all the volume numbers matching the volume name in the consistency group volume.
+func ConsistencyGroupVolumeNumberFor(volumeName string, vds ...lapi.VolumeDefinition) iter.Seq[int] {
+	return func(yield func(int) bool) {
+		for i := range vds {
+			if vds[i].VolumeNumber != nil && vds[i].Props[linstor.PropertyCSIVolumeName] == volumeName {
+				if !yield(int(*vds[i].VolumeNumber)) {
+					return
+				}
+			}
+		}
+	}
+}

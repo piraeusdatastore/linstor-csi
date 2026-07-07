@@ -503,6 +503,154 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 	return nil
 }
 
+// fileSystemProps returns the volume-definition properties for a volume's filesystem type and mkfs options;
+// empty fsType means a block volume (no filesystem).
+func fileSystemProps(fsType, mkfsOpts string) map[string]string {
+	if fsType == "" {
+		return nil
+	}
+
+	return map[string]string{
+		lapiconsts.NamespcFilesystem + "/" + lapiconsts.KeyFsType:           fsType,
+		lapiconsts.NamespcFilesystem + "/" + lapiconsts.KeyFsMkfsparameters: mkfsOpts,
+	}
+}
+
+// CreateConsistencyGroupVolume places a CSI volume as one volume number of the shared LINSTOR resource,
+// reserving (or, on retry, reusing) a number tagged with csiName so the call is idempotent.
+func (s *Linstor) CreateConsistencyGroupVolume(ctx context.Context, vol *volume.Info, csiName string, requiredBytes int64, params *volume.Parameters, topologies *csi.TopologyRequirement) error {
+	logger := s.log.WithFields(logrus.Fields{"resource": vol.ResourceName, "csiName": csiName})
+
+	logger.Debug("reconcile resource group from storage class")
+
+	rGroup, err := s.reconcileResourceGroup(ctx, params)
+	if err != nil {
+		return err
+	}
+
+	logger.Debug("reconcile shared resource definition")
+
+	_, err = s.reconcileResourceDefinition(ctx, vol.ResourceName, rGroup.Name)
+	if err != nil {
+		return err
+	}
+
+	logger.Debug("reserve volume number for member")
+
+	volNr, err := s.reserveVolumeNumber(ctx, vol.ResourceName, csiName, uint64(requiredBytes/KiB), vol.FsType, params.FSOpts)
+	if err != nil {
+		return err
+	}
+
+	// Address the reserved member for the rest of the create flow and the response.
+	vol.VolumeNumber = volNr
+	vol.DeviceBytes = map[int]int64{volNr: requiredBytes}
+
+	logger.WithField("volumeNumber", volNr).Debug("reconcile resource placement")
+
+	err = s.reconcileResourcePlacement(ctx, vol, params, topologies)
+	if err != nil {
+		return err
+	}
+
+	logger.Debug("reconcile shared resource definition properties")
+
+	err = s.client.ResourceDefinitions.Modify(ctx, vol.ResourceName, lapi.GenericPropsModify{OverrideProps: vol.Properties})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// RestoreConsistencyGroupVolume restores a member from a group snapshot. vol.VolumeNumber must be the number
+// from the member's snapshot ID. LINSTOR restore is whole-resource.
+func (s *Linstor) RestoreConsistencyGroupVolume(ctx context.Context, snap *volume.Snapshot, vol *volume.Info, csiName string, params *volume.Parameters, snapParams *volume.SnapshotParameters, topologies *csi.TopologyRequirement) error {
+	logger := s.log.WithFields(logrus.Fields{"resource": vol.ResourceName, "csiName": csiName, "volumeNumber": vol.VolumeNumber})
+
+	// A 404 means the shared resource has not been restored yet, so nothing is reserved.
+	vds, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, vol.ResourceName)
+	if nil404(err) != nil {
+		return err
+	}
+
+	reserved := slices.Collect(util.ConsistencyGroupVolumeNumberFor(csiName, vds...))
+
+	if slices.Contains(reserved, vol.VolumeNumber) {
+		logger.Debug("member already restored and claimed, nothing to do")
+		return nil
+	}
+
+	logger.Debug("restoring shared resource from group snapshot")
+
+	// Restores the whole shared resource (only the first member triggers it; reconcilers are idempotent).
+	if err := s.VolFromSnap(ctx, snap, vol, params, snapParams, topologies); err != nil {
+		return err
+	}
+
+	logger.Debug("claiming restored volume number for member")
+
+	return s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, vol.ResourceName, vol.VolumeNumber, lapi.VolumeDefinitionModify{
+		GenericPropsModify: lapi.GenericPropsModify{
+			OverrideProps: map[string]string{linstor.PropertyCSIVolumeName: csiName},
+		},
+	})
+}
+
+// reserveVolumeNumber returns the volume number of member csiName on the shared resource, allocating one (a
+// tagged volume definition) if absent. If a race left several tagged definitions, the lowest is kept and the
+// rest removed — "keep lowest" is the same decision for every racer, so concurrent dedup converges.
+func (s *Linstor) reserveVolumeNumber(ctx context.Context, resource, csiName string, sizeKib uint64, fsType, mkfsOpts string) (int, error) {
+	vds, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, resource)
+	if err != nil {
+		return -1, err
+	}
+
+	reserved := slices.Collect(util.ConsistencyGroupVolumeNumberFor(csiName, vds...))
+
+	if len(reserved) == 0 {
+		props := map[string]string{linstor.PropertyCSIVolumeName: csiName}
+		maps.Copy(props, fileSystemProps(fsType, mkfsOpts))
+
+		err = s.client.ResourceDefinitions.CreateVolumeDefinition(ctx, resource, lapi.VolumeDefinitionCreate{
+			VolumeDefinition: lapi.VolumeDefinition{
+				SizeKib: sizeKib,
+				Props:   props,
+			},
+		})
+		if err != nil {
+			return -1, err
+		}
+
+		vds, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, resource)
+		if err != nil {
+			return -1, err
+		}
+
+		reserved = slices.Collect(util.ConsistencyGroupVolumeNumberFor(csiName, vds...))
+
+		if len(reserved) == 0 {
+			return -1, fmt.Errorf("volume definition for %q not found after creation on resource %q", csiName, resource)
+		}
+	}
+
+	slices.Sort(reserved)
+
+	for _, extra := range reserved[1:] {
+		s.log.WithFields(logrus.Fields{
+			"resource":     resource,
+			"csiName":      csiName,
+			"volumeNumber": extra,
+		}).Warn("removing duplicate consistency-group volume definition")
+
+		if err := nil404(s.client.ResourceDefinitions.DeleteVolumeDefinition(ctx, resource, extra)); err != nil {
+			return -1, err
+		}
+	}
+
+	return reserved[0], nil
+}
+
 // Delete removes a persistent volume from LINSTOR.
 //
 // In order to support Snapshots living longer than their volumes, we have to keep the resource definition around while
@@ -1833,15 +1981,7 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 
 		vDef, err := s.client.ResourceDefinitions.GetVolumeDefinition(ctx, info.ResourceName, vn)
 		if errors.Is(err, lapi.NotFoundError) {
-			var props map[string]string
-
-			// "" indicates this is a block volume, so no FS should get created
-			if info.FsType != "" {
-				props = map[string]string{
-					lapiconsts.NamespcFilesystem + "/" + lapiconsts.KeyFsType:           info.FsType,
-					lapiconsts.NamespcFilesystem + "/" + lapiconsts.KeyFsMkfsparameters: mkfsOpts,
-				}
-			}
+			props := fileSystemProps(info.FsType, mkfsOpts)
 
 			vdCreate := lapi.VolumeDefinitionCreate{
 				VolumeDefinition: lapi.VolumeDefinition{
