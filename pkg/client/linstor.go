@@ -46,6 +46,7 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/mount-utils"
 	utilexec "k8s.io/utils/exec"
 	"k8s.io/utils/ptr"
@@ -955,14 +956,19 @@ func (s *Linstor) CompatibleSnapshotId(name string) string {
 
 // SnapCreate calls LINSTOR to create a new snapshot name "id" or backup of the volume "sourceVolId".
 func (s *Linstor) SnapCreate(ctx context.Context, id string, params *volume.SnapshotParameters, sourceVolIds ...volume.ID) ([]*volume.Snapshot, error) {
-	var lsnaps []lapi.Snapshot
+	// We only need to take a snapshot for every resource
+	sourceResources := sets.New[string]()
+	for _, id := range sourceVolIds {
+		sourceResources.Insert(id.ResourceName)
+	}
 
+	var lsnaps []lapi.Snapshot
 	var err error
 
 	if params.Type == volume.SnapshotTypeInCluster {
-		lsnaps, err = s.createInClusterSnapshots(ctx, id, sourceVolIds...)
+		lsnaps, err = s.createInClusterSnapshots(ctx, id, sourceResources.UnsortedList()...)
 	} else {
-		lsnaps, err = s.reconcileBackup(ctx, id, params, sourceVolIds...)
+		lsnaps, err = s.reconcileBackup(ctx, id, params, sourceResources.UnsortedList()...)
 	}
 
 	if err != nil {
@@ -973,20 +979,13 @@ func (s *Linstor) SnapCreate(ctx context.Context, id string, params *volume.Snap
 	errs := make([]error, 0, len(lsnaps))
 
 	for i := range lsnaps {
-		s, err := linstorSnapshotToCSI(&lsnaps[i])
+		csiSnaps, err := linstorSnapshotToCSISnapshots(&lsnaps[i])
 
-		if s != nil {
-			s.Type = params.Type
-
-			for _, sourceVolId := range sourceVolIds {
-				if sourceVolId.ResourceName == s.SourceName {
-					s.VolumeNumber = sourceVolId.VolumeNumber
-					break
-				}
-			}
+		for i := range csiSnaps {
+			csiSnaps[i].Type = params.Type
 		}
 
-		result = append(result, s)
+		result = append(result, csiSnaps...)
 		errs = append(errs, err)
 	}
 
@@ -997,16 +996,17 @@ func (s *Linstor) SnapCreate(ctx context.Context, id string, params *volume.Snap
 	return result, nil
 }
 
-func (s *Linstor) createInClusterSnapshots(ctx context.Context, id string, sourceVolIds ...volume.ID) ([]lapi.Snapshot, error) {
+func (s *Linstor) createInClusterSnapshots(ctx context.Context, id string, sourceResourceNames ...string) ([]lapi.Snapshot, error) {
 	log := s.log.WithField("id", id)
 
 	log.Debug("Creating in-cluster snapshot")
 
-	snapConfigs := make([]lapi.Snapshot, 0, len(sourceVolIds))
-	for _, sourceVolId := range sourceVolIds {
+	snapConfigs := make([]lapi.Snapshot, 0, len(sourceResourceNames))
+
+	for _, sourceResource := range sourceResourceNames {
 		snapConfigs = append(snapConfigs, lapi.Snapshot{
 			Name:         id,
-			ResourceName: sourceVolId.ResourceName,
+			ResourceName: sourceResource,
 		})
 	}
 
@@ -1030,14 +1030,14 @@ func (s *Linstor) createInClusterSnapshots(ctx context.Context, id string, sourc
 }
 
 // reconcileBackup ensure a backup exists at the given remote
-func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume.SnapshotParameters, sourceVolIds ...volume.ID) ([]lapi.Snapshot, error) {
+func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume.SnapshotParameters, sourceResourceNames ...string) ([]lapi.Snapshot, error) {
 	log := s.log.WithField("id", id)
 
-	if len(sourceVolIds) != 1 {
+	if len(sourceResourceNames) != 1 {
 		return nil, fmt.Errorf("group snapshots not supported for snapshots of type '%s'", params.Type)
 	}
 
-	sourceVolId := sourceVolIds[0]
+	sourceResouce := sourceResourceNames[0]
 
 	log.Debug("reconcile remote")
 
@@ -1049,7 +1049,7 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume
 	switch params.Type {
 	case volume.SnapshotTypeS3:
 		info, err := s.client.Backup.Info(ctx, params.RemoteName, lapi.BackupInfoRequest{
-			SrcRscName:  sourceVolId.ResourceName,
+			SrcRscName:  sourceResouce,
 			SrcSnapName: id,
 		})
 		if nil404(err) != nil {
@@ -1062,20 +1062,20 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume
 			// Bound the chain length/age when requested: forcing a fresh full
 			// starts a new chain so older backups eventually become reclaimable.
 			if incremental && (params.MaxIncrements > 0 || params.FullSnapshotAfter > 0) {
-				forceFull, err := s.backupChainExhausted(ctx, params, sourceVolId.ResourceName)
+				forceFull, err := s.backupChainExhausted(ctx, params, sourceResouce)
 				if err != nil {
 					return nil, err
 				}
 
 				if forceFull {
-					log.WithField("resource", sourceVolId).Info("incremental backup chain limit reached, forcing a full backup")
+					log.WithField("resource", sourceResouce).Info("incremental backup chain limit reached, forcing a full backup")
 
 					incremental = false
 				}
 			}
 
 			_, err := s.client.Backup.Create(ctx, params.RemoteName, lapi.BackupCreate{
-				RscName:     sourceVolId.ResourceName,
+				RscName:     sourceResouce,
 				SnapName:    id,
 				Incremental: incremental,
 			})
@@ -1084,7 +1084,7 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume
 			}
 		}
 
-		snap, err := s.client.Resources.GetSnapshot(ctx, sourceVolId.ResourceName, id)
+		snap, err := s.client.Resources.GetSnapshot(ctx, sourceResouce, id)
 		if err != nil {
 			return nil, fmt.Errorf("error fetching snapshot for backup: %w", err)
 		}
@@ -1102,8 +1102,8 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume
 			yes := true
 
 			snapName, err = s.client.Backup.Ship(ctx, params.RemoteName, lapi.BackupShipRequest{
-				SrcRscName:   sourceVolId.ResourceName,
-				DstRscName:   "backup-" + sourceVolId.ResourceName,
+				SrcRscName:   sourceResouce,
+				DstRscName:   "backup-" + sourceResouce,
 				DstStorPool:  params.LinstorTargetStoragePool,
 				DownloadOnly: &yes,
 			})
@@ -1117,7 +1117,7 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume
 			// snapshot name.
 			err = s.client.KeyValueStore.CreateOrModify(ctx, linstor.LinstorBackupKVName, lapi.GenericPropsModify{
 				OverrideProps: map[string]string{
-					id: fmt.Sprintf("%s/%s", sourceVolId, snapName),
+					id: fmt.Sprintf("%s/%s", sourceResouce, snapName),
 				},
 			})
 			if err != nil {
@@ -1127,7 +1127,7 @@ func (s *Linstor) reconcileBackup(ctx context.Context, id string, params *volume
 			snapName = kv.Props[id]
 		}
 
-		snap, err := s.client.Resources.GetSnapshot(ctx, sourceVolId.ResourceName, snapName)
+		snap, err := s.client.Resources.GetSnapshot(ctx, sourceResouce, snapName)
 		if err != nil {
 			return nil, fmt.Errorf("error fetching snapshot for backup: %w", err)
 		}
@@ -1920,26 +1920,26 @@ func (s *Linstor) FindSnapsByID(ctx context.Context, id string) ([]*volume.Snaps
 			return nil, nil404(err)
 		}
 
-		snap, err := linstorSnapshotToCSI(&lsnap)
+		csiSnaps, err := linstorSnapshotToCSISnapshots(&lsnap)
 		if err != nil {
 			return nil, err
 		}
 
-		snap.Type = snapshotId.Type
-
-		snaps = []*volume.Snapshot{snap}
+		for _, snap := range csiSnaps {
+			if snap.VolumeNumber == snapshotId.VolumeNumber {
+				snap.Type = snapshotId.Type
+				return []*volume.Snapshot{snap}, nil
+			}
+		}
 	case volume.SnapshotTypeS3:
 		snaps, err = s.findS3Backup(ctx, snapshotId)
 		if err != nil {
 			return nil, err
 		}
+
 	default:
 		// Either, snapshot is not ready yet, or it is a "legacy" snapshot where we did not have this logic yet.
-	}
-
-	// Set the correct volume number based on the requested source ID.
-	for _, snap := range snaps {
-		snap.VolumeNumber = snapshotId.VolumeNumber
+		return nil, nil
 	}
 
 	return snaps, nil
@@ -1977,16 +1977,16 @@ func (s *Linstor) findInProgressOrLegacySnaps(ctx context.Context, id string) ([
 	for i := range lsnaps {
 		log.WithField("snapshot", lsnaps[i]).Debug("found snapshot with matching id")
 
-		snap, err := linstorSnapshotToCSI(&lsnaps[i])
+		csiSnaps, err := linstorSnapshotToCSISnapshots(&lsnaps[i])
 		if err != nil {
 			return nil, err
 		}
 
-		if snap.Remote != "" {
-			detectedRemotes = true
-		}
+		detectedRemotes = detectedRemotes || slices.ContainsFunc(csiSnaps, func(snapshot *volume.Snapshot) bool {
+			return snapshot.Remote != ""
+		})
 
-		snaps = append(snaps, snap)
+		snaps = append(snaps, csiSnaps...)
 	}
 
 	if detectedRemotes {
@@ -2024,14 +2024,16 @@ func (s *Linstor) findInProgressOrLegacySnaps(ctx context.Context, id string) ([
 			return nil, fmt.Errorf("failed to find snapshot: %w", err)
 		}
 
-		snap, err := linstorSnapshotToCSI(&lsnap)
+		csiSnaps, err := linstorSnapshotToCSISnapshots(&lsnap)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse LINSTOR snapshot: %w", err)
 		}
 
-		snap.Type = volume.SnapshotTypeLinstor
+		for i := range csiSnaps {
+			csiSnaps[i].Type = volume.SnapshotTypeLinstor
+		}
 
-		return []*volume.Snapshot{snap}, nil
+		return csiSnaps, nil
 	}
 
 	log.Debug("no snapshot matching id found, trying S3 backups")
@@ -2073,14 +2075,20 @@ func (s *Linstor) findS3Backup(ctx context.Context, snapshotId *volume.SnapshotI
 
 	lsnap, err := s.client.Resources.GetSnapshot(ctx, snapshotId.SourceName, snapshotId.SnapshotName)
 	if err == nil {
-		snap, err := linstorSnapshotToCSI(&lsnap)
+		csiSnaps, err := linstorSnapshotToCSISnapshots(&lsnap)
 		if err != nil {
 			return nil, err
 		}
 
-		snap.Type = volume.SnapshotTypeS3
+		for _, snap := range csiSnaps {
+			if snap.VolumeNumber == snapshotId.VolumeNumber {
+				snap.Type = volume.SnapshotTypeS3
+				return []*volume.Snapshot{snap}, nil
+			}
+		}
 
-		return []*volume.Snapshot{snap}, nil
+		// Snapshot exists but not with this volume number
+		return nil, nil
 	}
 
 	log.WithError(err).Debug("No local copy of S3 backup, search named remote")
@@ -2202,15 +2210,18 @@ func (s *Linstor) FindSnapsBySource(ctx context.Context, sourceVol *volume.Info,
 		log := log.WithField("snap", lsnap)
 
 		log.Debug("converting LINSTOR to CSI snapshot")
-		csiSnap, err := linstorSnapshotToCSI(&lsnap)
+
+		csiSnaps, err := linstorSnapshotToCSISnapshots(&lsnap)
 		if err != nil {
 			log.WithError(err).Warn("failed to convert LINSTOR to CSI snapshot, skipping...")
 			continue
 		}
 
-		csiSnap.VolumeNumber = sourceVol.VolumeNumber
-
-		result = append(result, csiSnap)
+		for _, csiSnap := range csiSnaps {
+			if csiSnap.VolumeNumber == sourceVol.VolumeNumber {
+				result = append(result, csiSnap)
+			}
+		}
 	}
 
 	return result, nil
@@ -2241,15 +2252,17 @@ func (s *Linstor) ListSnaps(ctx context.Context, start, limit int) ([]*volume.Sn
 		log := log.WithField("snap", lsnap)
 
 		log.Debug("converting LINSTOR to CSI snapshot")
-		csiSnap, err := linstorSnapshotToCSI(&lsnap)
+
+		csiSnaps, err := linstorSnapshotToCSISnapshots(&lsnap)
 		if err != nil {
 			log.WithError(err).Warn("failed to convert LINSTOR to CSI snapshot, skipping...")
 			continue
 		}
 
-		SetSnapshotType(&csiSnap.SnapshotId, remotes)
-
-		foundIds[csiSnap.String()] = csiSnap
+		for _, csiSnap := range csiSnaps {
+			SetSnapshotType(&csiSnap.SnapshotId, remotes)
+			foundIds[csiSnap.String()] = csiSnap
+		}
 	}
 
 	log.Debug("getting snapshots from remotes")
@@ -2318,11 +2331,7 @@ func (s *Linstor) ListSnaps(ctx context.Context, start, limit int) ([]*volume.Sn
 	return result, nil
 }
 
-func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*volume.Snapshot, error) {
-	if len(lsnap.VolumeDefinitions) == 0 {
-		return nil, fmt.Errorf("missing volume definitions")
-	}
-
+func linstorSnapshotToCSISnapshots(lsnap *lapi.Snapshot) ([]*volume.Snapshot, error) {
 	if len(lsnap.Snapshots) == 0 {
 		return nil, fmt.Errorf("missing snapshots")
 	}
@@ -2335,9 +2344,6 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*volume.Snapshot, error) {
 		}
 	}
 
-	snapSizeBytes := int64(lsnap.VolumeDefinitions[0].SizeKib) * KiB
-	creationTimeMicroSecs := lsnap.Snapshots[0].CreateTimestamp
-
 	remote, ready, err := GetSnapshotRemoteAndReadiness(lsnap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get snapshot status: %w", err)
@@ -2345,22 +2351,43 @@ func linstorSnapshotToCSI(lsnap *lapi.Snapshot) (*volume.Snapshot, error) {
 
 	failed := slices.Contains(lsnap.Flags, lapiconsts.FlagFailedDisconnect) || slices.Contains(lsnap.Flags, lapiconsts.FlagFailedDeployment)
 
+	creationTimeMicroSecs := lsnap.Snapshots[0].CreateTimestamp
 	if creationTimeMicroSecs == nil {
 		// Some failed snapshots do not show any time values, set a default value.
 		creationTimeMicroSecs = &lapi.TimeStampMs{}
 	}
 
-	return &volume.Snapshot{
-		SnapshotId: volume.SnapshotId{
-			Remote:       remote,
-			SourceName:   lsnap.ResourceName,
-			SnapshotName: lsnap.Name,
-		},
-		CreationTime: creationTimeMicroSecs.Time,
-		SizeBytes:    snapSizeBytes,
-		Failed:       failed,
-		ReadyToUse:   ready,
-	}, nil
+	var snaps []*volume.Snapshot
+
+	for _, vd := range lsnap.VolumeDefinitions {
+		snapSizeBytes := int64(lsnap.VolumeDefinitions[0].SizeKib) * KiB
+
+		if vd.VolumeNumber != 0 && vd.VolumeDefinitionProps[linstor.PropertyCSIVolumeName] == "" {
+			// This VD is neither a regular volume snapshot (VN 0), nor a consistency group snapshot, skipping
+			continue
+		}
+
+		partOfConsistencyGroup := vd.VolumeDefinitionProps[linstor.PropertyCSIVolumeName] != ""
+		snaps = append(snaps, &volume.Snapshot{
+			SnapshotId: volume.SnapshotId{
+				Remote:       remote,
+				SourceName:   lsnap.ResourceName,
+				VolumeNumber: int(vd.VolumeNumber),
+				SnapshotName: lsnap.Name,
+			},
+			CreationTime:           creationTimeMicroSecs.Time,
+			SizeBytes:              snapSizeBytes,
+			Failed:                 failed,
+			ReadyToUse:             ready,
+			PartOfConsistencyGroup: partOfConsistencyGroup,
+		})
+	}
+
+	if len(snaps) == 0 {
+		return nil, fmt.Errorf("missing snapshots")
+	}
+
+	return snaps, nil
 }
 
 // NodeAvailable makes sure that LINSTOR considers that the node is in an ONLINE

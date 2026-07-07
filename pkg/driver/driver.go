@@ -1022,6 +1022,12 @@ func (d *Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequ
 	}
 
 	for _, snap := range snaps {
+		// A group snapshot is one shared LINSTOR snapshot; refuse per-member delete (use DeleteVolumeGroupSnapshot).
+		if snap.PartOfConsistencyGroup {
+			return nil, status.Errorf(codes.FailedPrecondition,
+				"snapshot %s is part of a consistency group; delete it with DeleteVolumeGroupSnapshot", req.GetSnapshotId())
+		}
+
 		if err := d.linstorClient.SnapDelete(ctx, &snap.SnapshotId); err != nil {
 			return nil, status.Errorf(codes.Internal, "unable to delete snapshot %s: %v",
 				req.GetSnapshotId(), err)
@@ -1248,6 +1254,17 @@ func (d *Driver) CreateVolumeGroupSnapshot(ctx context.Context, req *csi.CreateV
 
 	d.log.WithField("snapshot id", id).Debug("using snapshot id")
 
+	sources := make([]volume.ID, 0, len(req.GetSourceVolumeIds()))
+
+	for _, sourceID := range req.GetSourceVolumeIds() {
+		volId, err := volume.ParseVolumeId(sourceID)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "failed to parse volume id: %v", err)
+		}
+
+		sources = append(sources, volId)
+	}
+
 	existingSnaps, err := d.linstorClient.FindSnapsByID(ctx, id)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to check for existing snapshot: %v", err)
@@ -1256,79 +1273,49 @@ func (d *Driver) CreateVolumeGroupSnapshot(ctx context.Context, req *csi.CreateV
 	if len(existingSnaps) > 0 {
 		d.log.WithField("existing snapshots", existingSnaps).Debug("found existing snapshots")
 
-		expectedSources := sets.New(req.GetSourceVolumeIds()...)
-		existingSources := sets.New[string]()
-
+		existingSources := sets.New[volume.ID]()
 		for _, snap := range existingSnaps {
-			existingSources.Insert(snap.SourceName)
+			existingSources.Insert(snap.Source())
 		}
 
+		expectedSources := sets.New(sources...)
+
 		if !existingSources.Equal(expectedSources) {
-			return nil, status.Errorf(codes.AlreadyExists, "snapshot %s already exists, but differs on snapshot volumes: %v != %v", id, expectedSources, existingSources)
+			return nil, status.Errorf(codes.AlreadyExists, "snapshot %s already exists, but differs on snapshot volumes: %v != %v", id, expectedSources, existingSnaps)
 		}
 
 		d.log.Debug("existing snapshots match expected sources")
-
-		if slices.ContainsFunc(existingSnaps, func(s *volume.Snapshot) bool {
-			return s.Failed
-		}) {
-			d.log.Debug("existing snapshots have a failed snapshot, deleting to start a retry")
-
-			var errs []error
-
-			for _, snap := range existingSnaps {
-				errs = append(errs, d.linstorClient.SnapDelete(ctx, &snap.SnapshotId))
-			}
-
-			if err := errors.Join(errs...); err != nil {
-				return nil, fmt.Errorf("failed to clean up failed, incomplete snapshots: %w", err)
-			}
-
-			// Now safe to retry creation of the snapshot
-		} else {
-			d.log.Debug("existing snapshots found, running post-processing")
-
-			groupSnap := AggregateGroupSnapshot(id, existingSnaps...)
-
-			for _, snap := range existingSnaps {
-				err = d.maybeDeleteLocalSnapshot(ctx, snap, params)
-				if err != nil {
-					return nil, status.Errorf(codes.Internal, "failed to delete local snapshot: %s", err)
-				}
-
-				if groupSnap.ReadyToUse {
-					d.log.WithField("snapshot id", id).Debug("snapshot ready, delete temporary ID mapping if it exists")
-
-					err := d.linstorClient.DeleteTemporarySnapshotID(ctx, id, params)
-					if err != nil {
-						return nil, status.Errorf(codes.Internal, "failed to delete temporary snapshot ID: %v", err)
-					}
-				}
-			}
-
-			return &csi.CreateVolumeGroupSnapshotResponse{GroupSnapshot: groupSnap}, nil
-		}
 	}
 
-	sources := make([]volume.ID, 0, len(req.GetSourceVolumeIds()))
 
-	for _, id := range req.GetSourceVolumeIds() {
-		volId, err := volume.ParseVolumeId(id)
+	if slices.ContainsFunc(existingSnaps, func(s *volume.Snapshot) bool {
+		return s.Failed
+	}) {
+		d.log.Debug("existing snapshots have a failed snapshot, deleting to start a retry")
+
+		var errs []error
+
+		for _, snap := range existingSnaps {
+			errs = append(errs, d.linstorClient.SnapDelete(ctx, &snap.SnapshotId))
+		}
+
+		if err := errors.Join(errs...); err != nil {
+			return nil, fmt.Errorf("failed to clean up failed, incomplete snapshots: %w", err)
+		}
+
+		// Now safe to retry creation of the snapshot
+	}
+
+	if len(existingSnaps) == 0 {
+		existingSnaps, err = d.linstorClient.SnapCreate(ctx, id, params, sources...)
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "failed to parse volume id: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to create snapshot: %v", err)
 		}
-
-		sources = append(sources, volId)
 	}
 
-	snaps, err := d.linstorClient.SnapCreate(ctx, id, params, sources...)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to create snapshot: %v", err)
-	}
+	groupSnap := AggregateGroupSnapshot(id, existingSnaps...)
 
-	groupSnap := AggregateGroupSnapshot(id, snaps...)
-
-	for _, snap := range snaps {
+	for _, snap := range existingSnaps {
 		err = d.maybeDeleteLocalSnapshot(ctx, snap, params)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to delete local snapshot: %s", err)
@@ -1398,12 +1385,20 @@ func AggregateGroupSnapshot(id string, snapshots ...*volume.Snapshot) *csi.Volum
 			allReady = false
 		}
 
+		// CG members share one snapshot and can't be deleted independently, so bind them via GroupSnapshotId;
+		// members of an ordinary group snapshot own their snapshot and stay unbound (individually deletable).
+		groupSnapshotID := ""
+		if snap.PartOfConsistencyGroup {
+			groupSnapshotID = id
+		}
+
 		csiSnapshots = append(csiSnapshots, &csi.Snapshot{
-			SnapshotId:     snap.String(),
-			SourceVolumeId: snap.Source().String(),
-			CreationTime:   timestamppb.New(snap.CreationTime),
-			ReadyToUse:     snap.ReadyToUse,
-			SizeBytes:      snap.SizeBytes,
+			SnapshotId:      snap.String(),
+			SourceVolumeId:  snap.Source().String(),
+			GroupSnapshotId: groupSnapshotID,
+			CreationTime:    timestamppb.New(snap.CreationTime),
+			ReadyToUse:      snap.ReadyToUse,
+			SizeBytes:       snap.SizeBytes,
 		})
 	}
 

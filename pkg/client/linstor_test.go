@@ -34,6 +34,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/client/mocks"
+	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 	lc "github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
@@ -653,6 +654,107 @@ func TestIncrementChainLength(t *testing.T) {
 			if tt.wantFull {
 				assert.Equal(t, full.FinishedTimestamp.Time, fullStart)
 			}
+		})
+	}
+}
+
+// TestLinstorSnapshotToCSIConsistencyGroup: a snapshot is flagged as a group only when a volume definition
+// carries the CG tag, so a multi-volume NFS/RWX export is not mistaken for one.
+func TestLinstorSnapshotToCSIConsistencyGroup(t *testing.T) {
+	makeSnap := func(vds ...lapi.SnapshotVolumeDefinition) *lapi.Snapshot {
+		return &lapi.Snapshot{
+			Name:              "snap",
+			ResourceName:      "res",
+			Flags:             []string{"SUCCESSFUL"},
+			VolumeDefinitions: vds,
+			Snapshots:         []lapi.SnapshotNode{{CreateTimestamp: &lapi.TimeStampMs{}}},
+		}
+	}
+
+	tagged := func(vnr int32, csiName string) lapi.SnapshotVolumeDefinition {
+		return lapi.SnapshotVolumeDefinition{
+			VolumeNumber:          vnr,
+			SizeKib:               1024,
+			VolumeDefinitionProps: map[string]string{linstor.PropertyCSIVolumeName: csiName},
+		}
+	}
+
+	untagged := func(vnr int32) lapi.SnapshotVolumeDefinition {
+		return lapi.SnapshotVolumeDefinition{
+			VolumeNumber:          vnr,
+			SizeKib:               1024,
+			VolumeDefinitionProps: map[string]string{"FileSystem/Type": "ext4"},
+		}
+	}
+
+	cases := []struct {
+		name string
+		snap *lapi.Snapshot
+		want []*volume.Snapshot
+	}{
+		{"multi-member consistency group", makeSnap(tagged(0, "pvc-a"), tagged(1, "pvc-b")), []*volume.Snapshot{
+			{
+				SnapshotId: volume.SnapshotId{
+					SnapshotName: "snap",
+					SourceName:   "res",
+					VolumeNumber: 0,
+				},
+				SizeBytes:              1024 * 1024,
+				ReadyToUse:             true,
+				PartOfConsistencyGroup: true,
+			},
+			{
+				SnapshotId: volume.SnapshotId{
+					SnapshotName: "snap",
+					SourceName:   "res",
+					VolumeNumber: 1,
+				},
+				SizeBytes:              1024 * 1024,
+				ReadyToUse:             true,
+				PartOfConsistencyGroup: true,
+			},
+		}},
+		{"single-member consistency group", makeSnap(tagged(0, "pvc-a")), []*volume.Snapshot{
+			{
+				SnapshotId: volume.SnapshotId{
+					SnapshotName: "snap",
+					SourceName:   "res",
+					VolumeNumber: 0,
+				},
+				SizeBytes:              1024 * 1024,
+				ReadyToUse:             true,
+				PartOfConsistencyGroup: true,
+			},
+		}},
+		{"nfs export: multiple untagged volumes", makeSnap(untagged(0), untagged(1)), []*volume.Snapshot{
+			{
+				SnapshotId: volume.SnapshotId{
+					SnapshotName: "snap",
+					SourceName:   "res",
+					VolumeNumber: 0,
+				},
+				SizeBytes:  1024 * 1024,
+				ReadyToUse: true,
+			},
+		}},
+		{"plain single volume", makeSnap(untagged(0)), []*volume.Snapshot{
+			{
+				SnapshotId: volume.SnapshotId{
+					SnapshotName: "snap",
+					SourceName:   "res",
+					VolumeNumber: 0,
+				},
+				SizeBytes:  1024 * 1024,
+				ReadyToUse: true,
+			},
+		}},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			snaps, err := linstorSnapshotToCSISnapshots(tt.snap)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, snaps)
 		})
 	}
 }
