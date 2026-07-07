@@ -494,12 +494,58 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 // the actual resources are gone. An elegant way to go about this is by simply deleting the volume definition. This
 // hides
 func (s *Linstor) Delete(ctx context.Context, id volume.ID) error {
-	s.log.WithFields(logrus.Fields{
+	log := s.log.WithFields(logrus.Fields{
 		"volume": id,
-	}).Info("deleting volume")
+	})
+	log.Info("deleting volume")
 
+	// A shared consistency-group resource backs several members: removing one leaves the resource intact; only
+	// the last member tears it down. Standalone volumes have no sibling members and take the full teardown.
+	vds, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, id.ResourceName)
+	if err != nil {
+		// A missing resource definition means the volume is already gone.
+		return nil404(err)
+	}
+
+	otherMembers := 0
+
+	for vn := range util.ConsistencyGroupVolumes(vds...) {
+		if vn != id.VolumeNumber {
+			otherMembers++
+		}
+	}
+
+	if otherMembers == 0 {
+		// We are the only member -> proceed with normal deletion
+		return s.deleteResource(ctx, id.ResourceName)
+	}
+
+	log.Info("removing consistency-group member volume definition, keeping shared resource")
+
+	if err := nil404(s.client.ResourceDefinitions.DeleteVolumeDefinition(ctx, id.ResourceName, id.VolumeNumber)); err != nil {
+		return err
+	}
+
+	// A concurrent sibling delete may have removed the others meanwhile, so re-check
+	vds, err = s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, id.ResourceName)
+	if err != nil {
+		return nil404(err)
+	}
+
+	for range util.ConsistencyGroupVolumes(vds...) {
+		log.Info("another volume definition exists, not deleting")
+		return nil
+	}
+
+	log.Info("no other volume definition left, deleting")
+
+	return s.deleteResource(ctx, id.ResourceName)
+}
+
+// deleteResource tears down a whole resource; used for standalone volumes and a group's last member.
+func (s *Linstor) deleteResource(ctx context.Context, rdName string) error {
 	// Disable the BalanceResourceTask for this resource during deletion.
-	err := s.client.ResourceDefinitions.Modify(ctx, id.ResourceName, lapi.GenericPropsModify{
+	err := s.client.ResourceDefinitions.Modify(ctx, rdName, lapi.GenericPropsModify{
 		OverrideProps: map[string]string{lapiconsts.KeyBalanceResourcesEnabled: lapiconsts.ValFalse},
 	})
 	if err != nil {
@@ -509,7 +555,7 @@ func (s *Linstor) Delete(ctx context.Context, id volume.ID) error {
 	var resources []lapi.Resource
 
 	for {
-		resources, err = s.client.Resources.GetAll(ctx, id.ResourceName)
+		resources, err = s.client.Resources.GetAll(ctx, rdName)
 		if err != nil {
 			return nil404(err)
 		}
@@ -531,14 +577,14 @@ func (s *Linstor) Delete(ctx context.Context, id volume.ID) error {
 	})
 
 	for _, res := range resources {
-		err := s.client.Resources.Delete(ctx, id.ResourceName, res.NodeName, &lapi.ResourceDeleteOpts{KeepTiebreaker: false})
+		err := s.client.Resources.Delete(ctx, rdName, res.NodeName, &lapi.ResourceDeleteOpts{KeepTiebreaker: false})
 		if err != nil {
 			// If two deletions run in parallel, one could get a 404 message, which we treat as "everything finished"
 			return nil404(err)
 		}
 	}
 
-	vds, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, id.ResourceName)
+	vds, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, rdName)
 	if err != nil {
 		return nil404(err)
 	}
@@ -550,7 +596,7 @@ func (s *Linstor) Delete(ctx context.Context, id volume.ID) error {
 
 	for _, vd := range vds {
 		// Delete the volume definition. This indicates the normal deletion is complete.
-		err = s.client.ResourceDefinitions.DeleteVolumeDefinition(ctx, id.ResourceName, int(*vd.VolumeNumber))
+		err = s.client.ResourceDefinitions.DeleteVolumeDefinition(ctx, rdName, int(*vd.VolumeNumber))
 		if nil404(err) != nil {
 			// We continue with the cleanup on 404, maybe the previous cleanup was interrupted
 			return err
@@ -558,14 +604,14 @@ func (s *Linstor) Delete(ctx context.Context, id volume.ID) error {
 	}
 
 	// Reset BalanceResourceTask for the case the resource definition is in use by a snapshot.
-	err = s.client.ResourceDefinitions.Modify(ctx, id.ResourceName, lapi.GenericPropsModify{
+	err = s.client.ResourceDefinitions.Modify(ctx, rdName, lapi.GenericPropsModify{
 		DeleteProps: []string{lapiconsts.KeyBalanceResourcesEnabled},
 	})
 	if err != nil {
 		return nil404(err)
 	}
 
-	err = s.deleteResourceDefinitionAndGroupIfUnused(ctx, id.ResourceName)
+	err = s.deleteResourceDefinitionAndGroupIfUnused(ctx, rdName)
 	if err != nil {
 		return err
 	}
