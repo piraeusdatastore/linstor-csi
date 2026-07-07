@@ -724,6 +724,12 @@ func (d *Driver) createConsistencyGroupVolume(ctx context.Context, req *csi.Crea
 			return nil, err
 		}
 	} else if err := d.linstorClient.CreateConsistencyGroupVolume(ctx, info, csiName, requiredBytes, params, req.GetAccessibilityRequirements()); err != nil {
+		// A resource-group conflict is a caller error; anything else is internal.
+		var rgConflict *client.ResourceGroupConflictError
+		if errors.As(err, &rgConflict) {
+			return nil, status.Errorf(codes.InvalidArgument, "CreateVolume failed for %s: all consistency-group members must use the same StorageClass: %v", csiName, err)
+		}
+
 		return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", csiName, err)
 	}
 
@@ -793,6 +799,12 @@ func (d *Driver) restoreConsistencyGroupVolume(ctx context.Context, req *csi.Cre
 	}
 
 	if err := d.linstorClient.RestoreConsistencyGroupVolume(ctx, snaps[0], info, req.GetName(), params, snapParams, req.GetAccessibilityRequirements()); err != nil {
+		// A resource-group conflict is a caller error; anything else is internal.
+		var rgConflict *client.ResourceGroupConflictError
+		if errors.As(err, &rgConflict) {
+			return status.Errorf(codes.InvalidArgument, "CreateVolume failed for %s: all consistency-group members must use the same StorageClass: %v", req.GetName(), err)
+		}
+
 		return status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", req.GetName(), err)
 	}
 

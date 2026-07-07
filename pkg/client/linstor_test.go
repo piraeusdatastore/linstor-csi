@@ -758,3 +758,45 @@ func TestLinstorSnapshotToCSIConsistencyGroup(t *testing.T) {
 		})
 	}
 }
+
+// TestReconcileResourceDefinitionRGConflict: reconciling an existing resource definition against a different
+// resource group fails with ResourceGroupConflictError, while a matching group succeeds.
+func TestReconcileResourceDefinitionRGConflict(t *testing.T) {
+	t.Parallel()
+
+	const rdName = "cg-shared"
+
+	cases := []struct {
+		name         string
+		existingRG   string
+		wantedRG     string
+		wantConflict bool
+	}{
+		{"matching resource group", "sc-abc", "sc-abc", false},
+		{"conflicting resource group", "sc-abc", "sc-def", true},
+	}
+
+	for i := range cases {
+		tc := &cases[i]
+
+		t.Run(tc.name, func(t *testing.T) {
+			rd := &mocks.ResourceDefinitionProvider{}
+			rd.On("Get", mock.Anything, rdName).
+				Return(lapi.ResourceDefinition{Name: rdName, ResourceGroupName: tc.existingRG}, nil)
+
+			cl := &Linstor{
+				client: &lc.HighLevelClient{Client: &lapi.Client{ResourceDefinitions: rd}},
+				log:    logrus.WithField("test", t.Name()),
+			}
+
+			_, err := cl.reconcileResourceDefinition(context.Background(), rdName, tc.wantedRG)
+
+			var conflict *ResourceGroupConflictError
+			if tc.wantConflict {
+				assert.ErrorAs(t, err, &conflict)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

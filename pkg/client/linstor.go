@@ -1965,6 +1965,12 @@ func (s *Linstor) reconcileResourceDefinition(ctx context.Context, rdName, rgNam
 		}
 	}
 
+	// A resource definition's resource group is fixed at creation, so an existing one under a different group
+	// means a member's StorageClass differs from the group's — reject rather than silently absorb it.
+	if rd.ResourceGroupName != rgName {
+		return nil, &ResourceGroupConflictError{Resource: rdName, Existing: rd.ResourceGroupName, Wanted: rgName}
+	}
+
 	return &rd, nil
 }
 
