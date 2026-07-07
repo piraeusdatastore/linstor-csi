@@ -1,0 +1,23 @@
+# The golden image, imported ONCE from the container registry. Every VM's root disk is a host-assisted CDI
+# clone of this PVC (see vm1-disks.yaml / vm2-disks.yaml), so the Fedora cloud image is pulled a single time
+# instead of on every VM. It is a plain volume -- no consistency-group label -- because it is only ever used as
+# a clone source, never as a VM disk.
+#
+# Wait for the import to finish before creating VMs:
+#   kubectl get datavolume fedora-golden -w   # phase must reach Succeeded
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  name: fedora-golden
+spec:
+  source:
+    registry:
+      url: docker://quay.io/containerdisks/fedora:latest
+  storage:
+    accessModes:
+      - ReadWriteOnce
+    volumeMode: Block
+    storageClassName: linstor-cg
+    resources:
+      requests:
+        storage: 10Gi

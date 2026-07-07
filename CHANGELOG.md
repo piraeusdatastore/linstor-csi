@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Consistency groups: PVCs sharing a `linstor.csi.linbit.com/consistency-group`
+  label are placed as separate volumes of one LINSTOR resource, so a
+  `VolumeGroupSnapshot` across them is a single crash-consistent snapshot (e.g.
+  all disks of a KubeVirt VM). Restore is the mirror: each member claims the
+  volume number recorded in its snapshot. Enable with
+  `--enable-consistency-groups` (requires running in Kubernetes, with `get` on
+  PersistentVolumeClaims). See `examples/consistency-groups/`.
 - IO QoS limits via the `qos.linbit.com/{rbps,wbps,riops,wiops}` StorageClass
   parameters. The limits are stored on the LINSTOR resource definition and
   surfaced in the VolumeAttachment metadata for the nri-volume-qos plugin to

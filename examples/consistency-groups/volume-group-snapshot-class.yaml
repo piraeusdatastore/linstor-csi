@@ -1,0 +1,8 @@
+# Requires the external-snapshotter with VolumeGroupSnapshot support (csi-snapshotter v8+ and the
+# groupsnapshot.storage.k8s.io CRDs installed).
+apiVersion: groupsnapshot.storage.k8s.io/v1beta1
+kind: VolumeGroupSnapshotClass
+metadata:
+  name: linstor-cg-snapshots
+driver: linstor.csi.linbit.com
+deletionPolicy: Delete
