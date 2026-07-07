@@ -37,6 +37,12 @@ const (
 	// fully provisioned by this plugin.
 	PropertyProvisioningCompletedBy = lc.NamespcAuxiliary + "/csi-provisioning-completed-by"
 
+	// PropertyCSIVolumeName tags a volume definition with its backing CSI volume (PV) name, marking a CG member.
+	PropertyCSIVolumeName = lc.NamespcAuxiliary + "/csi-volume-name"
+
+	// ConsistencyGroupLabel is the PVC label whose value groups a namespace's volumes into one LINSTOR resource.
+	ConsistencyGroupLabel = DriverName + "/consistency-group"
+
 	// PropertyAllowTwoPrimaries is DRBD option to allow second primary. Mainly used for live-migration.
 	PropertyAllowTwoPrimaries = lc.NamespcDrbdNetOptions + "/allow-two-primaries"
 
