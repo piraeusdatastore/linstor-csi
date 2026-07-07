@@ -749,7 +749,15 @@ func (s *Linstor) Detach(ctx context.Context, id volume.ID, node string) error {
 
 	log.Info("removing temporary resource")
 
-	return nil404(s.client.Resources.Delete(ctx, id.ResourceName, node, &lapi.ResourceDeleteOpts{KeepTiebreaker: true}))
+	// The shared diskless attachment must outlive all but the last member: delete it, but treat LINSTOR's
+	// FailInUse rejection as "a sibling still needs it" (race-free, no separate in-use check).
+	err = s.client.Resources.Delete(ctx, id.ResourceName, node, &lapi.ResourceDeleteOpts{KeepTiebreaker: true})
+	if errors.Is(err, lapi.ApiCallRcErr(lapiconsts.FailInUse)) {
+		log.Info("resource still in use, keeping shared diskless attachment")
+		return nil
+	}
+
+	return nil404(err)
 }
 
 // CapacityBytes returns the amount of free space in the storage pool specified by the params and topology.
