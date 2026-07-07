@@ -112,7 +112,7 @@ func fakeKube(objs ...runtime.Object) dynamic.Interface {
 	return dynfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), gvrToListKind, objs...)
 }
 
-// newDriver builds an in-process driver with the fake Kubernetes client injected; extra options apply last.
+// newDriver builds an in-process driver with consistency groups enabled and the fake Kubernetes client injected.
 func newDriver(t *testing.T, cl *client.Linstor, kube dynamic.Interface, extra ...func(*driver.Driver) error) *driver.Driver {
 	t.Helper()
 
@@ -120,6 +120,7 @@ func newDriver(t *testing.T, cl *client.Linstor, kube dynamic.Interface, extra .
 		driver.NodeID(testNode()),
 		driver.LogLevel("debug"),
 		driver.KubeClient(kube),
+		driver.ConfigureConsistencyGroups(),
 	}, extra...)
 
 	drv, err := driver.NewDriver(cl, opts...)
@@ -773,7 +774,7 @@ func TestCGNodePublish(t *testing.T) {
 // commandeer volume numbers within the shared resource.
 func TestCGRejectRWXOverNFS(t *testing.T) {
 	ctx := t.Context()
-	cl, _ := realLinstor(t)
+	cl, hl := realLinstor(t)
 
 	const ns = "cgtest"
 
@@ -799,6 +800,11 @@ func TestCGRejectRWXOverNFS(t *testing.T) {
 			_, _ = drv.DeleteVolume(context.Background(), &csi.DeleteVolumeRequest{VolumeId: resp.GetVolume().GetVolumeId()})
 		})
 	}
+
+	// The rejection must fire before the shared resource is created.
+	resource := volume.ConsistencyGroupResourceName(ns, group)
+	assert.False(t, resourceExists(ctx, hl, resource),
+		"a rejected RWX-over-NFS member must not create the shared resource")
 }
 
 // TestCGRejectConflictingPlacement: a member resolving to a different resource group (StorageClass) than the

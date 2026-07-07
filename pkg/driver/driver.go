@@ -60,6 +60,9 @@ import (
 // Version is set via ldflags configued in the Makefile.
 var Version = "UNKNOWN"
 
+// pvcGVR reads PersistentVolumeClaims via the dynamic client to resolve consistency-group membership.
+var pvcGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "persistentvolumeclaims"}
+
 // Driver fullfils CSI controller, node, and indentity server interfaces.
 type Driver struct {
 	linstorClient *client.Linstor
@@ -78,6 +81,8 @@ type Driver struct {
 	resyncAfter time.Duration
 	// disableRWXBlockValidation disables KubeVirt VM ownership validation for RWX block volumes
 	disableRWXBlockValidation bool
+	// consistencyGroups places PVCs sharing a consistency-group label as volume numbers of one resource.
+	consistencyGroups bool
 
 	// Embed for forward compatibility.
 	csi.UnimplementedIdentityServer
@@ -185,6 +190,25 @@ func LogLevel(s string) func(*Driver) error {
 func KubeClient(client dynamic.Interface) func(*Driver) error {
 	return func(d *Driver) error {
 		d.kubeClient = client
+		return nil
+	}
+}
+
+// ConfigureConsistencyGroups enables consistency-group support: CreateVolume reads each PVC's group label and
+// places grouped volumes in one shared resource. Needs a Kubernetes client (built from in-cluster config if none).
+func ConfigureConsistencyGroups() func(*Driver) error {
+	return func(d *Driver) error {
+		if d.kubeClient == nil {
+			_, dyn, err := utils.KubernetesClient()
+			if err != nil {
+				return fmt.Errorf("consistency-group support requires running in Kubernetes: %w", err)
+			}
+
+			d.kubeClient = dyn
+		}
+
+		d.consistencyGroups = true
+
 		return nil
 	}
 }
@@ -475,6 +499,28 @@ func (d *Driver) NodeGetInfo(ctx context.Context, _ *csi.NodeGetInfoRequest) (*c
 	}, nil
 }
 
+// consistencyGroupForPVC returns the consistency group of a CreateVolume request from its PVC's label, or ""
+// (ordinary volume) when the feature is off, no Kubernetes client is set, or the label is absent.
+func (d *Driver) consistencyGroupForPVC(ctx context.Context, req *csi.CreateVolumeRequest) (string, error) {
+	if !d.consistencyGroups || d.kubeClient == nil {
+		return "", nil
+	}
+
+	namespace := req.GetParameters()[ParameterCsiPvcNamespace]
+	name := req.GetParameters()[ParameterCsiPvcName]
+
+	if namespace == "" || name == "" {
+		return "", nil
+	}
+
+	pvc, err := d.kubeClient.Resource(pvcGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("could not read PVC %s/%s for consistency-group label: %w", namespace, name, err)
+	}
+
+	return pvc.GetLabels()[linstor.ConsistencyGroupLabel], nil
+}
+
 // CreateVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#createvolume
 func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	if req.GetName() == "" {
@@ -525,6 +571,16 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 
 	pvcName := req.GetParameters()[ParameterCsiPvcName]
 	pvcNamespace := req.GetParameters()[ParameterCsiPvcNamespace]
+
+	// Consistency-group members follow a dedicated create path; unlabeled volumes take the ordinary one below.
+	group, err := d.consistencyGroupForPVC(ctx, req)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", req.GetName(), err)
+	}
+
+	if group != "" {
+		return d.createConsistencyGroupVolume(ctx, req, &params, fsType, nfsExport, requiredBytes, pvcNamespace, group)
+	}
 
 	pvcNamespaceToUse := ""
 	pvcNameToUse := ""
@@ -633,6 +689,114 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		req,
 		nfsExport,
 	)
+}
+
+// createConsistencyGroupVolume provisions a CSI volume as one volume number of the shared resource derived
+// from (namespace, group). Idempotency is keyed on the CSI volume name, so concurrent siblings don't interfere.
+func (d *Driver) createConsistencyGroupVolume(ctx context.Context, req *csi.CreateVolumeRequest, params *volume.Parameters, fsType string, nfsExport bool, requiredBytes int64, namespace, group string) (*csi.CreateVolumeResponse, error) {
+	csiName := req.GetName()
+
+	if nfsExport {
+		// RWX-over-NFS commandeers volume numbers within a resource, which collides with group membership.
+		return nil, status.Errorf(codes.InvalidArgument,
+			"CreateVolume failed for %s: consistency groups are not compatible with RWX-over-NFS volumes", csiName)
+	}
+
+	resource := volume.ConsistencyGroupResourceName(namespace, group)
+
+	log := d.log.WithFields(logrus.Fields{"resource": resource, "group": group, "csiName": csiName})
+	log.Info("creating consistency-group member volume")
+
+	info := &volume.Info{
+		ID:            volume.ID{ResourceName: resource},
+		DeviceBytes:   map[int]int64{0: requiredBytes},
+		ResourceGroup: params.ResourceGroup,
+		FsType:        fsType,
+		// Only resource-wide props go on the shared definition; per-member identity is the volume-definition tag.
+		Properties: map[string]string{
+			linstor.PropertyProvisioningCompletedBy:                   "linstor-csi/" + Version,
+			lc.NamespcAuxiliary + "/" + linstor.ConsistencyGroupLabel: fmt.Sprintf("%s/%s", namespace, group),
+		},
+	}
+
+	if req.GetVolumeContentSource() != nil {
+		if err := d.restoreConsistencyGroupVolume(ctx, req, info, params, requiredBytes); err != nil {
+			return nil, err
+		}
+	} else if err := d.linstorClient.CreateConsistencyGroupVolume(ctx, info, csiName, requiredBytes, params, req.GetAccessibilityRequirements()); err != nil {
+		return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", csiName, err)
+	}
+
+	topos, err := d.linstorClient.AccessibleTopologies(ctx, info.ID, params)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal,
+			"CreateVolume failed for %s: unable to determine volume topology: %v", csiName, err)
+	}
+
+	volCtx, err := VolumeContextFromParameters(params).ToMap()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: unable to encode volume context: %v", csiName, err)
+	}
+
+	return &csi.CreateVolumeResponse{
+		Volume: &csi.Volume{
+			VolumeId:           info.String(),
+			CapacityBytes:      info.Size(),
+			ContentSource:      req.GetVolumeContentSource(),
+			AccessibleTopology: topos,
+			VolumeContext:      volCtx,
+		},
+	}, nil
+}
+
+// restoreConsistencyGroupVolume populates a member from a group snapshot (the only supported source): it claims
+// the volume number from its snapshot ID. Cloning a single volume into a group is rejected (restore is whole-resource).
+func (d *Driver) restoreConsistencyGroupVolume(ctx context.Context, req *csi.CreateVolumeRequest, info *volume.Info, params *volume.Parameters, requiredBytes int64) error {
+	snapSource := req.GetVolumeContentSource().GetSnapshot()
+	if snapSource == nil {
+		return status.Errorf(codes.InvalidArgument,
+			"CreateVolume failed for %s: cloning a volume into a consistency group is not supported; restore from a group snapshot instead", req.GetName())
+	}
+
+	snapshotID := snapSource.GetSnapshotId()
+	if snapshotID == "" {
+		return status.Errorf(codes.InvalidArgument, "CreateVolume failed for %s: empty snapshotId", req.GetName())
+	}
+
+	snapID, err := volume.ParseSnapshotId(snapshotID)
+	if err != nil {
+		return status.Errorf(codes.InvalidArgument, "CreateVolume failed for %s: %v", req.GetName(), err)
+	}
+
+	snaps, err := d.linstorClient.FindSnapsByID(ctx, snapshotID)
+	if err != nil {
+		return status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", req.GetName(), err)
+	}
+
+	if len(snaps) == 0 {
+		return status.Errorf(codes.NotFound,
+			"CreateVolume failed for %s: snapshot '%s' not found in storage backend", req.GetName(), snapshotID)
+	} else if len(snaps) >= 2 {
+		return status.Errorf(codes.NotFound,
+			"CreateVolume failed for %s: found multiple snapshots matching ID '%s'", req.GetName(), snapshotID)
+	}
+
+	// Claim the source volume number from the snapshot ID - the join key across the snapshot boundary.
+	info.VolumeNumber = snapID.VolumeNumber
+	info.DeviceBytes = map[int]int64{snapID.VolumeNumber: requiredBytes}
+
+	snapParams, err := d.maybeGetSnapshotParameters(ctx, snapshotID)
+	if err != nil {
+		d.log.WithError(err).Warn("failed to fetch snapshot parameters, continuing without it")
+
+		snapParams = nil
+	}
+
+	if err := d.linstorClient.RestoreConsistencyGroupVolume(ctx, snaps[0], info, req.GetName(), params, snapParams, req.GetAccessibilityRequirements()); err != nil {
+		return status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", req.GetName(), err)
+	}
+
+	return nil
 }
 
 // DeleteVolume https://github.com/container-storage-interface/spec/blob/v1.9.0/spec.md#deletevolume
@@ -1286,7 +1450,6 @@ func (d *Driver) CreateVolumeGroupSnapshot(ctx context.Context, req *csi.CreateV
 
 		d.log.Debug("existing snapshots match expected sources")
 	}
-
 
 	if slices.ContainsFunc(existingSnaps, func(s *volume.Snapshot) bool {
 		return s.Failed

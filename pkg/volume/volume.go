@@ -27,6 +27,9 @@ import (
 
 	lc "github.com/LINBIT/golinstor"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/pborman/uuid"
+
+	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 )
 
 // Info provides everything needed to manipulate volumes.
@@ -69,6 +72,12 @@ func (i ID) String() string {
 	}
 
 	return fmt.Sprintf("%s/%d", i.ResourceName, i.VolumeNumber)
+}
+
+// ConsistencyGroupResourceName derives the shared resource name from (namespace, group), keyed so same-named
+// groups in different namespaces never collide.
+func ConsistencyGroupResourceName(namespace, group string) string {
+	return "cg-" + uuid.NewSHA1([]byte(linstor.DriverName), []byte(namespace+"/"+group)).String()
 }
 
 func ParseVolumeId(id string) (ID, error) {
