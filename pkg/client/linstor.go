@@ -197,14 +197,28 @@ func (s *Linstor) ListAllWithStatus(ctx context.Context) ([]volume.VolumeStatus,
 		resourcesByName[allResources[i].Name] = append(resourcesByName[allResources[i].Name], allResources[i])
 	}
 
-	for _, rd := range resDefs {
-		// Listing operates per resource, which maps to the implicit 0th volume of each resource.
-		vol := s.volumeInfoFromResourceDefinition(volume.ID{ResourceName: rd.Name}, rd)
-		if vol != nil {
-			vols = append(vols, volume.VolumeStatus{
-				Info:       *vol,
-				Conditions: ConditionFromResources(resourcesByName[vol.ResourceName]),
-			})
+	for i := range resDefs {
+		rd := resDefs[i]
+
+		// The volume condition is resource-level and shared by every member of a consistency group.
+		cond := ConditionFromResources(resourcesByName[rd.Name])
+
+		isConsistencyGroup := false
+
+		for vn := range util.ConsistencyGroupVolumes(rd.VolumeDefinitions...) {
+			isConsistencyGroup = true
+
+			vol := s.volumeInfoFromResourceDefinition(volume.ID{ResourceName: rd.Name, VolumeNumber: vn}, rd)
+			if vol != nil {
+				vols = append(vols, volume.VolumeStatus{Info: *vol, Conditions: cond})
+			}
+		}
+
+		if !isConsistencyGroup {
+			vol := s.volumeInfoFromResourceDefinition(volume.ID{ResourceName: rd.Name}, rd)
+			if vol != nil {
+				vols = append(vols, volume.VolumeStatus{Info: *vol, Conditions: cond})
+			}
 		}
 	}
 
