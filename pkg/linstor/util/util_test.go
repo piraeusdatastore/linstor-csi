@@ -23,6 +23,9 @@ import (
 
 	apiconst "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 )
 
 func TestContainsAll(t *testing.T) {
@@ -128,6 +131,61 @@ func TestContainsAny(t *testing.T) {
 			t.Fatalf("Expected that containsAny('%+v', '%v') results in\n\t%v\nbut got\n\t%v\n",
 				tt.data, tt.members, tt.expected, actual)
 		}
+	}
+}
+
+func TestConsistencyGroupVolumes(t *testing.T) {
+	vol := func(n int32) *int32 { return &n }
+
+	vds := []lapi.VolumeDefinition{
+		{
+			VolumeNumber: vol(0),
+			Props:        map[string]string{linstor.PropertyCSIVolumeName: "pvc-a"},
+		},
+		{
+			// Missing the CSI volume name -> not a consistency-group member.
+			VolumeNumber: vol(1),
+			Props:        map[string]string{"other": "prop"},
+		},
+		{
+			// No volume number -> skipped.
+			Props: map[string]string{linstor.PropertyCSIVolumeName: "pvc-b"},
+		},
+		{
+			VolumeNumber: vol(7),
+			Props:        map[string]string{linstor.PropertyCSIVolumeName: "pvc-c"},
+		},
+	}
+
+	got := map[int]string{}
+	for vn, volumeName := range ConsistencyGroupVolumes(vds...) {
+		got[vn] = volumeName
+	}
+
+	want := map[int]string{
+		0: "pvc-a",
+		7: "pvc-c",
+	}
+
+	assert.Equal(t, want, got)
+}
+
+func TestConsistencyGroupVolumesIterContract(t *testing.T) {
+	vol := func(n int32) *int32 { return &n }
+
+	vds := []lapi.VolumeDefinition{
+		{
+			VolumeNumber: vol(0),
+			Props:        map[string]string{linstor.PropertyCSIVolumeName: "pvc-a"},
+		},
+		{
+			VolumeNumber: vol(1),
+			Props:        map[string]string{linstor.PropertyCSIVolumeName: "pvc-b"},
+		},
+	}
+
+	for range ConsistencyGroupVolumes(vds...) {
+		return
 	}
 }
 

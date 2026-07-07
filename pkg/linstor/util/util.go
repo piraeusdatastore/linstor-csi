@@ -19,9 +19,13 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 package util
 
 import (
+	"iter"
+
 	apiconst "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/LINBIT/golinstor/devicelayerkind"
+
+	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 )
 
 // DeployedDiskfullyNodes lists all nodes where a resource has volumes physically
@@ -108,4 +112,17 @@ func GetDrbdLayer(layer *lapi.ResourceLayer) *lapi.DrbdResource {
 	}
 
 	return nil
+}
+
+// ConsistencyGroupVolumes yields all the volume numbers and names of CSI enabled consistency group volumes.
+func ConsistencyGroupVolumes(vds ...lapi.VolumeDefinition) iter.Seq2[int, string] {
+	return func(yield func(int, string) bool) {
+		for i := range vds {
+			if vds[i].VolumeNumber != nil && vds[i].Props[linstor.PropertyCSIVolumeName] != "" {
+				if !yield(int(*vds[i].VolumeNumber), vds[i].Props[linstor.PropertyCSIVolumeName]) {
+					return
+				}
+			}
+		}
+	}
 }
