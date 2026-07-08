@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.3] - 2026-07-08
+
 ### Added
 
 - IO QoS limits via the `qos.linbit.com/{rbps,wbps,riops,wiops}` StorageClass
@@ -721,8 +723,9 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.11.2...HEAD
-[1.11.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.11.1...v1.11.2
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.11.3...HEAD
+[1.11.3]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.11.2...v1.11.3
+[1.11.2]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.11.1...v1.11.2
 [1.11.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.6...v1.11.0
 [1.10.6]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.10.5...v1.10.6
