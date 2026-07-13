@@ -30,3 +30,17 @@ jobs:
           sudo apt-get install -y --no-install-recommends lvm2 thin-provisioning-tools
       - name: Run CSI sanity suite against LINSTOR
         run: make sanity
+  sanity-cg:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+      - name: Install LVM tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends lvm2 thin-provisioning-tools
+      - name: Run consistency-group suite against LINSTOR
+        run: make sanity-cg
