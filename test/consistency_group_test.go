@@ -19,11 +19,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
-	dynfake "k8s.io/client-go/dynamic/fake"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	kubefake "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
@@ -81,46 +79,32 @@ func realLinstor(t *testing.T) (*client.Linstor, *hlc.HighLevelClient) {
 	return cl, hl
 }
 
-// pvc builds an unstructured PVC; a non-empty group stamps the consistency-group label.
-func pvc(namespace, name, group string) *unstructured.Unstructured {
-	meta := map[string]interface{}{
-		"name":      name,
-		"namespace": namespace,
-	}
+// pvc builds an PVC; a non-empty group stamps the consistency-group label.
+func pvc(namespace, name, group string) *corev1.PersistentVolumeClaim {
+	var labels map[string]string
 	if group != "" {
-		meta["labels"] = map[string]interface{}{
+		labels = map[string]string{
 			"linstor.csi.linbit.com/consistency-group": group,
 		}
 	}
 
-	return &unstructured.Unstructured{Object: map[string]interface{}{
-		"apiVersion": "v1",
-		"kind":       "PersistentVolumeClaim",
-		"metadata":   meta,
-	}}
-}
-
-func fakeKube(objs ...runtime.Object) dynamic.Interface {
-	// The fake dynamic client must know the list kind for every resource the driver LISTs; register them.
-	gvrToListKind := map[schema.GroupVersionResource]string{
-		{Group: "", Version: "v1", Resource: "persistentvolumeclaims"}:                        "PersistentVolumeClaimList",
-		{Group: "snapshot.storage.k8s.io", Version: "v1", Resource: "volumesnapshotcontents"}: "VolumeSnapshotContentList",
-		{Group: "snapshot.storage.k8s.io", Version: "v1", Resource: "volumesnapshotclasses"}:  "VolumeSnapshotClassList",
-		{Group: "snapshot.storage.k8s.io", Version: "v1", Resource: "volumesnapshots"}:        "VolumeSnapshotList",
+	return &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels:    labels,
+		},
 	}
-
-	return dynfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), gvrToListKind, objs...)
 }
 
 // newDriver builds an in-process driver with consistency groups enabled and the fake Kubernetes client injected.
-func newDriver(t *testing.T, cl *client.Linstor, kube dynamic.Interface, extra ...func(*driver.Driver) error) *driver.Driver {
+func newDriver(t *testing.T, cl *client.Linstor, kube kubernetes.Interface, extra ...func(*driver.Driver) error) *driver.Driver {
 	t.Helper()
 
 	opts := append([]func(*driver.Driver) error{
 		driver.NodeID(testNode()),
 		driver.LogLevel("debug"),
-		driver.KubeClient(kube),
-		driver.ConfigureConsistencyGroups(),
+		driver.ConfigureConsistencyGroups(kube),
 	}, extra...)
 
 	drv, err := driver.NewDriver(cl, opts...)
@@ -226,7 +210,7 @@ func TestCGAllocation(t *testing.T) {
 	const ns = "cgtest"
 
 	group := uniqueGroup("alloc")
-	drv := newDriver(t, cl, fakeKube(pvc(ns, "pvc-a", group), pvc(ns, "pvc-b", group)))
+	drv := newDriver(t, cl, kubefake.NewClientset(pvc(ns, "pvc-a", group), pvc(ns, "pvc-b", group)))
 
 	resps := runInParallel(t,
 		func() (*csi.CreateVolumeResponse, error) {
@@ -282,7 +266,7 @@ func TestCGMemberDeleteGC(t *testing.T) {
 	const ns = "cgtest"
 
 	group := uniqueGroup("gc")
-	drv := newDriver(t, cl, fakeKube(pvc(ns, "gc-a", group), pvc(ns, "gc-b", group), pvc(ns, "gc-c", group)))
+	drv := newDriver(t, cl, kubefake.NewClientset(pvc(ns, "gc-a", group), pvc(ns, "gc-b", group), pvc(ns, "gc-c", group)))
 
 	resps := runInParallel(t,
 		func() (*csi.CreateVolumeResponse, error) {
@@ -322,7 +306,7 @@ func TestCGNamespaceIsolation(t *testing.T) {
 	cl, _ := realLinstor(t)
 
 	group := uniqueGroup("iso")
-	drv := newDriver(t, cl, fakeKube(pvc("ns-one", "pvc-x", group), pvc("ns-two", "pvc-x", group)))
+	drv := newDriver(t, cl, kubefake.NewClientset(pvc("ns-one", "pvc-x", group), pvc("ns-two", "pvc-x", group)))
 
 	resps := runInParallel(t,
 		func() (*csi.CreateVolumeResponse, error) {
@@ -359,7 +343,7 @@ func TestCGPerMemberFsType(t *testing.T) {
 	const ns = "cgtest"
 
 	group := uniqueGroup("fstype")
-	drv := newDriver(t, cl, fakeKube(pvc(ns, "fs-ext4", group), pvc(ns, "fs-xfs", group)))
+	drv := newDriver(t, cl, kubefake.NewClientset(pvc(ns, "fs-ext4", group), pvc(ns, "fs-xfs", group)))
 
 	resps := runInParallel(t,
 		func() (*csi.CreateVolumeResponse, error) {
@@ -406,7 +390,7 @@ func TestCGGroupSnapshotDedup(t *testing.T) {
 	const ns = "cgtest"
 
 	group := uniqueGroup("gsnap")
-	drv := newDriver(t, cl, fakeKube(pvc(ns, "gs-a", group), pvc(ns, "gs-b", group)))
+	drv := newDriver(t, cl, kubefake.NewClientset(pvc(ns, "gs-a", group), pvc(ns, "gs-b", group)))
 
 	resps := runInParallel(t,
 		func() (*csi.CreateVolumeResponse, error) {
@@ -474,7 +458,7 @@ func TestCGDeleteSnapshotRejectsGroupMember(t *testing.T) {
 	const ns = "cgtest"
 
 	group := uniqueGroup("delsnap")
-	drv := newDriver(t, cl, fakeKube(pvc(ns, "ds-a", group), pvc(ns, "ds-b", group)))
+	drv := newDriver(t, cl, kubefake.NewClientset(pvc(ns, "ds-a", group), pvc(ns, "ds-b", group)))
 
 	resps := runInParallel(t,
 		func() (*csi.CreateVolumeResponse, error) {
@@ -555,7 +539,7 @@ func TestCGGroupRestore(t *testing.T) {
 	const ns = "cgtest"
 
 	srcGroup := uniqueGroup("restore-src")
-	srcDrv := newDriver(t, cl, fakeKube(pvc(ns, "src-a", srcGroup), pvc(ns, "src-b", srcGroup)))
+	srcDrv := newDriver(t, cl, kubefake.NewClientset(pvc(ns, "src-a", srcGroup), pvc(ns, "src-b", srcGroup)))
 
 	resps := runInParallel(t,
 		func() (*csi.CreateVolumeResponse, error) {
@@ -600,7 +584,7 @@ func TestCGGroupRestore(t *testing.T) {
 
 	// Restore into a NEW, all-fresh group. The first member to arrive triggers the whole-resource restore.
 	restoreGroup := uniqueGroup("restore-dst")
-	dstDrv := newDriver(t, cl, fakeKube(pvc(ns, "dst-a", restoreGroup), pvc(ns, "dst-b", restoreGroup)))
+	dstDrv := newDriver(t, cl, kubefake.NewClientset(pvc(ns, "dst-a", restoreGroup), pvc(ns, "dst-b", restoreGroup)))
 
 	reqA := createReq("dst-a", ns, "dst-a", "ext4", 128*miB, false)
 	reqA.VolumeContentSource = snapshotSource(snapForSource[idA])
@@ -644,7 +628,7 @@ func TestCGListVolumes(t *testing.T) {
 	const ns = "cgtest"
 
 	group := uniqueGroup("list")
-	drv := newDriver(t, cl, fakeKube(pvc(ns, "ls-a", group), pvc(ns, "ls-b", group), pvc(ns, "ls-plain", "")))
+	drv := newDriver(t, cl, kubefake.NewClientset(pvc(ns, "ls-a", group), pvc(ns, "ls-b", group), pvc(ns, "ls-plain", "")))
 
 	resps := runInParallel(t,
 		func() (*csi.CreateVolumeResponse, error) {
@@ -701,7 +685,7 @@ func TestCGNodePublish(t *testing.T) {
 	const ns = "cgtest"
 
 	group := uniqueGroup("publish")
-	drv := newDriver(t, cl, fakeKube(pvc(ns, "pub-a", group), pvc(ns, "pub-b", group)))
+	drv := newDriver(t, cl, kubefake.NewClientset(pvc(ns, "pub-a", group), pvc(ns, "pub-b", group)))
 
 	resps := runInParallel(t,
 		func() (*csi.CreateVolumeResponse, error) {
@@ -779,7 +763,7 @@ func TestCGRejectRWXOverNFS(t *testing.T) {
 	const ns = "cgtest"
 
 	group := uniqueGroup("rwxnfs")
-	drv := newDriver(t, cl, fakeKube(pvc(ns, "nfs-a", group)),
+	drv := newDriver(t, cl, kubefake.NewClientset(pvc(ns, "nfs-a", group)),
 		driver.ConfigureRWX(kubefake.NewSimpleClientset(), ns, "reactor-config"))
 
 	req := createReq("nfs-a", ns, "nfs-a", "ext4", 128*miB, false)
@@ -816,7 +800,7 @@ func TestCGRejectConflictingPlacement(t *testing.T) {
 	const ns = "cgtest"
 
 	group := uniqueGroup("conflict")
-	drv := newDriver(t, cl, fakeKube(pvc(ns, "cf-a", group), pvc(ns, "cf-b", group)))
+	drv := newDriver(t, cl, kubefake.NewClientset(pvc(ns, "cf-a", group), pvc(ns, "cf-b", group)))
 
 	respA, err := drv.CreateVolume(ctx, createReq("cf-a", ns, "cf-a", "ext4", 128*miB, false))
 	require.NoError(t, err)

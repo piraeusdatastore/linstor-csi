@@ -145,8 +145,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Build the Kubernetes clients once. They are nil when not running in Kubernetes; features that need
-	// them (RWX, snapshot-class syncing, RWX-block validation) handle their absence.
+	// Build the Kubernetes clients once. They are nil when not running in Kubernetes
 	kubeTyped, kubeDynamic, kubeErr := utils.KubernetesClient()
 
 	opts := []func(*driver.Driver) error{
@@ -160,31 +159,35 @@ func main() {
 
 	if *enableRWX {
 		if kubeErr != nil {
-			log.Fatalf("RWX support requires running in Kubernetes: %s", kubeErr)
-		}
+			log.Warnf("Failed to enable RWX support, continuing without it: %s", kubeErr)
+		} else {
+			if *namespace == "" {
+				content, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+				if err != nil {
+					log.Fatalf("RWX enabled but no valid service namespace could be found: %s", err)
+				}
 
-		if *namespace == "" {
-			content, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-			if err != nil {
-				log.Fatalf("RWX enabled but no valid service namespace could be found: %s", err)
+				*namespace = strings.TrimSpace(string(content))
 			}
 
-			*namespace = strings.TrimSpace(string(content))
+			opts = append(opts, driver.ConfigureRWX(kubeTyped, *namespace, *reactorConfigMapName))
 		}
-
-		opts = append(opts, driver.ConfigureRWX(kubeTyped, *namespace, *reactorConfigMapName))
 	}
 
-	if *disableRWXBlockValidation {
-		opts = append(opts, driver.DisableRWXBlockValidation())
+	if !*disableRWXBlockValidation {
+		if kubeErr != nil {
+			log.Warnf("Failed to enable RWX block validation support, continuing without it: %s", kubeErr)
+		} else {
+			opts = append(opts, driver.EnableRWXBlockValidation(kubeTyped))
+		}
 	}
 
 	if *enableConsistencyGroups {
 		if kubeErr != nil {
-			log.Fatalf("consistency-group support requires running in Kubernetes: %s", kubeErr)
+			log.Warnf("Failed to enable consistency-group support, continuing without it: %s", kubeErr)
+		} else {
+			opts = append(opts, driver.ConfigureConsistencyGroups(kubeTyped))
 		}
-
-		opts = append(opts, driver.ConfigureConsistencyGroups())
 	}
 
 	drv, err := driver.NewDriver(linstorClient, opts...)
