@@ -23,10 +23,10 @@ import (
 	"fmt"
 
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 )
 
 // KubeVirtVMLabel is the label that KubeVirt adds to pods to identify the VM they belong to.
@@ -47,62 +47,42 @@ var PVGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "per
 // - Multiple pods from different VMs are trying to use the same volume
 // - A pod without the KubeVirt VM label is trying to use a volume already attached elsewhere (strict mode)
 // Returns empty string for VM name when no pods are using the volume or validation is skipped.
-func ValidateRWXBlockAttachment(ctx context.Context, kubeClient dynamic.Interface, log *logrus.Entry, volumeID string) (string, error) {
+func ValidateRWXBlockAttachment(ctx context.Context, kubeClient kubernetes.Interface, log *logrus.Entry, volumeID string) (string, error) {
 	log.WithField("volumeID", volumeID).Info("validateRWXBlockAttachment called")
 
-	if kubeClient == nil {
-		// Not running in Kubernetes, skip validation
-		log.Warn("validateRWXBlockAttachment: kubeClient is nil, skipping validation")
-		return "", nil
-	}
-
 	// Get PV to find PVC reference
-	pv, err := kubeClient.Resource(PVGVR).Get(ctx, volumeID, metav1.GetOptions{})
+	pv, err := kubeClient.CoreV1().PersistentVolumes().Get(ctx, volumeID, metav1.GetOptions{})
 	if err != nil {
 		log.WithError(err).Warn("cannot validate RWX attachment: failed to get PV")
 		return "", nil
 	}
 
 	// Verify that PV's volumeHandle matches the volumeID
-	volumeHandle, found, err := unstructured.NestedString(pv.Object, "spec", "csi", "volumeHandle")
-	if err != nil {
-		log.WithError(err).Warnf("cannot validate RWX attachment: failed to read volumeHandle for PV %s", volumeID)
-
-		return "", nil
-	}
-
-	if !found {
+	if pv.Spec.CSI == nil {
 		log.Warnf("cannot validate RWX attachment: volumeHandle not found for PV %s", volumeID)
 
 		return "", nil
 	}
 
-	if volumeHandle != volumeID {
+	if pv.Spec.CSI.VolumeHandle != volumeID {
 		log.WithFields(logrus.Fields{
 			"volumeID":     volumeID,
-			"volumeHandle": volumeHandle,
+			"volumeHandle": pv.Spec.CSI.VolumeHandle,
 		}).Warn("cannot validate RWX attachment: PV volumeHandle does not match volumeID")
 
 		return "", nil
 	}
 
-	// Extract claimRef from PV
-	claimRef, found, _ := unstructured.NestedMap(pv.Object, "spec", "claimRef")
-	if !found {
+	if pv.Spec.ClaimRef == nil {
 		log.Warn("cannot validate RWX attachment: PV has no claimRef")
 		return "", nil
 	}
 
-	pvcName, _, _ := unstructured.NestedString(claimRef, "name")
-	pvcNamespace, _, _ := unstructured.NestedString(claimRef, "namespace")
-
-	if pvcNamespace == "" || pvcName == "" {
-		log.Warn("cannot validate RWX attachment: PVC name or namespace is empty in claimRef")
-		return "", nil
-	}
+	pvcName := pv.Spec.ClaimRef.Name
+	pvcNamespace := pv.Spec.ClaimRef.Namespace
 
 	// List all pods in the namespace
-	podList, err := kubeClient.Resource(PodGVR).Namespace(pvcNamespace).List(ctx, metav1.ListOptions{})
+	podList, err := kubeClient.CoreV1().Pods(pvcNamespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to list pods in namespace %s: %w", pvcNamespace, err)
 	}
@@ -115,40 +95,35 @@ func ValidateRWXBlockAttachment(ctx context.Context, kubeClient dynamic.Interfac
 
 	var podsUsingPVC []podInfo
 
-	for _, item := range podList.Items {
+	for i := range podList.Items {
+		pod := &podList.Items[i]
+
 		// Get pod phase from status
-		phase, _, _ := unstructured.NestedString(item.Object, "status", "phase")
-		if phase == "Succeeded" || phase == "Failed" {
+		if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
 			continue
 		}
 
-		// Check if pod uses the PVC
-		volumes, found, _ := unstructured.NestedSlice(item.Object, "spec", "volumes")
-		if !found {
-			continue
-		}
+		for j := range pod.Spec.Volumes {
+			vol := &pod.Spec.Volumes[j]
 
-		for _, vol := range volumes {
-			volMap, ok := vol.(map[string]interface{})
-			if !ok {
+			if vol.PersistentVolumeClaim == nil {
 				continue
 			}
 
-			claimName, found, _ := unstructured.NestedString(volMap, "persistentVolumeClaim", "claimName")
-			if !found || claimName != pvcName {
+			if vol.PersistentVolumeClaim.ClaimName != pvcName {
 				continue
 			}
 
 			// Extract VM name, handling both regular and hotplug disk pods
-			vmName, err := GetVMNameFromPod(ctx, kubeClient, log, &item)
+			vmName, err := GetVMNameFromPod(ctx, kubeClient, log, pod)
 			if err != nil {
-				log.WithError(err).WithField("pod", item.GetName()).Warn("failed to get VM name from pod")
+				log.WithError(err).WithField("pod", pod.Name).Warn("failed to get VM name from pod")
 				// Continue with empty vmName - will be caught by strict mode check
 				vmName = ""
 			}
 
 			podsUsingPVC = append(podsUsingPVC, podInfo{
-				name:   item.GetName(),
+				name:   pod.Name,
 				vmName: vmName,
 			})
 
@@ -213,7 +188,7 @@ func ValidateRWXBlockAttachment(ctx context.Context, kubeClient dynamic.Interfac
 
 // GetVMNameFromPod extracts the VM name from a pod, handling both regular virt-launcher pods
 // and hotplug disk pods (which reference the virt-launcher pod via ownerReferences).
-func GetVMNameFromPod(ctx context.Context, kubeClient dynamic.Interface, log *logrus.Entry, pod *unstructured.Unstructured) (string, error) {
+func GetVMNameFromPod(ctx context.Context, kubeClient kubernetes.Interface, log *logrus.Entry, pod *corev1.Pod) (string, error) {
 	labels := pod.GetLabels()
 	if labels == nil {
 		return "", nil
@@ -234,23 +209,20 @@ func GetVMNameFromPod(ctx context.Context, kubeClient dynamic.Interface, log *lo
 			}
 
 			// Get the owner pod (virt-launcher)
-			ownerPod, err := kubeClient.Resource(PodGVR).Namespace(pod.GetNamespace()).Get(ctx, owner.Name, metav1.GetOptions{})
+			ownerPod, err := kubeClient.CoreV1().Pods(pod.GetNamespace()).Get(ctx, owner.Name, metav1.GetOptions{})
 			if err != nil {
 				return "", fmt.Errorf("failed to get owner pod %s: %w", owner.Name, err)
 			}
 
 			// Extract VM name from owner pod
-			ownerLabels := ownerPod.GetLabels()
-			if ownerLabels != nil {
-				if vmName, ok := ownerLabels[KubeVirtVMLabel]; ok && vmName != "" {
-					log.WithFields(logrus.Fields{
-						"hotplugPod":   pod.GetName(),
-						"virtLauncher": owner.Name,
-						"vmName":       vmName,
-					}).Debug("resolved VM name from hotplug disk pod via owner reference")
+			if vmName, ok := ownerPod.GetLabels()[KubeVirtVMLabel]; ok {
+				log.WithFields(logrus.Fields{
+					"hotplugPod":   pod.GetName(),
+					"virtLauncher": owner.Name,
+					"vmName":       vmName,
+				}).Debug("resolved VM name from hotplug disk pod via owner reference")
 
-					return vmName, nil
-				}
+				return vmName, nil
 			}
 
 			return "", fmt.Errorf("owner pod %s does not have %s label", owner.Name, KubeVirtVMLabel)

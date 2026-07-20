@@ -24,16 +24,18 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	dynamicfake "k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 )
 
 func TestValidateRWXBlockAttachment(t *testing.T) {
 	testCases := []struct {
 		name        string
-		pods        []*unstructured.Unstructured
+		pods        []*corev1.Pod
 		pvcName     string
 		namespace   string
 		expectError bool
@@ -41,15 +43,15 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 	}{
 		{
 			name:        "no pods using PVC",
-			pods:        []*unstructured.Unstructured{},
+			pods:        []*corev1.Pod{},
 			pvcName:     "test-pvc",
 			namespace:   "default",
 			expectError: false,
 		},
 		{
 			name: "single pod using PVC",
-			pods: []*unstructured.Unstructured{
-				createUnstructuredPod("pod1", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+			pods: []*corev1.Pod{
+				createPod("pod1", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
 			},
 			pvcName:     "test-pvc",
 			namespace:   "default",
@@ -57,9 +59,9 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 		},
 		{
 			name: "two pods same VM (live migration)",
-			pods: []*unstructured.Unstructured{
-				createUnstructuredPod("virt-launcher-vm1-abc", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
-				createUnstructuredPod("virt-launcher-vm1-xyz", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+			pods: []*corev1.Pod{
+				createPod("virt-launcher-vm1-abc", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+				createPod("virt-launcher-vm1-xyz", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
 			},
 			pvcName:     "test-pvc",
 			namespace:   "default",
@@ -67,9 +69,9 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 		},
 		{
 			name: "two pods different VMs (should fail)",
-			pods: []*unstructured.Unstructured{
-				createUnstructuredPod("virt-launcher-vm1-abc", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
-				createUnstructuredPod("virt-launcher-vm2-xyz", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm2"}, "Running"),
+			pods: []*corev1.Pod{
+				createPod("virt-launcher-vm1-abc", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+				createPod("virt-launcher-vm2-xyz", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm2"}, "Running"),
 			},
 			pvcName:     "test-pvc",
 			namespace:   "default",
@@ -78,9 +80,9 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 		},
 		{
 			name: "pod without KubeVirt label when multiple pods exist (strict mode)",
-			pods: []*unstructured.Unstructured{
-				createUnstructuredPod("pod1", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
-				createUnstructuredPod("pod2", "default", "test-pvc", map[string]string{}, "Running"),
+			pods: []*corev1.Pod{
+				createPod("pod1", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+				createPod("pod2", "default", "test-pvc", map[string]string{}, "Running"),
 			},
 			pvcName:     "test-pvc",
 			namespace:   "default",
@@ -89,9 +91,9 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 		},
 		{
 			name: "completed pods should be ignored",
-			pods: []*unstructured.Unstructured{
-				createUnstructuredPod("pod1", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
-				createUnstructuredPod("pod2", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm2"}, "Succeeded"),
+			pods: []*corev1.Pod{
+				createPod("pod1", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+				createPod("pod2", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm2"}, "Succeeded"),
 			},
 			pvcName:     "test-pvc",
 			namespace:   "default",
@@ -99,9 +101,9 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 		},
 		{
 			name: "failed pods should be ignored",
-			pods: []*unstructured.Unstructured{
-				createUnstructuredPod("pod1", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
-				createUnstructuredPod("pod2", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm2"}, "Failed"),
+			pods: []*corev1.Pod{
+				createPod("pod1", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+				createPod("pod2", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm2"}, "Failed"),
 			},
 			pvcName:     "test-pvc",
 			namespace:   "default",
@@ -109,9 +111,9 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 		},
 		{
 			name: "pods in different namespace should not conflict",
-			pods: []*unstructured.Unstructured{
-				createUnstructuredPod("pod1", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
-				createUnstructuredPod("pod2", "other", "test-pvc", map[string]string{KubeVirtVMLabel: "vm2"}, "Running"),
+			pods: []*corev1.Pod{
+				createPod("pod1", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+				createPod("pod2", "other", "test-pvc", map[string]string{KubeVirtVMLabel: "vm2"}, "Running"),
 			},
 			pvcName:     "test-pvc",
 			namespace:   "default",
@@ -119,9 +121,9 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 		},
 		{
 			name: "pods using different PVCs should not conflict",
-			pods: []*unstructured.Unstructured{
-				createUnstructuredPod("pod1", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
-				createUnstructuredPod("pod2", "default", "other-pvc", map[string]string{KubeVirtVMLabel: "vm2"}, "Running"),
+			pods: []*corev1.Pod{
+				createPod("pod1", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+				createPod("pod2", "default", "other-pvc", map[string]string{KubeVirtVMLabel: "vm2"}, "Running"),
 			},
 			pvcName:     "test-pvc",
 			namespace:   "default",
@@ -129,10 +131,10 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 		},
 		{
 			name: "three pods from same VM (multi-node live migration scenario)",
-			pods: []*unstructured.Unstructured{
-				createUnstructuredPod("virt-launcher-vm1-a", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
-				createUnstructuredPod("virt-launcher-vm1-b", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
-				createUnstructuredPod("virt-launcher-vm1-c", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Pending"),
+			pods: []*corev1.Pod{
+				createPod("virt-launcher-vm1-a", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+				createPod("virt-launcher-vm1-b", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+				createPod("virt-launcher-vm1-c", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Pending"),
 			},
 			pvcName:     "test-pvc",
 			namespace:   "default",
@@ -140,8 +142,8 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 		},
 		{
 			name: "hotplug disk pod with virt-launcher (should succeed)",
-			pods: []*unstructured.Unstructured{
-				createUnstructuredPod("virt-launcher-vm1-abc", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+			pods: []*corev1.Pod{
+				createPod("virt-launcher-vm1-abc", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
 				createHotplugDiskPod("hp-volume-xyz", "default", "test-pvc", "virt-launcher-vm1-abc", "Running"),
 			},
 			pvcName:     "test-pvc",
@@ -150,10 +152,10 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 		},
 		{
 			name: "hotplug disks from different VMs (should fail)",
-			pods: []*unstructured.Unstructured{
-				createUnstructuredPod("virt-launcher-vm1-abc", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+			pods: []*corev1.Pod{
+				createPod("virt-launcher-vm1-abc", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
 				createHotplugDiskPod("hp-volume-vm1", "default", "test-pvc", "virt-launcher-vm1-abc", "Running"),
-				createUnstructuredPod("virt-launcher-vm2-xyz", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm2"}, "Running"),
+				createPod("virt-launcher-vm2-xyz", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm2"}, "Running"),
 				createHotplugDiskPod("hp-volume-vm2", "default", "test-pvc", "virt-launcher-vm2-xyz", "Running"),
 			},
 			pvcName:     "test-pvc",
@@ -165,11 +167,8 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create fake dynamic client with test pods and PV
-			scheme := runtime.NewScheme()
-
 			// Create PV object that references the PVC
-			pv := createUnstructuredPV("test-volume-id", tc.namespace, tc.pvcName)
+			pv := createPV("test-volume-id", tc.namespace, tc.pvcName)
 
 			objects := make([]runtime.Object, 0, len(tc.pods)+1)
 			objects = append(objects, pv)
@@ -178,11 +177,7 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 				objects = append(objects, pod)
 			}
 
-			gvrToListKind := map[schema.GroupVersionResource]string{
-				PodGVR: "PodList",
-				PVGVR:  "PersistentVolumeList",
-			}
-			client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme, gvrToListKind, objects...)
+			client := fake.NewClientset(objects...)
 
 			// Create logger
 			logger := logrus.NewEntry(logrus.New())
@@ -208,24 +203,9 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 	}
 }
 
-func TestValidateRWXBlockAttachmentNoKubeClient(t *testing.T) {
-	// When not running in Kubernetes (no client), validation should be skipped
-	logger := logrus.NewEntry(logrus.New())
-
-	vmName, err := ValidateRWXBlockAttachment(context.Background(), nil, logger, "test-volume-id")
-	assert.NoError(t, err)
-	assert.Empty(t, vmName)
-}
-
 func TestValidateRWXBlockAttachmentPVNotFound(t *testing.T) {
 	// When PV is not found, validation should be skipped with warning
-	scheme := runtime.NewScheme()
-
-	gvrToListKind := map[schema.GroupVersionResource]string{
-		PodGVR: "PodList",
-		PVGVR:  "PersistentVolumeList",
-	}
-	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme, gvrToListKind)
+	client := fake.NewClientset()
 
 	logger := logrus.NewEntry(logrus.New())
 	logger.Logger.SetLevel(logrus.DebugLevel)
@@ -235,52 +215,47 @@ func TestValidateRWXBlockAttachmentPVNotFound(t *testing.T) {
 	assert.Empty(t, vmName)
 }
 
-// createUnstructuredPod creates an unstructured pod object for testing.
-func createUnstructuredPod(name, namespace, pvcName string, labels map[string]string, phase string) *unstructured.Unstructured {
-	pod := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "v1",
-			"kind":       "Pod",
-			"metadata": map[string]interface{}{
-				"name":      name,
-				"namespace": namespace,
-				"labels":    toStringInterfaceMap(labels),
-			},
-			"spec": map[string]interface{}{
-				"volumes": []interface{}{
-					map[string]interface{}{
-						"name": "data",
-						"persistentVolumeClaim": map[string]interface{}{
-							"claimName": pvcName,
-						},
+// createPod creates a pod object for testing.
+func createPod(name, namespace, pvcName string, labels map[string]string, phase corev1.PodPhase) *corev1.Pod {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.PodSpec{
+			Volumes: []corev1.Volume{{
+				Name: "data",
+				VolumeSource: corev1.VolumeSource{
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: pvcName,
 					},
 				},
-			},
-			"status": map[string]interface{}{
-				"phase": phase,
-			},
+			}},
+		},
+		Status: corev1.PodStatus{
+			Phase: phase,
 		},
 	}
 
 	return pod
 }
 
-// createUnstructuredPV creates an unstructured PersistentVolume object for testing.
-func createUnstructuredPV(name, pvcNamespace, pvcName string) *unstructured.Unstructured {
-	pv := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "v1",
-			"kind":       "PersistentVolume",
-			"metadata": map[string]interface{}{
-				"name": name,
+// createPV creates a PersistentVolume object for testing.
+func createPV(name, pvcNamespace, pvcName string) *corev1.PersistentVolume {
+	pv := &corev1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: corev1.PersistentVolumeSpec{
+			ClaimRef: &corev1.ObjectReference{
+				Name:      pvcName,
+				Namespace: pvcNamespace,
 			},
-			"spec": map[string]interface{}{
-				"claimRef": map[string]interface{}{
-					"name":      pvcName,
-					"namespace": pvcNamespace,
-				},
-				"csi": map[string]interface{}{
-					"volumeHandle": name,
+			PersistentVolumeSource: corev1.PersistentVolumeSource{
+				CSI: &corev1.CSIPersistentVolumeSource{
+					Driver:       linstor.DriverName,
+					VolumeHandle: name,
 				},
 			},
 		},
@@ -289,52 +264,35 @@ func createUnstructuredPV(name, pvcNamespace, pvcName string) *unstructured.Unst
 	return pv
 }
 
-// toStringInterfaceMap converts map[string]string to map[string]interface{}.
-func toStringInterfaceMap(m map[string]string) map[string]interface{} {
-	result := make(map[string]interface{})
-
-	for k, v := range m {
-		result[k] = v
-	}
-
-	return result
-}
-
 // createHotplugDiskPod creates a hotplug disk pod that references a virt-launcher pod via ownerReferences.
-func createHotplugDiskPod(name, namespace, pvcName, ownerPodName, phase string) *unstructured.Unstructured {
-	pod := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "v1",
-			"kind":       "Pod",
-			"metadata": map[string]interface{}{
-				"name":      name,
-				"namespace": namespace,
-				"labels": map[string]interface{}{
-					"kubevirt.io": "hotplug-disk",
-				},
-				"ownerReferences": []interface{}{
-					map[string]interface{}{
-						"apiVersion":         "v1",
-						"kind":               "Pod",
-						"name":               ownerPodName,
-						"controller":         true,
-						"blockOwnerDeletion": true,
+func createHotplugDiskPod(name, namespace, pvcName, ownerPodName string, phase corev1.PodPhase) *corev1.Pod {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"kubevirt.io": "hotplug-disk",
+			},
+			OwnerReferences: []metav1.OwnerReference{{
+				APIVersion:         "v1",
+				Kind:               "Pod",
+				Name:               ownerPodName,
+				Controller:         new(true),
+				BlockOwnerDeletion: new(true),
+			}},
+		},
+		Spec: corev1.PodSpec{
+			Volumes: []corev1.Volume{{
+				Name: "data",
+				VolumeSource: corev1.VolumeSource{
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: pvcName,
 					},
 				},
-			},
-			"spec": map[string]interface{}{
-				"volumes": []interface{}{
-					map[string]interface{}{
-						"name": "data",
-						"persistentVolumeClaim": map[string]interface{}{
-							"claimName": pvcName,
-						},
-					},
-				},
-			},
-			"status": map[string]interface{}{
-				"phase": phase,
-			},
+			}},
+		},
+		Status: corev1.PodStatus{
+			Phase: phase,
 		},
 	}
 

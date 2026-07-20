@@ -60,9 +60,6 @@ import (
 // Version is set via ldflags configued in the Makefile.
 var Version = "UNKNOWN"
 
-// pvcGVR reads PersistentVolumeClaims via the dynamic client to resolve consistency-group membership.
-var pvcGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "persistentvolumeclaims"}
-
 // Driver fullfils CSI controller, node, and indentity server interfaces.
 type Driver struct {
 	linstorClient *client.Linstor
@@ -79,10 +76,10 @@ type Driver struct {
 	topologyPrefix string
 	// resyncAfter is the interval after which reconciliations should be retried
 	resyncAfter time.Duration
-	// disableRWXBlockValidation disables KubeVirt VM ownership validation for RWX block volumes
-	disableRWXBlockValidation bool
-	// consistencyGroups places PVCs sharing a consistency-group label as volume numbers of one resource.
-	consistencyGroups bool
+	// rwxBlockValidationClient, when set, enables KubeVirt VM ownership validation for RWX block volumes.
+	rwxBlockValidationClient kubernetes.Interface
+	// consistencyGroupClient, when set, places PVCs sharing a consistency-group label as volume numbers of one resource.
+	consistencyGroupClient kubernetes.Interface
 
 	// Embed for forward compatibility.
 	csi.UnimplementedIdentityServer
@@ -195,19 +192,10 @@ func KubeClient(client dynamic.Interface) func(*Driver) error {
 }
 
 // ConfigureConsistencyGroups enables consistency-group support: CreateVolume reads each PVC's group label and
-// places grouped volumes in one shared resource. Needs a Kubernetes client (built from in-cluster config if none).
-func ConfigureConsistencyGroups() func(*Driver) error {
+// places grouped volumes in one shared resource. The client is used to read the PVCs.
+func ConfigureConsistencyGroups(client kubernetes.Interface) func(*Driver) error {
 	return func(d *Driver) error {
-		if d.kubeClient == nil {
-			_, dyn, err := utils.KubernetesClient()
-			if err != nil {
-				return fmt.Errorf("consistency-group support requires running in Kubernetes: %w", err)
-			}
-
-			d.kubeClient = dyn
-		}
-
-		d.consistencyGroups = true
+		d.consistencyGroupClient = client
 
 		return nil
 	}
@@ -237,13 +225,13 @@ func ResyncAfter(resyncAfter time.Duration) func(*Driver) error {
 	}
 }
 
-// DisableRWXBlockValidation disables the KubeVirt VM ownership validation for RWX block volumes.
-// When disabled, the driver will not check if multiple pods using the same RWX block volume
-// belong to the same VM. This may be needed in environments where the validation causes issues
-// or when using RWX block volumes outside of KubeVirt.
-func DisableRWXBlockValidation() func(*Driver) error {
+// EnableRWXBlockValidation enables the KubeVirt VM ownership validation for RWX block volumes.
+// When enabled, the driver checks that multiple pods using the same RWX block volume belong to
+// the same VM, guarding against misuse of allow-two-primaries. The client is used to read the
+// PV/PVC objects.
+func EnableRWXBlockValidation(client kubernetes.Interface) func(*Driver) error {
 	return func(d *Driver) error {
-		d.disableRWXBlockValidation = true
+		d.rwxBlockValidationClient = client
 		return nil
 	}
 }
@@ -502,7 +490,7 @@ func (d *Driver) NodeGetInfo(ctx context.Context, _ *csi.NodeGetInfoRequest) (*c
 // consistencyGroupForPVC returns the consistency group of a CreateVolume request from its PVC's label, or ""
 // (ordinary volume) when the feature is off, no Kubernetes client is set, or the label is absent.
 func (d *Driver) consistencyGroupForPVC(ctx context.Context, req *csi.CreateVolumeRequest) (string, error) {
-	if !d.consistencyGroups || d.kubeClient == nil {
+	if d.consistencyGroupClient == nil {
 		return "", nil
 	}
 
@@ -513,7 +501,7 @@ func (d *Driver) consistencyGroupForPVC(ctx context.Context, req *csi.CreateVolu
 		return "", nil
 	}
 
-	pvc, err := d.kubeClient.Resource(pvcGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	pvc, err := d.consistencyGroupClient.CoreV1().PersistentVolumeClaims(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return "", fmt.Errorf("could not read PVC %s/%s for consistency-group label: %w", namespace, name, err)
 	}
@@ -880,8 +868,8 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	rwxBlock := req.VolumeCapability.AccessMode.GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER && req.VolumeCapability.GetBlock() != nil
 
 	// Validate RWX block attachment to prevent misuse of allow-two-primaries
-	if rwxBlock && !d.disableRWXBlockValidation {
-		if _, err := utils.ValidateRWXBlockAttachment(ctx, d.kubeClient, d.log, req.GetVolumeId()); err != nil {
+	if rwxBlock && d.rwxBlockValidationClient != nil {
+		if _, err := utils.ValidateRWXBlockAttachment(ctx, d.rwxBlockValidationClient, d.log, req.GetVolumeId()); err != nil {
 			return nil, status.Errorf(codes.FailedPrecondition,
 				"ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err)
 		}
