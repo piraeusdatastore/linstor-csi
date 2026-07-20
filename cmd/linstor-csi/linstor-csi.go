@@ -192,7 +192,12 @@ func main() {
 		if kubeErr != nil {
 			log.Warnf("Failed to enable RWX block validation support, continuing without it: %s", kubeErr)
 		} else {
-			opts = append(opts, driver.EnableRWXBlockValidation(kubeTyped))
+			validator, err := utils.NewRWXBlockValidator(ctx, kubeTyped, *resyncAfter, logger)
+			if err != nil {
+				log.Fatalf("Failed to enable block validation: %s", err)
+			}
+
+			opts = append(opts, driver.EnableRWXBlockValidation(validator))
 		}
 	}
 

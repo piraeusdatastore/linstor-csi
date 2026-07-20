@@ -73,8 +73,8 @@ type Driver struct {
 	topologyPrefix string
 	// snapshotClient reads VolumeSnapshotClass/Content objects for snapshot-parameter lookups.
 	snapshotClient snapclientset.Interface
-	// rwxBlockValidationClient, when set, enables KubeVirt VM ownership validation for RWX block volumes.
-	rwxBlockValidationClient kubernetes.Interface
+	// rwxBlockValidator resolves volumes to their PV/PVC via a volume-handle index; built once in Serve.
+	rwxBlockValidator *utils.RWXBlockValidator
 	// consistencyGroupClient, when set, places PVCs sharing a consistency-group label as volume numbers of one resource.
 	consistencyGroupClient kubernetes.Interface
 
@@ -213,11 +213,10 @@ func ConfigureRWX(cl kubernetes.Interface, namespace, reactorConfigMap string) f
 
 // EnableRWXBlockValidation enables the KubeVirt VM ownership validation for RWX block volumes.
 // When enabled, the driver checks that multiple pods using the same RWX block volume belong to
-// the same VM, guarding against misuse of allow-two-primaries. The client is used to read the
-// PV/PVC objects.
-func EnableRWXBlockValidation(client kubernetes.Interface) func(*Driver) error {
+// the same VM, guarding against misuse of allow-two-primaries.
+func EnableRWXBlockValidation(validator *utils.RWXBlockValidator) func(*Driver) error {
 	return func(d *Driver) error {
-		d.rwxBlockValidationClient = client
+		d.rwxBlockValidator = validator
 		return nil
 	}
 }
@@ -854,8 +853,8 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	rwxBlock := req.VolumeCapability.AccessMode.GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER && req.VolumeCapability.GetBlock() != nil
 
 	// Validate RWX block attachment to prevent misuse of allow-two-primaries
-	if rwxBlock && d.rwxBlockValidationClient != nil {
-		if _, err := utils.ValidateRWXBlockAttachment(ctx, d.rwxBlockValidationClient, d.log, req.GetVolumeId()); err != nil {
+	if rwxBlock && d.rwxBlockValidator != nil {
+		if _, err := d.rwxBlockValidator.ValidateAttachment(ctx, req.GetVolumeId()); err != nil {
 			return nil, status.Errorf(codes.FailedPrecondition,
 				"ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err)
 		}
