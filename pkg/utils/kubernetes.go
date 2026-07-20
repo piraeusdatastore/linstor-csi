@@ -3,12 +3,12 @@ package utils
 import (
 	"fmt"
 
-	"k8s.io/client-go/dynamic"
+	snapclientset "github.com/kubernetes-csi/external-snapshotter/client/v8/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
-func KubernetesClient() (kubernetes.Interface, dynamic.Interface, error) {
+func KubernetesClient() (kubernetes.Interface, snapclientset.Interface, error) {
 	cfg, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read cluster config: %w", err)
@@ -19,10 +19,10 @@ func KubernetesClient() (kubernetes.Interface, dynamic.Interface, error) {
 		return nil, nil, fmt.Errorf("failed to create typed cluster client: %w", err)
 	}
 
-	d, err := dynamic.NewForConfig(cfg)
+	s, err := snapclientset.NewForConfig(cfg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create dynamic cluster client: %w", err)
+		return nil, nil, fmt.Errorf("failed to create snapshot cluster client: %w", err)
 	}
 
-	return c, d, nil
+	return c, s, nil
 }
