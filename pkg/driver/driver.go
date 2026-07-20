@@ -33,7 +33,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	lc "github.com/LINBIT/golinstor"
 	"github.com/LINBIT/golinstor/devicelayerkind"
@@ -63,7 +62,6 @@ var Version = "UNKNOWN"
 // Driver fullfils CSI controller, node, and indentity server interfaces.
 type Driver struct {
 	linstorClient *client.Linstor
-	kubeClient    dynamic.Interface
 	nfsExporter   *NfsExporter
 	log           *logrus.Entry
 	version       string
@@ -74,8 +72,8 @@ type Driver struct {
 	nodeID string
 	// topologyPrefix is the name
 	topologyPrefix string
-	// resyncAfter is the interval after which reconciliations should be retried
-	resyncAfter time.Duration
+	// snapshotClient reads VolumeSnapshotClass/Content objects for snapshot-parameter lookups.
+	snapshotClient dynamic.Interface
 	// rwxBlockValidationClient, when set, enables KubeVirt VM ownership validation for RWX block volumes.
 	rwxBlockValidationClient kubernetes.Interface
 	// consistencyGroupClient, when set, places PVCs sharing a consistency-group label as volume numbers of one resource.
@@ -98,7 +96,6 @@ func NewDriver(linstorClient *client.Linstor, options ...func(*Driver) error) (*
 		nodeID:         "localhost",
 		log:            logrus.NewEntry(logrus.New()),
 		topologyPrefix: lc.NamespcAuxiliary,
-		resyncAfter:    5 * time.Minute,
 	}
 
 	d.log.Logger.SetOutput(ioutil.Discard)
@@ -182,11 +179,12 @@ func LogLevel(s string) func(*Driver) error {
 	}
 }
 
-// KubeClient sets the dynamic Kubernetes client used to read PVC/PV objects. It is built once in main
-// (nil when not running in Kubernetes); callers that need Kubernetes access guard on a nil client.
-func KubeClient(client dynamic.Interface) func(*Driver) error {
+// SnapshotClient sets the client used to read VolumeSnapshotClass/Content objects when resolving
+// snapshot parameters during snapshot operations.
+func SnapshotClient(client dynamic.Interface) func(*Driver) error {
 	return func(d *Driver) error {
-		d.kubeClient = client
+		d.snapshotClient = client
+
 		return nil
 	}
 }
@@ -210,17 +208,6 @@ func ConfigureRWX(cl kubernetes.Interface, namespace, reactorConfigMap string) f
 			log:              d.log.WithField("component", "nfsExporter"),
 		}
 
-		return nil
-	}
-}
-
-// ResyncAfter sets the interval in which certain resources should be synced.
-//
-// Currently, this only applies to VolumeSnapshotClassses.
-// Set to 0 to disable syncing.
-func ResyncAfter(resyncAfter time.Duration) func(*Driver) error {
-	return func(d *Driver) error {
-		d.resyncAfter = resyncAfter
 		return nil
 	}
 }
@@ -1624,13 +1611,6 @@ func (d *Driver) Serve(ctx context.Context, listener net.Listener) error {
 		return resp, err
 	}
 
-	if d.kubeClient != nil && d.resyncAfter > 0 {
-		err := ReconcileVolumeSnapshotClass(ctx, d.kubeClient, d.linstorClient, d.log, d.resyncAfter)
-		if err != nil {
-			return fmt.Errorf("failed to start volume snapshot class reconciler")
-		}
-	}
-
 	srv := grpc.NewServer(grpc.UnaryInterceptor(errHandler))
 	csi.RegisterIdentityServer(srv, d)
 	csi.RegisterControllerServer(srv, d)
@@ -1791,7 +1771,7 @@ func findMatchingSnapshotClassName(snapId string, contents ...unstructured.Unstr
 }
 
 func (d *Driver) maybeGetSnapshotParameters(ctx context.Context, snapshotID string) (*volume.SnapshotParameters, error) {
-	if d.kubeClient == nil {
+	if d.snapshotClient == nil {
 		return nil, nil
 	}
 
@@ -1799,7 +1779,7 @@ func (d *Driver) maybeGetSnapshotParameters(ctx context.Context, snapshotID stri
 	contentGvr := gv.WithResource("volumesnapshotcontents")
 	classGvr := gv.WithResource("volumesnapshotclasses")
 
-	result, err := d.kubeClient.Resource(contentGvr).List(ctx, metav1.ListOptions{})
+	result, err := d.snapshotClient.Resource(contentGvr).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch list of snapshot contents")
 	}
@@ -1809,7 +1789,7 @@ func (d *Driver) maybeGetSnapshotParameters(ctx context.Context, snapshotID stri
 		return nil, fmt.Errorf("failed to determine snapshot class name")
 	}
 
-	class, err := d.kubeClient.Resource(classGvr).Get(ctx, snapshotClassName, metav1.GetOptions{})
+	class, err := d.snapshotClient.Resource(classGvr).Get(ctx, snapshotClassName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch snapshot class: %w", err)
 	}
