@@ -19,11 +19,11 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 package utils
 
 import (
-	"context"
 	"testing"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -168,7 +168,7 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create PV object that references the PVC
-			pv := createPV("test-volume-id", tc.namespace, tc.pvcName)
+			pv := createPV("test-volume-id", "test-volume-id", tc.namespace, tc.pvcName)
 
 			objects := make([]runtime.Object, 0, len(tc.pods)+1)
 			objects = append(objects, pv)
@@ -177,14 +177,10 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 				objects = append(objects, pod)
 			}
 
-			client := fake.NewClientset(objects...)
-
-			// Create logger
-			logger := logrus.NewEntry(logrus.New())
-			logger.Logger.SetLevel(logrus.DebugLevel)
+			validator := newValidator(t, objects...)
 
 			// Run validation
-			vmName, err := ValidateRWXBlockAttachment(context.Background(), client, logger, "test-volume-id")
+			vmName, err := validator.ValidateAttachment(t.Context(), "test-volume-id")
 
 			if tc.expectError {
 				assert.Error(t, err)
@@ -204,15 +200,42 @@ func TestValidateRWXBlockAttachment(t *testing.T) {
 }
 
 func TestValidateRWXBlockAttachmentPVNotFound(t *testing.T) {
-	// When PV is not found, validation should be skipped with warning
-	client := fake.NewClientset()
+	// When no PV matches the volume handle, validation should be skipped without error.
+	validator := newValidator(t)
+
+	vmName, err := validator.ValidateAttachment(t.Context(), "non-existent-pv")
+	assert.NoError(t, err)
+	assert.Empty(t, vmName)
+}
+
+func TestValidateRWXBlockAttachmentFindsPVByVolumeHandle(t *testing.T) {
+	// The PV object name differs from the CSI volume handle; the validator must still resolve it
+	// through the volume-handle index rather than assuming the handle is the PV name.
+	validator := newValidator(t,
+		createPV("different-pv-name", "test-volume-id", "default", "test-pvc"),
+		createPod("virt-launcher-vm1-abc", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm1"}, "Running"),
+		createPod("virt-launcher-vm2-xyz", "default", "test-pvc", map[string]string{KubeVirtVMLabel: "vm2"}, "Running"),
+	)
+
+	vmName, err := validator.ValidateAttachment(t.Context(), "test-volume-id")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "different VMs")
+	assert.Empty(t, vmName)
+}
+
+// newValidator builds an RWXBlockValidator backed by a fake client seeded with the given objects.
+func newValidator(t *testing.T, objects ...runtime.Object) *RWXBlockValidator {
+	t.Helper()
+
+	client := fake.NewClientset(objects...)
 
 	logger := logrus.NewEntry(logrus.New())
 	logger.Logger.SetLevel(logrus.DebugLevel)
 
-	vmName, err := ValidateRWXBlockAttachment(context.Background(), client, logger, "non-existent-pv")
-	assert.NoError(t, err)
-	assert.Empty(t, vmName)
+	validator, err := NewRWXBlockValidator(t.Context(), client, 0, logger)
+	require.NoError(t, err)
+
+	return validator
 }
 
 // createPod creates a pod object for testing.
@@ -241,8 +264,9 @@ func createPod(name, namespace, pvcName string, labels map[string]string, phase 
 	return pod
 }
 
-// createPV creates a PersistentVolume object for testing.
-func createPV(name, pvcNamespace, pvcName string) *corev1.PersistentVolume {
+// createPV creates a PersistentVolume object for testing. The object name and CSI volume handle are
+// separate so tests can exercise the case where they differ.
+func createPV(name, volumeHandle, pvcNamespace, pvcName string) *corev1.PersistentVolume {
 	pv := &corev1.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -255,7 +279,7 @@ func createPV(name, pvcNamespace, pvcName string) *corev1.PersistentVolume {
 			PersistentVolumeSource: corev1.PersistentVolumeSource{
 				CSI: &corev1.CSIPersistentVolumeSource{
 					Driver:       linstor.DriverName,
-					VolumeHandle: name,
+					VolumeHandle: volumeHandle,
 				},
 			},
 		},

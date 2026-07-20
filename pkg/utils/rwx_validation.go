@@ -21,12 +21,14 @@ package utils
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 )
 
 // KubeVirtVMLabel is the label that KubeVirt adds to pods to identify the VM they belong to.
@@ -35,41 +37,85 @@ const KubeVirtVMLabel = "vm.kubevirt.io/name"
 // KubeVirtHotplugDiskLabel is the label that KubeVirt adds to hotplug disk pods.
 const KubeVirtHotplugDiskLabel = "kubevirt.io"
 
-// PodGVR is the GroupVersionResource for pods.
-var PodGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+// volumeHandleIndex indexes PersistentVolumes by their CSI volume handle.
+const volumeHandleIndex = "byVolumeHandle"
 
-// PVGVR is the GroupVersionResource for persistent volumes.
-var PVGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "persistentvolumes"}
+// RWXBlockValidator checks that RWX block volumes are only used by pods belonging to the same KubeVirt VM.
+// It resolves the PersistentVolume for a CSI volume handle through an informer-backed index, so the volume
+// handle does not need to match the PV object name.
+type RWXBlockValidator struct {
+	pvIndexer cache.Indexer
+	client    kubernetes.Interface
+	log       *logrus.Entry
+}
 
-// ValidateRWXBlockAttachment checks that RWX block volumes are only used by pods belonging to the same VM.
+// NewRWXBlockValidator builds a PersistentVolume informer indexed by CSI volume handle, starts it, and
+// blocks until its cache has synced. The informer keeps the index current for the lifetime of ctx.
+func NewRWXBlockValidator(ctx context.Context, client kubernetes.Interface, resyncAfter time.Duration, log *logrus.Entry) (*RWXBlockValidator, error) {
+	factory := informers.NewSharedInformerFactory(client, resyncAfter)
+	informer := factory.Core().V1().PersistentVolumes().Informer()
+
+	if err := informer.AddIndexers(cache.Indexers{volumeHandleIndex: indexPersistentVolumeByVolumeHandle}); err != nil {
+		return nil, fmt.Errorf("failed to add volume handle index: %w", err)
+	}
+
+	factory.StartWithContext(ctx)
+
+	if !cache.WaitForNamedCacheSyncWithContext(ctx, informer.HasSynced) {
+		return nil, fmt.Errorf("failed to sync persistent volume informer cache")
+	}
+
+	return &RWXBlockValidator{
+		pvIndexer: informer.GetIndexer(),
+		client:    client,
+		log:       log.WithField("component", "RWXBlockValidator"),
+	}, nil
+}
+
+// indexPersistentVolumeByVolumeHandle keys CSI-backed PersistentVolumes by their volume handle.
+func indexPersistentVolumeByVolumeHandle(obj interface{}) ([]string, error) {
+	pv, ok := obj.(*corev1.PersistentVolume)
+	if !ok || pv.Spec.CSI == nil {
+		return nil, nil
+	}
+
+	return []string{pv.Spec.CSI.VolumeHandle}, nil
+}
+
+// persistentVolumeForVolumeHandle returns the PersistentVolume whose CSI volume handle matches volumeID.
+func (v *RWXBlockValidator) persistentVolumeForVolumeHandle(volumeID string) (*corev1.PersistentVolume, error) {
+	objs, err := v.pvIndexer.ByIndex(volumeHandleIndex, volumeID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(objs) != 1 {
+		return nil, fmt.Errorf("unexpected number of PVs found with matching volume handle: %d != 1", len(objs))
+	}
+
+	pv, ok := objs[0].(*corev1.PersistentVolume)
+	if !ok {
+		return nil, fmt.Errorf("unexpected PV type: %T", pv)
+	}
+
+	// An informer may change this, so create a deep copy
+	return pv.DeepCopy(), nil
+}
+
+// ValidateAttachment checks that an RWX block volume is only used by pods belonging to the same VM.
 // This prevents misuse of allow-two-primaries while still permitting live migration.
 // Returns the VM name if validation passes, or an error if:
 // - Multiple pods from different VMs are trying to use the same volume
 // - A pod without the KubeVirt VM label is trying to use a volume already attached elsewhere (strict mode)
 // Returns empty string for VM name when no pods are using the volume or validation is skipped.
-func ValidateRWXBlockAttachment(ctx context.Context, kubeClient kubernetes.Interface, log *logrus.Entry, volumeID string) (string, error) {
-	log.WithField("volumeID", volumeID).Info("validateRWXBlockAttachment called")
+func (v *RWXBlockValidator) ValidateAttachment(ctx context.Context, volumeID string) (string, error) {
+	log := v.log.WithField("volumeID", volumeID)
+	log.Info("validateRWXBlockAttachment called")
 
-	// Get PV to find PVC reference
-	pv, err := kubeClient.CoreV1().PersistentVolumes().Get(ctx, volumeID, metav1.GetOptions{})
+	// Resolve the PV by its CSI volume handle; the handle need not match the PV object name.
+	pv, err := v.persistentVolumeForVolumeHandle(volumeID)
 	if err != nil {
-		log.WithError(err).Warn("cannot validate RWX attachment: failed to get PV")
-		return "", nil
-	}
-
-	// Verify that PV's volumeHandle matches the volumeID
-	if pv.Spec.CSI == nil {
-		log.Warnf("cannot validate RWX attachment: volumeHandle not found for PV %s", volumeID)
-
-		return "", nil
-	}
-
-	if pv.Spec.CSI.VolumeHandle != volumeID {
-		log.WithFields(logrus.Fields{
-			"volumeID":     volumeID,
-			"volumeHandle": pv.Spec.CSI.VolumeHandle,
-		}).Warn("cannot validate RWX attachment: PV volumeHandle does not match volumeID")
-
+		log.WithError(err).Warn("cannot validate RWX attachment: failed to look up PV by volume handle")
 		return "", nil
 	}
 
@@ -82,7 +128,7 @@ func ValidateRWXBlockAttachment(ctx context.Context, kubeClient kubernetes.Inter
 	pvcNamespace := pv.Spec.ClaimRef.Namespace
 
 	// List all pods in the namespace
-	podList, err := kubeClient.CoreV1().Pods(pvcNamespace).List(ctx, metav1.ListOptions{})
+	podList, err := v.client.CoreV1().Pods(pvcNamespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to list pods in namespace %s: %w", pvcNamespace, err)
 	}
@@ -115,7 +161,7 @@ func ValidateRWXBlockAttachment(ctx context.Context, kubeClient kubernetes.Inter
 			}
 
 			// Extract VM name, handling both regular and hotplug disk pods
-			vmName, err := GetVMNameFromPod(ctx, kubeClient, log, pod)
+			vmName, err := GetVMNameFromPod(ctx, v.client, log, pod)
 			if err != nil {
 				log.WithError(err).WithField("pod", pod.Name).Warn("failed to get VM name from pod")
 				// Continue with empty vmName - will be caught by strict mode check
@@ -136,7 +182,6 @@ func ValidateRWXBlockAttachment(ctx context.Context, kubeClient kubernetes.Inter
 		// Return VM name if there's exactly one pod
 		if len(podsUsingPVC) == 1 {
 			log.WithFields(logrus.Fields{
-				"volumeID":     volumeID,
 				"vmName":       podsUsingPVC[0].vmName,
 				"podCount":     1,
 				"pvcNamespace": pvcNamespace,
@@ -147,7 +192,6 @@ func ValidateRWXBlockAttachment(ctx context.Context, kubeClient kubernetes.Inter
 		}
 
 		log.WithFields(logrus.Fields{
-			"volumeID":     volumeID,
 			"pvcNamespace": pvcNamespace,
 			"pvcName":      pvcName,
 		}).Info("validateRWXBlockAttachment: no pods found using PVC")
