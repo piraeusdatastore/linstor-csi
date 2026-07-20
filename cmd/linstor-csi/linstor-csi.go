@@ -57,17 +57,21 @@ func main() {
 		labelBySP                 = flag.Bool("label-by-storage-pool", true, "Set to false to disable labeling of nodes based on their configured storage pools.")
 		nodeCacheTimeout          = flag.Duration("node-cache-timeout", 1*time.Minute, "Duration for which the results of node and storage pool related API responses should be cached.")
 		resourceCacheTimeout      = flag.Duration("resource-cache-timeout", 30*time.Second, "Duration for which the results of resource related API responses should be cached.")
-		resyncAfter               = flag.Duration("resync-after", 5*time.Minute, "Duration after which reconciliations (such as for VolumeSnapshotClasses) should be rerun. Set to 0 to disable.")
+		resyncAfter               = flag.Duration("resync-after", 5*time.Minute, "Duration after which reconciliations (such as for VolumeSnapshotClasses) should be rerun.")
 		enableRWX                 = flag.Bool("enable-rwx", false, "Enable RWX support via NFS (requires running in Kubernetes).")
 		namespace                 = flag.String("nfs-service-namespace", "", "The namespace the NFS service is running in.")
 		reactorConfigMapName      = flag.String("nfs-reactor-config-map-name", "linstor-csi-nfs-reactor-config", "Name of the config map used to store promoter configuration")
 		disableRWXBlockValidation = flag.Bool("disable-rwx-block-validation", false, "Disable KubeVirt VM ownership validation for RWX block volumes.")
 		enableConsistencyGroups   = flag.Bool("enable-consistency-groups", false, "Place PVCs sharing a linstor.csi.linbit.com/consistency-group label as separate volumes of one LINSTOR resource (requires running in Kubernetes).")
+		enableSnapshotClasses     = flag.Bool("enable-volume-snapshot-classes", true, "Enable VolumeSnapshotClass handling: reconcile VolumeSnapshotClasses and read snapshot-class parameters (requires running in Kubernetes).")
 	)
 
 	flag.Var(&volume.DefaultRemoteAccessPolicy, "default-remote-access-policy", "")
 
 	flag.Parse()
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	// TODO: Take log outputs and options from the command line.
 	logOut := os.Stderr
@@ -153,8 +157,18 @@ func main() {
 		driver.LogOut(logOut),
 		driver.NodeID(*node),
 		driver.TopologyPrefix(*propNs),
-		driver.KubeClient(kubeDynamic),
-		driver.ResyncAfter(*resyncAfter),
+	}
+
+	if *enableSnapshotClasses {
+		if kubeErr != nil {
+			log.Warnf("Failed to enable VolumeSnapshotClass handling, continuing without it: %s", kubeErr)
+		} else {
+			opts = append(opts, driver.SnapshotClient(kubeDynamic))
+
+			if err := driver.ReconcileVolumeSnapshotClass(ctx, kubeDynamic, linstorClient, logger, *resyncAfter); err != nil {
+				log.Fatalf("Failed to start VolumeSnapshotClass reconciler: %s", err)
+			}
+		}
 	}
 
 	if *enableRWX {
@@ -199,9 +213,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	if err := drv.Serve(ctx, listener); err != nil {
 		log.Fatal(err)
