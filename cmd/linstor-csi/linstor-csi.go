@@ -150,7 +150,7 @@ func main() {
 	}
 
 	// Build the Kubernetes clients once. They are nil when not running in Kubernetes
-	kubeTyped, kubeDynamic, kubeErr := utils.KubernetesClient()
+	kubeTyped, kubeSnapshot, kubeErr := utils.KubernetesClient()
 
 	opts := []func(*driver.Driver) error{
 		driver.LogLevel(*logLevel),
@@ -163,9 +163,9 @@ func main() {
 		if kubeErr != nil {
 			log.Warnf("Failed to enable VolumeSnapshotClass handling, continuing without it: %s", kubeErr)
 		} else {
-			opts = append(opts, driver.SnapshotClient(kubeDynamic))
+			opts = append(opts, driver.SnapshotClient(kubeSnapshot))
 
-			if err := driver.ReconcileVolumeSnapshotClass(ctx, kubeDynamic, linstorClient, logger, *resyncAfter); err != nil {
+			if err := driver.ReconcileVolumeSnapshotClass(ctx, kubeSnapshot, kubeTyped, linstorClient, logger, *resyncAfter); err != nil {
 				log.Fatalf("Failed to start VolumeSnapshotClass reconciler: %s", err)
 			}
 		}

@@ -2,18 +2,17 @@ package driver
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"time"
 
-	"github.com/kubernetes-csi/external-snapshotter/v8/pkg/utils"
+	snapv1 "github.com/kubernetes-csi/external-snapshotter/client/v8/apis/volumesnapshot/v1"
+	snapclientset "github.com/kubernetes-csi/external-snapshotter/client/v8/clientset/versioned"
+	snapinformers "github.com/kubernetes-csi/external-snapshotter/client/v8/informers/externalversions"
+	snaputils "github.com/kubernetes-csi/external-snapshotter/v8/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/dynamic/dynamicinformer"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
@@ -21,15 +20,11 @@ import (
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
-func ReconcileVolumeSnapshotClass(ctx context.Context, kubeClient dynamic.Interface, snapshotter *client.Linstor, log *logrus.Entry, resyncAfter time.Duration) error {
-	factory := dynamicinformer.NewDynamicSharedInformerFactory(kubeClient, resyncAfter)
-	volumeSnapshotClassIndexer := factory.ForResource(schema.GroupVersionResource{
-		Group:    "snapshot.storage.k8s.io",
-		Version:  "v1",
-		Resource: "volumesnapshotclasses",
-	}).Informer()
+func ReconcileVolumeSnapshotClass(ctx context.Context, snapClient snapclientset.Interface, secretClient kubernetes.Interface, snapshotter *client.Linstor, log *logrus.Entry, resyncAfter time.Duration) error {
+	factory := snapinformers.NewSharedInformerFactory(snapClient, resyncAfter)
+	volumeSnapshotClassInformer := factory.Snapshot().V1().VolumeSnapshotClasses().Informer()
 
-	err := volumeSnapshotClassIndexer.SetWatchErrorHandlerWithContext(func(ctx context.Context, r *cache.Reflector, err error) {
+	err := volumeSnapshotClassInformer.SetWatchErrorHandlerWithContext(func(ctx context.Context, r *cache.Reflector, err error) {
 		if errors.IsNotFound(err) {
 			log.WithError(err).Debug("volumesnapshotclasses.snapshot.storage.k8s.io not deployed in cluster, ignoring")
 		} else {
@@ -40,37 +35,31 @@ func ReconcileVolumeSnapshotClass(ctx context.Context, kubeClient dynamic.Interf
 		return fmt.Errorf("failed to set error handler: %w", err)
 	}
 
-	_, err = volumeSnapshotClassIndexer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj any) {
-			params, err := snapshotParamsFromUnstructured(ctx, kubeClient, obj.(*unstructured.Unstructured))
-			if err != nil {
-				log.WithError(err).Warn("failed to parse unstructured object")
-				return
-			}
+	reconcile := func(obj any) {
+		class, ok := obj.(*snapv1.VolumeSnapshotClass)
+		if !ok {
+			log.Warnf("expected *VolumeSnapshotClass, got %T", obj)
+			return
+		}
 
-			if params != nil {
-				err := snapshotter.ReconcileRemote(ctx, params)
-				if err != nil {
-					log.WithError(err).Warnf("failed to reconcile remote for volumesnapshotclass '%s'", obj.(*unstructured.Unstructured).GetName())
-					return
-				}
-			}
-		},
-		UpdateFunc: func(_, newObj any) {
-			newParams, err := snapshotParamsFromUnstructured(ctx, kubeClient, newObj.(*unstructured.Unstructured))
-			if err != nil {
-				log.WithError(err).Warn("failed to parse unstructured (new) object")
-				return
-			}
+		params, err := snapshotParamsFromClass(ctx, secretClient, class)
+		if err != nil {
+			log.WithError(err).Warn("failed to parse volume snapshot class")
+			return
+		}
 
-			if newParams != nil {
-				err := snapshotter.ReconcileRemote(ctx, newParams)
-				if err != nil {
-					log.WithError(err).Warnf("failed to reconcile remote for volumesnapshotclass '%s'", newObj.(*unstructured.Unstructured).GetName())
-					return
-				}
-			}
-		},
+		if params == nil {
+			return
+		}
+
+		if err := snapshotter.ReconcileRemote(ctx, params); err != nil {
+			log.WithError(err).Warnf("failed to reconcile remote for volumesnapshotclass '%s'", class.GetName())
+		}
+	}
+
+	_, err = volumeSnapshotClassInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+		AddFunc:    reconcile,
+		UpdateFunc: func(_, newObj any) { reconcile(newObj) },
 	}, resyncAfter)
 	if err != nil {
 		return err
@@ -81,53 +70,27 @@ func ReconcileVolumeSnapshotClass(ctx context.Context, kubeClient dynamic.Interf
 	return nil
 }
 
-func snapshotParamsFromUnstructured(ctx context.Context, client dynamic.Interface, obj *unstructured.Unstructured) (*volume.SnapshotParameters, error) {
-	driver, _, err := unstructured.NestedString(obj.Object, "driver")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get driver name: %w", err)
-	}
-
-	if driver != linstor.DriverName {
+func snapshotParamsFromClass(ctx context.Context, secretClient kubernetes.Interface, class *snapv1.VolumeSnapshotClass) (*volume.SnapshotParameters, error) {
+	if class.Driver != linstor.DriverName {
 		return nil, nil
 	}
 
-	params, _, err := unstructured.NestedStringMap(obj.Object, "parameters")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get driver parameters: %w", err)
-	}
-
-	secretName, _, err := unstructured.NestedString(obj.Object, "parameters", utils.PrefixedSnapshotterSecretNameKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get driver secret name: %w", err)
-	}
-
-	secretNamespace, _, err := unstructured.NestedString(obj.Object, "parameters", utils.PrefixedSnapshotterSecretNamespaceKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get driver secret namespace: %w", err)
-	}
+	secretName := class.Parameters[snaputils.PrefixedSnapshotterSecretNameKey]
+	secretNamespace := class.Parameters[snaputils.PrefixedSnapshotterSecretNamespaceKey]
 
 	var secretMap map[string]string
 
 	if secretName != "" {
-		secret, err := client.Resource(schema.GroupVersionResource{Version: "v1", Resource: "secrets"}).Namespace(secretNamespace).Get(ctx, secretName, metav1.GetOptions{})
+		secret, err := secretClient.CoreV1().Secrets(secretNamespace).Get(ctx, secretName, metav1.GetOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to get secret '%s': %w", secretName, err)
 		}
 
-		secretMap, _, err = unstructured.NestedStringMap(secret.Object, "data")
-		if err != nil {
-			return nil, fmt.Errorf("failed to access secret '%s': %w", secretName, err)
-		}
-
-		for k, v := range secretMap {
-			b, err := base64.StdEncoding.DecodeString(v)
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode secret value '%s/data/%s': %w", secretName, k, err)
-			}
-
-			secretMap[k] = string(b)
+		secretMap = make(map[string]string, len(secret.Data))
+		for k, v := range secret.Data {
+			secretMap[k] = string(v)
 		}
 	}
 
-	return volume.NewSnapshotParameters(params, secretMap)
+	return volume.NewSnapshotParameters(class.Parameters, secretMap)
 }

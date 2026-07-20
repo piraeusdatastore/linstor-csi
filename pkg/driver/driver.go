@@ -37,6 +37,8 @@ import (
 	lc "github.com/LINBIT/golinstor"
 	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	snapv1 "github.com/kubernetes-csi/external-snapshotter/client/v8/apis/volumesnapshot/v1"
+	snapclientset "github.com/kubernetes-csi/external-snapshotter/client/v8/clientset/versioned"
 	"github.com/piraeusdatastore/nri-volume-qos/pkg/meta"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -44,10 +46,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
@@ -73,7 +72,7 @@ type Driver struct {
 	// topologyPrefix is the name
 	topologyPrefix string
 	// snapshotClient reads VolumeSnapshotClass/Content objects for snapshot-parameter lookups.
-	snapshotClient dynamic.Interface
+	snapshotClient snapclientset.Interface
 	// rwxBlockValidationClient, when set, enables KubeVirt VM ownership validation for RWX block volumes.
 	rwxBlockValidationClient kubernetes.Interface
 	// consistencyGroupClient, when set, places PVCs sharing a consistency-group label as volume numbers of one resource.
@@ -181,7 +180,7 @@ func LogLevel(s string) func(*Driver) error {
 
 // SnapshotClient sets the client used to read VolumeSnapshotClass/Content objects when resolving
 // snapshot parameters during snapshot operations.
-func SnapshotClient(client dynamic.Interface) func(*Driver) error {
+func SnapshotClient(client snapclientset.Interface) func(*Driver) error {
 	return func(d *Driver) error {
 		d.snapshotClient = client
 
@@ -190,7 +189,7 @@ func SnapshotClient(client dynamic.Interface) func(*Driver) error {
 }
 
 // ConfigureConsistencyGroups enables consistency-group support: CreateVolume reads each PVC's group label and
-// places grouped volumes in one shared resource. The client is used to read the PVCs.
+// places grouped volumes in one shared resource.
 func ConfigureConsistencyGroups(client kubernetes.Interface) func(*Driver) error {
 	return func(d *Driver) error {
 		d.consistencyGroupClient = client
@@ -1747,24 +1746,26 @@ func (d *Driver) createNewVolume(ctx context.Context, info *volume.Info, params 
 	}, nil
 }
 
-func findMatchingSnapshotClassName(snapId string, contents ...unstructured.Unstructured) string {
+func findMatchingSnapshotClassName(snapId string, contents ...snapv1.VolumeSnapshotContent) string {
 	for i := range contents {
-		content := contents[i].Object
-		if driver, _, _ := unstructured.NestedString(content, "spec", "driver"); driver != linstor.DriverName {
+		content := contents[i]
+		if content.Spec.Driver != linstor.DriverName {
 			continue
 		}
 
-		if handle, _, _ := unstructured.NestedString(content, "status", "snapshotHandle"); handle != snapId {
+		if content.Status == nil || content.Status.SnapshotHandle == nil || *content.Status.SnapshotHandle != snapId {
 			continue
 		}
 
-		if readyToUse, _, _ := unstructured.NestedBool(content, "status", "readyToUse"); !readyToUse {
+		if content.Status.ReadyToUse == nil || !*content.Status.ReadyToUse {
 			continue
 		}
 
-		snapshotClass, _, _ := unstructured.NestedString(content, "spec", "volumeSnapshotClassName")
+		if content.Spec.VolumeSnapshotClassName == nil {
+			continue
+		}
 
-		return snapshotClass
+		return *content.Spec.VolumeSnapshotClassName
 	}
 
 	return ""
@@ -1775,11 +1776,7 @@ func (d *Driver) maybeGetSnapshotParameters(ctx context.Context, snapshotID stri
 		return nil, nil
 	}
 
-	gv := schema.GroupVersion{Group: "snapshot.storage.k8s.io", Version: "v1"}
-	contentGvr := gv.WithResource("volumesnapshotcontents")
-	classGvr := gv.WithResource("volumesnapshotclasses")
-
-	result, err := d.snapshotClient.Resource(contentGvr).List(ctx, metav1.ListOptions{})
+	result, err := d.snapshotClient.SnapshotV1().VolumeSnapshotContents().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch list of snapshot contents")
 	}
@@ -1789,17 +1786,12 @@ func (d *Driver) maybeGetSnapshotParameters(ctx context.Context, snapshotID stri
 		return nil, fmt.Errorf("failed to determine snapshot class name")
 	}
 
-	class, err := d.snapshotClient.Resource(classGvr).Get(ctx, snapshotClassName, metav1.GetOptions{})
+	class, err := d.snapshotClient.SnapshotV1().VolumeSnapshotClasses().Get(ctx, snapshotClassName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch snapshot class: %w", err)
 	}
 
-	rawParams, _, err := unstructured.NestedStringMap(class.Object, "parameters")
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse snapshot class: %w", err)
-	}
-
-	return volume.NewSnapshotParameters(rawParams, nil)
+	return volume.NewSnapshotParameters(class.Parameters, nil)
 }
 
 // maybeDeleteLocalSnapshot deletes the local portion of a snapshot according to their volume.SnapshotParameters.
