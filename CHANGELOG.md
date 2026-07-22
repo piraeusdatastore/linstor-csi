@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.11.3] - 2026-07-08
+## [1.12.0] - 2026-07-24
 
 ### Added
 
@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   volume number recorded in its snapshot. Enable with
   `--enable-consistency-groups` (requires running in Kubernetes, with `get` on
   PersistentVolumeClaims). See `examples/consistency-groups/`.
+
+### Fixed
+
+- RWX block validation now looks up PersistentVolumes by their CSI volume
+  handle instead of assuming the PV name matches the volume handle.
+
+## [1.11.3] - 2026-07-08
+
+### Added
+
 - IO QoS limits via the `qos.linbit.com/{rbps,wbps,riops,wiops}` StorageClass
   parameters. The limits are stored on the LINSTOR resource definition and
   surfaced in the VolumeAttachment metadata for the nri-volume-qos plugin to
@@ -730,7 +740,8 @@ on storage with the following (case sensitive!) options:<!-- Needs Docs -->
 - all storageClass parameters options are now case insenstive
 - non-debug logging is less verbose in general
 
-[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.11.3...HEAD
+[Unreleased]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.12.0...HEAD
+[1.12.0]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.11.3...v1.12.0
 [1.11.3]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.11.2...v1.11.3
 [1.11.2]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.11.1...v1.11.2
 [1.11.1]: https://github.com/piraeusdatastore/linstor-csi/compare/v1.11.0...v1.11.1
