@@ -262,16 +262,6 @@ func (d *Driver) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeRe
 	return &csi.ProbeResponse{}, nil
 }
 
-// NodeStageVolume https://github.com/container-storage-interface/spec/blob/v1.13.0/spec.md#nodestagevolume
-func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "")
-}
-
-// NodeUnstageVolume https://github.com/container-storage-interface/spec/blob/v1.13.0/spec.md#nodeunstagevolume
-func (d *Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "")
-}
-
 // NodePublishVolume https://github.com/container-storage-interface/spec/blob/v1.13.0/spec.md#nodepublishvolume
 func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	if req.GetVolumeId() == "" {
@@ -1368,11 +1358,6 @@ func (d *Driver) ControllerGetVolume(ctx context.Context, req *csi.ControllerGet
 			CapacityBytes: vol.Size(),
 		},
 	}, nil
-}
-
-// ControllerModifyVolume https://github.com/container-storage-interface/spec/blob/v1.13.0/spec.md#controllermodifyvolume
-func (d *Driver) ControllerModifyVolume(ctx context.Context, req *csi.ControllerModifyVolumeRequest) (*csi.ControllerModifyVolumeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "")
 }
 
 // GroupControllerGetCapabilities https://github.com/container-storage-interface/spec/blob/v1.11.0/spec.md#groupcontrollergetcapabilities
