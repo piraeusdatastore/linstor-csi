@@ -26,7 +26,6 @@ import (
 	"time"
 
 	lc "github.com/LINBIT/golinstor"
-	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/pborman/uuid"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
@@ -199,11 +198,6 @@ type VolumeStats struct {
 	AvailableInodes int64
 	TotalInodes     int64
 	UsedInodes      int64
-}
-
-type VolumeStatus struct {
-	Info
-	Conditions *csi.VolumeCondition
 }
 
 // Add the given prefix to the property name.

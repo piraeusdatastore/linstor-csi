@@ -178,9 +178,9 @@ func LogLevel(s string) func(*Linstor) error {
 	}
 }
 
-// ListAllWithStatus returns a sorted list of volume and their status.
-func (s *Linstor) ListAllWithStatus(ctx context.Context) ([]volume.VolumeStatus, error) {
-	var vols []volume.VolumeStatus
+// ListAll returns a sorted list of volume and their status.
+func (s *Linstor) ListAll(ctx context.Context) ([]volume.Info, error) {
+	var vols []volume.Info
 
 	resourcesByName := make(map[string][]lapi.ResourceWithVolumes)
 
@@ -201,9 +201,6 @@ func (s *Linstor) ListAllWithStatus(ctx context.Context) ([]volume.VolumeStatus,
 	for i := range resDefs {
 		rd := resDefs[i]
 
-		// The volume condition is resource-level and shared by every member of a consistency group.
-		cond := ConditionFromResources(resourcesByName[rd.Name])
-
 		isConsistencyGroup := false
 
 		for vn := range util.ConsistencyGroupVolumes(rd.VolumeDefinitions...) {
@@ -211,14 +208,14 @@ func (s *Linstor) ListAllWithStatus(ctx context.Context) ([]volume.VolumeStatus,
 
 			vol := s.volumeInfoFromResourceDefinition(volume.ID{ResourceName: rd.Name, VolumeNumber: vn}, rd)
 			if vol != nil {
-				vols = append(vols, volume.VolumeStatus{Info: *vol, Conditions: cond})
+				vols = append(vols, *vol)
 			}
 		}
 
 		if !isConsistencyGroup {
 			vol := s.volumeInfoFromResourceDefinition(volume.ID{ResourceName: rd.Name}, rd)
 			if vol != nil {
-				vols = append(vols, volume.VolumeStatus{Info: *vol, Conditions: cond})
+				vols = append(vols, *vol)
 			}
 		}
 	}
@@ -2575,19 +2572,6 @@ func (s *Linstor) FindAssignmentOnNode(ctx context.Context, id volume.ID, node s
 	return va, nil
 }
 
-func (s *Linstor) Status(ctx context.Context, id volume.ID) (*csi.VolumeCondition, error) {
-	s.log.WithFields(logrus.Fields{
-		"volume": id,
-	}).Debug("getting assignments")
-
-	ress, err := s.client.Resources.GetResourceView(ctx, &lapi.ListOpts{Resource: []string{id.ResourceName}})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list resources for '%s': %w", id.ResourceName, err)
-	}
-
-	return ConditionFromResources(ress), nil
-}
-
 // SetSnapshotType tries to set the snapshot type based on the remote name.
 // If there is no remote name, it's a local snapshot, if the remote name is an S3 remote, it's an S3 snapshot, etc...
 // If the remote is unknown, we treat it as a local snapshot.
@@ -2664,36 +2648,6 @@ func GetSnapshotRemoteAndReadiness(snap *lapi.Snapshot) (string, bool, error) {
 
 	// Local only snapshot
 	return "", slices.Contains(snap.Flags, lapiconsts.FlagSuccessful), nil
-}
-
-func ConditionFromResources(ress []lapi.ResourceWithVolumes) *csi.VolumeCondition {
-	var abnormalNodes []string
-
-	for i := range ress {
-		res := &ress[i]
-
-		if res.State == nil {
-			abnormalNodes = append(abnormalNodes, res.NodeName)
-			continue
-		}
-
-		drbd := util.GetDrbdLayer(res.LayerObject)
-		if drbd != nil && drbd.PromotionScore == 0 {
-			abnormalNodes = append(abnormalNodes, res.NodeName)
-		}
-	}
-
-	condition := &csi.VolumeCondition{
-		Abnormal: false,
-		Message:  "Volume healthy",
-	}
-
-	if len(abnormalNodes) > 0 {
-		condition.Abnormal = true
-		condition.Message = fmt.Sprintf("Resource with issues on node(s): %s", strings.Join(abnormalNodes, ","))
-	}
-
-	return condition
 }
 
 // Mount makes volumes consumable from the source to the target.
