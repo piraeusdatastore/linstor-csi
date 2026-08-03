@@ -454,6 +454,8 @@ func (d *Driver) NodeGetCapabilities(context.Context, *csi.NodeGetCapabilitiesRe
 					},
 				},
 			},
+			// No SINGLE_NODE_MULTI_WRITER here: enforcing that a device is only mounted on one path is complicated.
+			// It would require some concurrency checks to get right.
 		},
 	}, nil
 }
@@ -1121,6 +1123,13 @@ func (d *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Control
 					Type: csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER,
 				},
 			}},
+			{Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: csi.ControllerServiceCapability_RPC_GET_SNAPSHOT,
+				},
+			}},
+			// No PUBLISH_READONLY here: LINSTOR does not support enforcement of RO state at the make-avail/controller
+			// level.
 		},
 	}, nil
 }
@@ -1242,6 +1251,28 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 	}
 
 	return &csi.ListSnapshotsResponse{Entries: entries, NextToken: nextToken}, nil
+}
+
+// GetSnapshot https://github.com/container-storage-interface/spec/blob/v1.13.0/spec.md#getsnapshot
+func (d *Driver) GetSnapshot(ctx context.Context, req *csi.GetSnapshotRequest) (*csi.GetSnapshotResponse, error) {
+	snaps, err := d.linstorClient.FindSnapsByID(ctx, req.GetSnapshotId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to find snapshot: %v", err)
+	}
+
+	if len(snaps) == 0 {
+		return nil, status.Errorf(codes.NotFound, "snapshot %s not found", req.GetSnapshotId())
+	} else if len(snaps) > 1 {
+		return nil, status.Errorf(codes.Internal, "found multiple snapshots for %s", req.GetSnapshotId())
+	}
+
+	return &csi.GetSnapshotResponse{Snapshot: &csi.Snapshot{
+		SnapshotId:     snaps[0].String(),
+		SourceVolumeId: snaps[0].Source().String(),
+		CreationTime:   timestamppb.New(snaps[0].CreationTime),
+		SizeBytes:      snaps[0].SizeBytes,
+		ReadyToUse:     snaps[0].ReadyToUse,
+	}}, nil
 }
 
 // NodeExpandVolume https://github.com/container-storage-interface/spec/blob/v1.13.0/spec.md#nodeexpandvolume
