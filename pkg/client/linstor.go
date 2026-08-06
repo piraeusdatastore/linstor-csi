@@ -41,7 +41,6 @@ import (
 	lapiconsts "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/LINBIT/golinstor/clonestatus"
-	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
@@ -704,18 +703,14 @@ func (s *Linstor) Delete(ctx context.Context, id volume.ID) error {
 
 // deleteResource tears down a whole resource; used for standalone volumes and a group's last member.
 func (s *Linstor) deleteResource(ctx context.Context, rdName string) error {
-	// Disable the BalanceResourceTask for this resource during deletion.
-	err := s.client.ResourceDefinitions.Modify(ctx, rdName, lapi.GenericPropsModify{
-		OverrideProps: map[string]string{lapiconsts.KeyBalanceResourcesEnabled: lapiconsts.ValFalse},
-	})
+	// Remember the resource group: the resource definition may be gone after the truncate.
+	rDef, err := s.client.ResourceDefinitions.Get(ctx, rdName)
 	if err != nil {
 		return nil404(err)
 	}
 
-	var resources []lapi.Resource
-
 	for {
-		resources, err = s.client.Resources.GetAll(ctx, rdName)
+		resources, err := s.client.Resources.GetAll(ctx, rdName)
 		if err != nil {
 			return nil404(err)
 		}
@@ -730,23 +725,22 @@ func (s *Linstor) deleteResource(ctx context.Context, rdName string) error {
 		time.Sleep(5 * time.Second)
 	}
 
-	// Need to ensure that diskless resources are always deleted first, otherwise the last diskfull resource won't be
-	// deleted
-	sort.Slice(resources, func(i, j int) bool {
-		return !util.DeployedDiskfully(resources[i]) && util.DeployedDiskfully(resources[j])
+	// Truncating removes all resources in one server-side operation, so there is no window in
+	// which the balancer could re-create replicas, nor a need to delete diskless resources first.
+	err = s.client.ResourceDefinitions.Truncate(ctx, rdName, &lapi.ResourceDefinitionTruncateOpts{
+		// Delete the resource definition unless snapshots keep it alive; the emptiness check
+		// happens server-side, atomically after the truncate completed.
+		DeleteEmptyResourceDefinition: true,
 	})
-
-	for _, res := range resources {
-		err := s.client.Resources.Delete(ctx, rdName, res.NodeName, &lapi.ResourceDeleteOpts{KeepTiebreaker: false})
-		if err != nil {
-			// If two deletions run in parallel, one could get a 404 message, which we treat as "everything finished"
-			return nil404(err)
-		}
+	if nil404(err) != nil {
+		return err
 	}
 
+	// If snapshots kept the resource definition alive, delete the volume definitions: this marks
+	// the normal deletion as complete, hiding the volume while the snapshots live on.
 	vds, err := s.client.ResourceDefinitions.GetVolumeDefinitions(ctx, rdName)
-	if err != nil {
-		return nil404(err)
+	if nil404(err) != nil {
+		return err
 	}
 
 	// Sort descending, volume 0 should be the last to be removed
@@ -755,28 +749,13 @@ func (s *Linstor) deleteResource(ctx context.Context, rdName string) error {
 	})
 
 	for _, vd := range vds {
-		// Delete the volume definition. This indicates the normal deletion is complete.
 		err = s.client.ResourceDefinitions.DeleteVolumeDefinition(ctx, rdName, int(*vd.VolumeNumber))
 		if nil404(err) != nil {
-			// We continue with the cleanup on 404, maybe the previous cleanup was interrupted
 			return err
 		}
 	}
 
-	// Reset BalanceResourceTask for the case the resource definition is in use by a snapshot.
-	err = s.client.ResourceDefinitions.Modify(ctx, rdName, lapi.GenericPropsModify{
-		DeleteProps: []string{lapiconsts.KeyBalanceResourcesEnabled},
-	})
-	if err != nil {
-		return nil404(err)
-	}
-
-	err = s.deleteResourceDefinitionAndGroupIfUnused(ctx, rdName)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return s.deleteResourceGroupIfUnused(ctx, rDef.ResourceGroupName)
 }
 
 // AccessibleTopologies returns a list of pointers to csi.Topology from where the
@@ -842,39 +821,11 @@ func (s *Linstor) Attach(ctx context.Context, id volume.ID, node string, rwxBloc
 		"targetNode": node,
 	}).Info("attaching volume")
 
-	ress, err := s.client.Resources.GetAll(ctx, id.ResourceName)
-	if err != nil {
-		return "", err
-	}
-
-	if len(ress) == 0 {
-		return "", fmt.Errorf("failed to attach resource with no deployed replica")
-	}
-
-	otherResInUse := 0
-
-	for i := range ress {
-		if ress[i].NodeName != node && ress[i].State != nil && ress[i].State.InUse != nil && *ress[i].State.InUse {
-			otherResInUse++
-		}
-	}
-
-	if otherResInUse >= 2 {
-		return "", fmt.Errorf("two other resources already InUse")
-	}
-
-	if otherResInUse > 0 && rwxBlock {
-		rdPropsModify := lapi.GenericPropsModify{OverrideProps: map[string]string{
-			linstor.PropertyAllowTwoPrimaries: "yes",
-		}}
-
-		err = s.client.ResourceDefinitions.Modify(ctx, id.ResourceName, rdPropsModify)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	err = s.client.Resources.MakeAvailable(ctx, id.ResourceName, node, lapi.ResourceMakeAvailable{Diskful: false})
+	// For RWX volumes LINSTOR manages allow-two-primaries (or activation on both nodes for
+	// shared storage pools) itself, keeping it set only while a live migration needs it.
+	err := s.client.Resources.MakeAvailable(ctx, id.ResourceName, node, lapi.ResourceMakeAvailable{
+		AutoManageDualPrimary: rwxBlock,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -887,79 +838,20 @@ func (s *Linstor) Attach(ctx context.Context, id volume.ID, node string, rwxBloc
 	return vol.DevicePath, nil
 }
 
-// getDisklessFlag inspects a resource to determine the right diskless flag to use.
-func getDisklessFlag(resource *lapi.Resource) string {
-	layer := resource.LayerObject
-
-	for layer != nil {
-		switch layer.Type {
-		case devicelayerkind.Drbd:
-			return lapiconsts.FlagDrbdDiskless
-		case devicelayerkind.Nvme:
-			return lapiconsts.FlagNvmeInitiator
-		default:
-			// recurse deeper
-		}
-
-		if len(layer.Children) != 1 {
-			// No idea how to deal with layer depending on children anyways, so we just ignore those
-			break
-		}
-
-		layer = &layer.Children[0]
-	}
-
-	return ""
-}
-
-// Detach removes a volume from the node.
+// Detach reverts a previous Attach, removing temporary resources from the node.
 func (s *Linstor) Detach(ctx context.Context, id volume.ID, node string) error {
 	log := s.log.WithFields(logrus.Fields{
 		"volume":     id,
 		"targetNode": node,
 	})
 
-	ress, err := s.client.Resources.GetAll(ctx, id.ResourceName)
-	if err != nil {
-		return nil404(err)
-	}
+	log.Info("detaching volume")
 
-	resInUse := 0
-
-	for i := range ress {
-		if ress[i].State != nil && ress[i].State.InUse != nil && *ress[i].State.InUse {
-			resInUse++
-		}
-	}
-
-	if resInUse == 1 {
-		rdPropsModify := lapi.GenericPropsModify{DeleteProps: []string{
-			linstor.PropertyAllowTwoPrimaries,
-		}}
-
-		err = s.client.ResourceDefinitions.Modify(ctx, id.ResourceName, rdPropsModify)
-		if err != nil {
-			return nil404(err)
-		}
-	}
-
-	vol, err := s.client.Resources.GetVolume(ctx, id.ResourceName, node, id.VolumeNumber)
-	if err != nil {
-		return nil404(err)
-	}
-
-	if vol.ProviderKind != lapi.DISKLESS {
-		log.Info("resource not a diskless, not deleting")
-		return nil
-	}
-
-	log.Info("removing temporary resource")
-
-	// The shared diskless attachment must outlive all but the last member: delete it, but treat LINSTOR's
-	// FailInUse rejection as "a sibling still needs it" (race-free, no separate in-use check).
-	err = s.client.Resources.Delete(ctx, id.ResourceName, node, &lapi.ResourceDeleteOpts{KeepTiebreaker: true})
+	// A consistency-group sibling may still be mounted on the node: treat LINSTOR's FailInUse
+	// rejection as "a sibling still needs it" (race-free, no separate in-use check).
+	err := s.client.Resources.UnmakeAvailable(ctx, id.ResourceName, node)
 	if errors.Is(err, lapi.ApiCallRcErr(lapiconsts.FailInUse)) {
-		log.Info("resource still in use, keeping shared diskless attachment")
+		log.Info("resource still in use, keeping attachment")
 		return nil
 	}
 
@@ -1084,6 +976,47 @@ func (s *Linstor) CapacityBytes(ctx context.Context, storagePools []string, over
 	}
 
 	return totalKiB * KiB, nil
+}
+
+// OnlySharedStoragePools reports whether the given storage pools are all backed by a shared
+// space, i.e. the volume data is accessible from multiple nodes without replication.
+// A configured pool that exists on no node is an error rather than being silently ignored.
+func (s *Linstor) OnlySharedStoragePools(ctx context.Context, pools []string) (bool, error) {
+	if len(pools) == 0 {
+		// Without an explicit storage pool selection we cannot tell where the volume ends up.
+		return false, nil
+	}
+
+	cached := true
+
+	// The cached view can lag briefly after pool reconfiguration; acceptable for a
+	// create-time validation.
+	sps, err := s.client.Nodes.GetStoragePoolView(ctx, &lapi.ListOpts{Cached: &cached})
+	if err != nil {
+		return false, fmt.Errorf("failed to check storage pools for shared spaces: %w", err)
+	}
+
+	notFound := sets.New(pools...)
+
+	for i := range sps {
+		if !slices.Contains(pools, sps[i].StoragePoolName) {
+			continue
+		}
+
+		notFound.Delete(sps[i].StoragePoolName)
+
+		// LINSTOR names the free space manager of non-shared pools "<node>;<pool>"; actual
+		// shared spaces never contain the reserved ";".
+		if sps[i].FreeSpaceMgrName == "" || strings.Contains(sps[i].FreeSpaceMgrName, ";") {
+			return false, nil
+		}
+	}
+
+	if notFound.Len() > 0 {
+		return false, fmt.Errorf("storage pool(s) %s not found on any node", strings.Join(sets.List(notFound), ", "))
+	}
+
+	return true, nil
 }
 
 func (s *Linstor) CompatibleSnapshotId(name string) string {
@@ -1535,14 +1468,30 @@ func (s *Linstor) SnapDelete(ctx context.Context, snap *volume.SnapshotId) error
 
 	log.Debug("deleting local snapshot")
 
-	err := s.client.Resources.DeleteSnapshot(ctx, snap.SourceName, snap.SnapshotName)
+	// Remember the resource group: when LINSTOR deletes the empty resource definition together
+	// with the snapshot, it can no longer be looked up afterwards.
+	rDef, err := s.client.ResourceDefinitions.Get(ctx, snap.SourceName)
+	if err != nil {
+		// A missing resource definition means the snapshot is already gone.
+		if nil404(err) == nil {
+			return nil
+		}
+
+		return fmt.Errorf("failed to remove snapshot: %w", err)
+	}
+
+	err = s.client.Resources.DeleteSnapshot(ctx, snap.SourceName, snap.SnapshotName, &lapi.SnapshotDeleteOpts{
+		// Delete the resource definition along with its last snapshot, without a client-side
+		// check-then-delete race.
+		DeleteEmptyResourceDefinition: true,
+	})
 	if nil404(err) != nil {
 		return fmt.Errorf("failed to remove snapshot: %w", err)
 	}
 
-	err = s.deleteResourceDefinitionAndGroupIfUnused(ctx, snap.SourceName)
-	if nil404(err) != nil {
-		return fmt.Errorf("failed to remove resource definition: %w", err)
+	err = s.deleteResourceGroupIfUnused(ctx, rDef.ResourceGroupName)
+	if err != nil {
+		return fmt.Errorf("failed to remove resource group: %w", err)
 	}
 
 	return nil
@@ -1641,14 +1590,23 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *v
 	if snap.Remote != "" && snapParams != nil && snapParams.DeleteLocal {
 		logger.Info("deleting local copy of backup")
 
-		err := s.client.Resources.DeleteSnapshot(ctx, snap.SourceName, snap.SnapshotName)
+		// Remember the resource group: the snapshot delete may remove the empty resource
+		// definition along with the snapshot.
+		srcDef, err := s.client.ResourceDefinitions.Get(ctx, snap.SourceName)
 		if err != nil {
-			logger.WithError(err).Warn("deleting local copy of backup failed")
-		}
+			logger.WithError(err).Warn("looking up local RD of backup failed")
+		} else {
+			err = s.client.Resources.DeleteSnapshot(ctx, snap.SourceName, snap.SnapshotName, &lapi.SnapshotDeleteOpts{
+				DeleteEmptyResourceDefinition: true,
+			})
+			if err != nil {
+				logger.WithError(err).Warn("deleting local copy of backup failed")
+			}
 
-		err = s.deleteResourceDefinitionAndGroupIfUnused(ctx, snap.SourceName)
-		if err != nil {
-			logger.WithError(err).Warn("deleting local RD of backup failed")
+			err = s.deleteResourceGroupIfUnused(ctx, srcDef.ResourceGroupName)
+			if err != nil {
+				logger.WithError(err).Warn("deleting local RG of backup failed")
+			}
 		}
 	}
 
@@ -2998,73 +2956,19 @@ func (s *Linstor) GetNodeTopologies(ctx context.Context, nodename string) (*csi.
 	return topo, nil
 }
 
-// Delete the given resource definition and linked resource group, but only if:
-// * No resources are placed
-// * No snapshots of the resource exist
-func (s *Linstor) deleteResourceDefinitionAndGroupIfUnused(ctx context.Context, rdName string) error {
-	log := s.log.WithField("rd", rdName)
-	log.Debug("checking for undeleted resources")
-
-	resources, err := s.client.Resources.GetAll(ctx, rdName)
-	if err != nil {
-		// Returns nil if api call returned 404, i.e. someone else already deleted the RD
-		return nil404(err)
-	}
-
-	for _, res := range resources {
-		if !slices.Contains(res.Flags, lapiconsts.FlagDelete) {
-			log.WithField("resource", res).Debug("not deleting resource definition, found undeleted resource")
-			return nil
-		}
-	}
-
-	log.Debug("checking for undeleted snapshots")
-
-	snapshots, err := s.client.Resources.GetSnapshots(ctx, rdName)
-	if err != nil {
-		// Returns nil if api call returned 404, i.e. someone else already deleted the RD
-		return nil404(err)
-	}
-
-	for _, snap := range snapshots {
-		if !slices.Contains(snap.Flags, lapiconsts.FlagDelete) {
-			log.WithField("snapshot", snap).Debug("not deleting resource definition, found undeleted snapshot")
-			return nil
-		}
-	}
-
-	log.Debug("fetching resource definition, then deleting it")
-
-	// Our last chance to get the resource group from the RD
-	rDef, err := s.client.ResourceDefinitions.Get(ctx, rdName)
-	if err != nil {
-		// if no RD was found, returns nil
-		return nil404(err)
-	}
-
-	err = s.client.ResourceDefinitions.Delete(ctx, rdName)
-	if err != nil {
-		// Returns nil if api call returned 404, i.e. someone else already deleted the RD
-		return nil404(err)
-	}
-
-	log.Info("checking RG for removal")
-
-	if rDef.ResourceGroupName == "DfltRscGrp" {
+// deleteResourceGroupIfUnused removes a resource group unless other resource definitions still use it.
+func (s *Linstor) deleteResourceGroupIfUnused(ctx context.Context, rgName string) error {
+	if rgName == "DfltRscGrp" {
 		// Don't try to delete the default resource group
 		return nil
 	}
 
-	err = s.client.ResourceGroups.Delete(ctx, rDef.ResourceGroupName)
-	if err != nil {
-		if errors.Is(err, lapi.ApiCallRcErr(lapiconsts.FailExistsRscDfn)) {
-			return nil
-		}
-
-		return nil404(err)
+	err := s.client.ResourceGroups.Delete(ctx, rgName)
+	if errors.Is(err, lapi.ApiCallRcErr(lapiconsts.FailExistsRscDfn)) {
+		return nil
 	}
 
-	return nil
+	return nil404(err)
 }
 
 // SortByPreferred sorts nodes based on the given topology preferences.

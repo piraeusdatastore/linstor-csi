@@ -527,9 +527,30 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	}
 
 	if len(params.LayerList) > 0 && params.LayerList[0] != devicelayerkind.Drbd {
+		rwxBlock := false
+
 		for _, c := range req.GetVolumeCapabilities() {
-			if c.GetAccessMode().GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER {
-				return nil, status.Errorf(codes.InvalidArgument, "ReadWriteMany volumes require a DRBD layer")
+			if c.GetAccessMode().GetMode() != csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER {
+				continue
+			}
+
+			if c.GetBlock() == nil {
+				return nil, status.Errorf(codes.InvalidArgument, "ReadWriteMany volumes require a DRBD layer or shared storage")
+			}
+
+			rwxBlock = true
+		}
+
+		// RWX block volumes also work without DRBD when all storage pools are backed by
+		// shared storage: LINSTOR activates the resource on the nodes that need it.
+		if rwxBlock {
+			shared, err := d.linstorClient.OnlySharedStoragePools(ctx, params.StoragePools)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", req.GetName(), err)
+			}
+
+			if !shared {
+				return nil, status.Errorf(codes.InvalidArgument, "ReadWriteMany volumes require a DRBD layer or shared storage")
 			}
 		}
 	}
