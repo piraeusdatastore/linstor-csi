@@ -6,9 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- RWX block volumes no longer require a DRBD layer when all configured storage
+  pools are backed by shared storage.
+
 ### Changed
 
 - Update CSI spec to 1.13.0.
+- The driver now requires LINSTOR 1.35 or newer and refuses to start against
+  older controllers.
 
 ## [1.12.0] - 2026-07-24
 
