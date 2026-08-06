@@ -137,6 +137,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if err := c.EnsureMinimumApiVersion(ctx); err != nil {
+		log.Fatal(err)
+	}
+
 	linstorClient, err := client.NewLinstor(
 		client.APIClient(c),
 		client.LogFmt(logFmt),

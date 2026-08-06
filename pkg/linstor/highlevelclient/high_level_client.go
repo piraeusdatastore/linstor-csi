@@ -32,10 +32,41 @@ import (
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
 
+// The REST API version that introduced the APIs the driver depends on: resource-definition
+// truncate, snapshot delete with resource-definition cleanup, unmake-available and
+// make-available with auto-manage-dual-primary. Shipped with LINSTOR 1.35.
+const (
+	MinimumRestApiMajor = 1
+	MinimumRestApiMinor = 29
+)
+
 // HighLevelClient is a golinstor client with convience functions.
 type HighLevelClient struct {
 	*lapi.Client
 	PropertyNamespace string
+}
+
+// EnsureMinimumApiVersion returns an error if the connected LINSTOR controller does not provide
+// the REST API version the driver requires.
+func (c *HighLevelClient) EnsureMinimumApiVersion(ctx context.Context) error {
+	version, err := c.Controller.GetVersion(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch LINSTOR version: %w", err)
+	}
+
+	var major, minor int
+
+	_, err = fmt.Sscanf(version.RestApiVersion, "%d.%d", &major, &minor)
+	if err != nil {
+		return fmt.Errorf("failed to parse LINSTOR REST API version '%s': %w", version.RestApiVersion, err)
+	}
+
+	if major != MinimumRestApiMajor || minor < MinimumRestApiMinor {
+		return fmt.Errorf("LINSTOR %s (REST API %s) is not supported: the driver requires REST API %d.%d or newer, shipped with LINSTOR 1.35",
+			version.Version, version.RestApiVersion, MinimumRestApiMajor, MinimumRestApiMinor)
+	}
+
+	return nil
 }
 
 // NewHighLevelClient returns a pointer to a golinstor client with convience.
