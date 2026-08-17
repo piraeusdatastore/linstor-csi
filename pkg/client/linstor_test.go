@@ -23,6 +23,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -424,6 +425,77 @@ func TestLinstor_SortByPreferred(t *testing.T) {
 			actual, err := cl.SortByPreferred(context.Background(), tcase.nodes, tcase.policy, tcase.preferredTopology)
 			assert.NoError(t, err)
 			tcase.assertion(t, actual)
+		})
+	}
+}
+
+func TestLinstor_GetVolumeHealth(t *testing.T) {
+	tcases := []struct {
+		name          string
+		response      []byte
+		expectedIssue *volume.HealthIssue
+	}{
+		{
+			// All resource connected and up to date - all diskful, none are published
+			name:          "pvc-080c4024-9f03-4d71-909f-be4aa58e64ff",
+			response:      []byte(`[{"name":"pvc-080c4024-9f03-4d71-909f-be4aa58e64ff","node_name":"node-0","props":{"StorPoolName":"worker-pool"},"layer_object":{"children":[{"type":"STORAGE","storage":{"storage_volumes":[{"volume_number":0,"device_path":"/dev/linstor-vg/pvc-080c4024-9f03-4d71-909f-be4aa58e64ff_00000","allocated_size_kib":507758,"usable_size_kib":8392704,"disk_state":"[]"}]}}],"type":"DRBD","drbd":{"drbd_resource_definition":{"peer_slots":7,"al_stripes":1,"al_stripe_size_kib":32,"port":7004,"transport_type":"IP","secret":"0iTx8wUc7WfRFZ9f5clx","down":false},"node_id":2,"peer_slots":7,"al_stripes":1,"al_size":32,"drbd_volumes":[{"drbd_volume_definition":{"volume_number":0,"minor_number":1004},"device_path":"/dev/drbd1004","backing_device":"/dev/linstor-vg/pvc-080c4024-9f03-4d71-909f-be4aa58e64ff_00000","allocated_size_kib":8390440,"usable_size_kib":8388608}],"connections":{"node-2":{"connected":true,"message":"Connected"},"node-1":{"connected":true,"message":"Connected"}},"promotion_score":10103,"may_promote":false}},"state":{"in_use":false},"uuid":"0c9c79f1-0c7d-44d6-9113-18f1f8da2f36","create_timestamp":1650958143619},{"name":"pvc-080c4024-9f03-4d71-909f-be4aa58e64ff","node_name":"node-1","props":{"StorPoolName":"worker-pool"},"layer_object":{"children":[{"type":"STORAGE","storage":{"storage_volumes":[{"volume_number":0,"device_path":"/dev/linstor-vg/pvc-080c4024-9f03-4d71-909f-be4aa58e64ff_00000","allocated_size_kib":507758,"usable_size_kib":8392704,"disk_state":"[]"}]}}],"type":"DRBD","drbd":{"drbd_resource_definition":{"peer_slots":7,"al_stripes":1,"al_stripe_size_kib":32,"port":7004,"transport_type":"IP","secret":"0iTx8wUc7WfRFZ9f5clx","down":false},"node_id":1,"peer_slots":7,"al_stripes":1,"al_size":32,"drbd_volumes":[{"drbd_volume_definition":{"volume_number":0,"minor_number":1004},"device_path":"/dev/drbd1004","backing_device":"/dev/linstor-vg/pvc-080c4024-9f03-4d71-909f-be4aa58e64ff_00000","allocated_size_kib":8390440,"usable_size_kib":8388608}],"connections":{"node-2":{"connected":true,"message":"Connected"},"node-0":{"connected":true,"message":"Connected"}},"promotion_score":10103,"may_promote":false}},"state":{"in_use":true},"uuid":"75a226de-172e-4464-ab1c-e1ad22ae8929","create_timestamp":1650958145216},{"name":"pvc-080c4024-9f03-4d71-909f-be4aa58e64ff","node_name":"node-2","props":{"StorPoolName":"worker-pool"},"layer_object":{"children":[{"type":"STORAGE","storage":{"storage_volumes":[{"volume_number":0,"device_path":"/dev/linstor-vg/pvc-080c4024-9f03-4d71-909f-be4aa58e64ff_00000","allocated_size_kib":507758,"usable_size_kib":8392704,"disk_state":"[]"}]}}],"type":"DRBD","drbd":{"drbd_resource_definition":{"peer_slots":7,"al_stripes":1,"al_stripe_size_kib":32,"port":7004,"transport_type":"IP","secret":"0iTx8wUc7WfRFZ9f5clx","down":false},"node_id":0,"peer_slots":7,"al_stripes":1,"al_size":32,"drbd_volumes":[{"drbd_volume_definition":{"volume_number":0,"minor_number":1004},"device_path":"/dev/drbd1004","backing_device":"/dev/linstor-vg/pvc-080c4024-9f03-4d71-909f-be4aa58e64ff_00000","allocated_size_kib":8390440,"usable_size_kib":8388608}],"connections":{"node-0":{"connected":true,"message":"Connected"},"node-1":{"connected":true,"message":"Connected"}},"promotion_score":10103,"may_promote":false}},"state":{"in_use":false},"uuid":"3939463f-2c72-4918-b485-53d44ca4337d","create_timestamp":1650958142041}]`),
+			expectedIssue: nil,
+		},
+		{
+			// No deployed resource - the volume is inaccessible
+			name:     "no-replica",
+			response: []byte(`[]`),
+			expectedIssue: &volume.HealthIssue{
+				Status:  volume.HealthStatusInaccessible,
+				Reason:  "NoReplicas",
+				Message: "The volume has no deployed replica",
+			},
+		},
+		{
+			// One resource disconnected, one tie-breaker diskless - none are published
+			name:     "res1",
+			response: []byte(`[{"name":"res1","node_name":"node-0","props":{"StorPoolName":"master-pool"},"layer_object":{"children":[{"type":"STORAGE","storage":{"storage_volumes":[{"volume_number":0,"device_path":"/dev/linstor-vg/res1_00000","allocated_size_kib":421,"usable_size_kib":1052672,"disk_state":"[]"}]}}],"type":"DRBD","drbd":{"drbd_resource_definition":{"peer_slots":7,"al_stripes":1,"al_stripe_size_kib":32,"port":7006,"transport_type":"IP","secret":"cADS/SmRP49riL4Ge+zf","down":false},"node_id":0,"peer_slots":7,"al_stripes":1,"al_size":32,"drbd_volumes":[{"drbd_volume_definition":{"volume_number":0,"minor_number":1006},"device_path":"/dev/drbd1006","backing_device":"/dev/linstor-vg/res1_00000","allocated_size_kib":1048840,"usable_size_kib":1048576}],"connections":{"node-1":{"connected":false,"message":"Connecting"},"node-2":{"connected":true,"message":"Connected"}},"promotion_score":10101,"may_promote":true}},"state":{"in_use":false},"uuid":"0b6003e6-c973-40ca-b1fd-46039f79c238","create_timestamp":1655106116603},{"name":"res1","node_name":"node-1","props":{"StorPoolName":"master-pool"},"layer_object":{"children":[{"type":"STORAGE","storage":{"storage_volumes":[{"volume_number":0,"device_path":"/dev/linstor-vg/res1_00000","allocated_size_kib":421,"usable_size_kib":1052672,"disk_state":"[]"}]}}],"type":"DRBD","drbd":{"drbd_resource_definition":{"peer_slots":7,"al_stripes":1,"al_stripe_size_kib":32,"port":7006,"transport_type":"IP","secret":"cADS/SmRP49riL4Ge+zf","down":false},"node_id":1,"peer_slots":7,"al_stripes":1,"al_size":32,"drbd_volumes":[{"drbd_volume_definition":{"volume_number":0,"minor_number":1006},"device_path":"/dev/drbd1006","backing_device":"/dev/linstor-vg/res1_00000","allocated_size_kib":1048840,"usable_size_kib":1048576}],"connections":{"node-2":{"connected":false,"message":"StandAlone"},"node-0":{"connected":false,"message":"StandAlone"}},"promotion_score":0,"may_promote":false}},"state":{"in_use":false},"uuid":"787cd251-0e6f-4135-8a41-3bf6292d4853","create_timestamp":1655106118277},{"name":"res1","node_name":"node-2","props":{"StorPoolName":"DfltDisklessStorPool"},"flags":["DISKLESS","DRBD_DISKLESS","TIE_BREAKER"],"layer_object":{"children":[{"type":"STORAGE","storage":{"storage_volumes":[{"volume_number":0,"allocated_size_kib":0,"usable_size_kib":1048576}]}}],"type":"DRBD","drbd":{"drbd_resource_definition":{"peer_slots":7,"al_stripes":1,"al_stripe_size_kib":32,"port":7006,"transport_type":"IP","secret":"cADS/SmRP49riL4Ge+zf","down":false},"node_id":2,"peer_slots":7,"al_stripes":1,"al_size":32,"flags":["DISKLESS","INITIALIZED"],"drbd_volumes":[{"drbd_volume_definition":{"volume_number":0,"minor_number":1006},"device_path":"/dev/drbd1006","allocated_size_kib":-1,"usable_size_kib":1048576}],"connections":{"node-1":{"connected":false,"message":"Connecting"},"node-0":{"connected":true,"message":"Connected"}},"promotion_score":1,"may_promote":true}},"state":{"in_use":false},"uuid":"b3aae5c4-64d9-4d24-a1ba-a306b21d53a8","create_timestamp":1655106114421}]`),
+			expectedIssue: &volume.HealthIssue{
+				Status:  volume.HealthStatusDegraded,
+				Reason:  "UnhealthyReplicas",
+				Message: "Degraded replicas on: node-1",
+			},
+		},
+		{
+			// Diskful storage backend + in-use diskless attachment - healthy
+			name:          "pvc-manual-diskless",
+			response:      []byte(`[{"name":"pvc-manual-diskless","node_name":"storage-0","props":{"StorPoolName":"data-pool"},"layer_object":{"children":[{"type":"STORAGE","storage":{"storage_volumes":[{"volume_number":0,"device_path":"/dev/data-vg/pvc-manual-diskless_00000","allocated_size_kib":421,"usable_size_kib":1052672,"disk_state":"[]"}]}}],"type":"DRBD","drbd":{"drbd_resource_definition":{"peer_slots":7,"al_stripes":1,"al_stripe_size_kib":32,"port":7011,"transport_type":"IP","secret":"secret","down":false},"node_id":0,"peer_slots":7,"al_stripes":1,"al_size":32,"drbd_volumes":[{"drbd_volume_definition":{"volume_number":0,"minor_number":1011},"device_path":"/dev/drbd1011","backing_device":"/dev/data-vg/pvc-manual-diskless_00000","allocated_size_kib":1048840,"usable_size_kib":1048576}],"connections":{"compute-0":{"connected":true,"message":"Connected"}},"promotion_score":10101,"may_promote":true}},"state":{"in_use":false},"uuid":"00000000-0000-0000-0000-000000000003","create_timestamp":1655106116603,"volumes":[{"volume_number":0}]},{"name":"pvc-manual-diskless","node_name":"compute-0","props":{"StorPoolName":"DfltDisklessStorPool"},"flags":["DISKLESS","DRBD_DISKLESS"],"layer_object":{"children":[{"type":"STORAGE","storage":{"storage_volumes":[{"volume_number":0,"allocated_size_kib":0,"usable_size_kib":1048576}]}}],"type":"DRBD","drbd":{"drbd_resource_definition":{"peer_slots":7,"al_stripes":1,"al_stripe_size_kib":32,"port":7011,"transport_type":"IP","secret":"secret","down":false},"node_id":1,"peer_slots":7,"al_stripes":1,"al_size":32,"flags":["DISKLESS","INITIALIZED"],"drbd_volumes":[{"drbd_volume_definition":{"volume_number":0,"minor_number":1011},"device_path":"/dev/drbd1011","allocated_size_kib":-1,"usable_size_kib":1048576}],"connections":{"storage-0":{"connected":true,"message":"Connected"}},"promotion_score":10101,"may_promote":true}},"state":{"in_use":true},"uuid":"00000000-0000-0000-0000-000000000004","create_timestamp":1655106118277,"volumes":[{"volume_number":0,"provider_kind":"DISKLESS"}]}]`),
+			expectedIssue: nil,
+		},
+		{
+			// No resource can be promoted - the volume is inaccessible
+			name:     "res-all-abnormal",
+			response: []byte(`[{"name":"res-all-abnormal","node_name":"node-a","layer_object":{"type":"DRBD","drbd":{"promotion_score":0,"may_promote":false}},"state":{"in_use":false}},{"name":"res-all-abnormal","node_name":"node-b","layer_object":{"type":"DRBD","drbd":{"promotion_score":0,"may_promote":false}},"state":{"in_use":false}}]`),
+			expectedIssue: &volume.HealthIssue{
+				Status:  volume.HealthStatusInaccessible,
+				Reason:  "NoHealthyReplicas",
+				Message: "All deployed replicas have issues: node-a, node-b",
+			},
+		},
+	}
+
+	for i := range tcases {
+		tcase := &tcases[i]
+
+		t.Run(tcase.name, func(t *testing.T) {
+			var parsedResponse []lapi.ResourceWithVolumes
+
+			err := json.Unmarshal(tcase.response, &parsedResponse)
+			assert.NoError(t, err)
+
+			r := &mocks.ResourceProvider{}
+			r.EXPECT().GetResourceView(mock.Anything, []*lapi.ListOpts{{Resource: []string{tcase.name}}}).Return(parsedResponse, nil)
+			cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: r}}, log: logrus.WithField("test", t.Name())}
+
+			actualIssue, err := cl.GetVolumeHealthIssue(context.Background(), volume.ID{ResourceName: tcase.name, VolumeNumber: 0})
+			assert.NoError(t, err)
+			r.AssertExpectations(t)
+			assert.Equal(t, tcase.expectedIssue, actualIssue)
 		})
 	}
 }

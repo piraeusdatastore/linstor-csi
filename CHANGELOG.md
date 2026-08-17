@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - RWX block volumes no longer require a DRBD layer when all configured storage
   pools are backed by shared storage.
+- Volume health reporting via the new alpha `ControllerGetVolumeHealth` and
+  `ControllerListVolumeHealth` RPCs, replacing the `VOLUME_CONDITION`
+  mechanism removed in CSI spec 1.13.
 
 ### Changed
 
