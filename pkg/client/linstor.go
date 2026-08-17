@@ -177,9 +177,9 @@ func LogLevel(s string) func(*Linstor) error {
 	}
 }
 
-// ListAll returns a sorted list of volume and their status.
-func (s *Linstor) ListAll(ctx context.Context) ([]volume.Info, error) {
-	var vols []volume.Info
+// ListAll returns a sorted list of volumes and status.
+func (s *Linstor) ListAll(ctx context.Context) ([]volume.Status, error) {
+	var vols []volume.Status
 
 	resourcesByName := make(map[string][]lapi.ResourceWithVolumes)
 
@@ -200,6 +200,9 @@ func (s *Linstor) ListAll(ctx context.Context) ([]volume.Info, error) {
 	for i := range resDefs {
 		rd := resDefs[i]
 
+		// The volume health is resource-level and shared by every member of a consistency group.
+		healthIssue := HealthIssueFromResource(resourcesByName[rd.Name])
+
 		isConsistencyGroup := false
 
 		for vn := range util.ConsistencyGroupVolumes(rd.VolumeDefinitions...) {
@@ -207,14 +210,14 @@ func (s *Linstor) ListAll(ctx context.Context) ([]volume.Info, error) {
 
 			vol := s.volumeInfoFromResourceDefinition(volume.ID{ResourceName: rd.Name, VolumeNumber: vn}, rd)
 			if vol != nil {
-				vols = append(vols, *vol)
+				vols = append(vols, volume.Status{Info: *vol, HealthIssue: healthIssue})
 			}
 		}
 
 		if !isConsistencyGroup {
 			vol := s.volumeInfoFromResourceDefinition(volume.ID{ResourceName: rd.Name}, rd)
 			if vol != nil {
-				vols = append(vols, *vol)
+				vols = append(vols, volume.Status{Info: *vol, HealthIssue: healthIssue})
 			}
 		}
 	}
@@ -2530,6 +2533,20 @@ func (s *Linstor) FindAssignmentOnNode(ctx context.Context, id volume.ID, node s
 	return va, nil
 }
 
+// GetVolumeHealthIssue returns the health issue of the given volume, if any.
+func (s *Linstor) GetVolumeHealthIssue(ctx context.Context, id volume.ID) (*volume.HealthIssue, error) {
+	s.log.WithFields(logrus.Fields{
+		"volume": id,
+	}).Debug("getting resource health")
+
+	ress, err := s.client.Resources.GetResourceView(ctx, &lapi.ListOpts{Resource: []string{id.ResourceName}})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list resources for '%s': %w", id.ResourceName, err)
+	}
+
+	return HealthIssueFromResource(ress), nil
+}
+
 // SetSnapshotType tries to set the snapshot type based on the remote name.
 // If there is no remote name, it's a local snapshot, if the remote name is an S3 remote, it's an S3 snapshot, etc...
 // If the remote is unknown, we treat it as a local snapshot.
@@ -2606,6 +2623,51 @@ func GetSnapshotRemoteAndReadiness(snap *lapi.Snapshot) (string, bool, error) {
 
 	// Local only snapshot
 	return "", slices.Contains(snap.Flags, lapiconsts.FlagSuccessful), nil
+}
+
+// HealthIssueFromResource derives the health issues of a volume from its LINSTOR resources.
+//
+// A resource is abnormal if its state is unknown (satellite offline) or DRBD reports it as not
+// promotable. A nil result means the volume is healthy, abnormal resources degrade the
+// volume, and if no healthy resource is left the volume is inaccessible.
+func HealthIssueFromResource(ress []lapi.ResourceWithVolumes) *volume.HealthIssue {
+	if len(ress) == 0 {
+		return &volume.HealthIssue{
+			Status:  volume.HealthStatusInaccessible,
+			Reason:  "NoReplicas",
+			Message: "The volume has no deployed replica",
+		}
+	}
+
+	abnormalRes := slices.DeleteFunc(slices.Clone(ress), func(res lapi.ResourceWithVolumes) bool {
+		drbd := util.GetDrbdLayer(res.LayerObject)
+		return res.State != nil && (drbd == nil || drbd.PromotionScore != 0)
+	})
+
+	var abnormalNodes []string
+	for i := range abnormalRes {
+		abnormalNodes = append(abnormalNodes, abnormalRes[i].NodeName)
+	}
+
+	switch len(abnormalNodes) {
+	case 0:
+		// All good
+		return nil
+	case len(ress):
+		// All have issues
+		return &volume.HealthIssue{
+			Status:  volume.HealthStatusInaccessible,
+			Reason:  "NoHealthyReplicas",
+			Message: fmt.Sprintf("All deployed replicas have issues: %s", strings.Join(abnormalNodes, ", ")),
+		}
+	default:
+		// Some have issues
+		return &volume.HealthIssue{
+			Status:  volume.HealthStatusDegraded,
+			Reason:  "UnhealthyReplicas",
+			Message: fmt.Sprintf("Degraded replicas on: %s", strings.Join(abnormalNodes, ", ")),
+		}
+	}
 }
 
 // Mount makes volumes consumable from the source to the target.

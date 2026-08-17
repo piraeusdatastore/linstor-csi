@@ -1038,6 +1038,99 @@ func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (
 	return &csi.ListVolumesResponse{NextToken: nextToken, Entries: entries}, nil
 }
 
+// ControllerListVolumeHealth https://github.com/container-storage-interface/spec/blob/v1.13.0/spec.md#controllerlistvolumehealth
+func (d *Driver) ControllerListVolumeHealth(ctx context.Context, req *csi.ControllerListVolumeHealthRequest) (*csi.ControllerListVolumeHealthResponse, error) {
+	volumes, err := d.linstorClient.ListAll(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ControllerListVolumeHealth failed: %v", err)
+	}
+
+	// Only abnormal volumes are reported.
+	volumes = slices.DeleteFunc(volumes, func(vol volume.Status) bool {
+		return vol.HealthIssue == nil
+	})
+
+	start, err := parseAsInt(req.GetStartingToken())
+	if err != nil {
+		return nil, status.Errorf(codes.Aborted, "ControllerListVolumeHealth failed: %v", err)
+	}
+
+	if start > len(volumes) {
+		return &csi.ControllerListVolumeHealthResponse{}, nil
+	}
+
+	end := len(volumes)
+
+	var nextToken string
+
+	if maxEntries := int(req.GetMaxEntries()); maxEntries > 0 && start+maxEntries < end {
+		end = start + maxEntries
+		nextToken = strconv.Itoa(end)
+	}
+
+	entries := make([]*csi.VolumeHealth, 0, end-start)
+
+	for i := range volumes[start:end] {
+		vol := &volumes[start+i]
+		entries = append(entries, &csi.VolumeHealth{
+			VolumeId:       vol.String(),
+			HealthStatuses: csiHealthStatus(vol.HealthIssue),
+		})
+	}
+
+	return &csi.ControllerListVolumeHealthResponse{NextToken: nextToken, Entries: entries}, nil
+}
+
+// csiHealthStatus converts the internal volume health representation to CSI health entries.
+func csiHealthStatus(health *volume.HealthIssue) []*csi.VolumeHealth_VolumeHealthEntry {
+	if health == nil {
+		return nil
+	}
+
+	s := csi.VolumeHealthErrorType_UNKNOWN_VOLUME_HEALTH_TYPE
+
+	switch health.Status {
+	case volume.HealthStatusDegraded:
+		s = csi.VolumeHealthErrorType_DEGRADED
+	case volume.HealthStatusInaccessible:
+		s = csi.VolumeHealthErrorType_INACCESSIBLE
+	}
+
+	return []*csi.VolumeHealth_VolumeHealthEntry{{
+		Status:  s,
+		Reason:  health.Reason,
+		Message: health.Message,
+	}}
+}
+
+// ControllerGetVolumeHealth https://github.com/container-storage-interface/spec/blob/v1.13.0/spec.md#controllergetvolumehealth
+func (d *Driver) ControllerGetVolumeHealth(ctx context.Context, req *csi.ControllerGetVolumeHealthRequest) (*csi.ControllerGetVolumeHealthResponse, error) {
+	if req.GetVolumeId() == "" {
+		return nil, missingAttr("ControllerGetVolumeHealth", req.GetVolumeId(), "VolumeId")
+	}
+
+	vol, err := d.linstorClient.FindByID(ctx, req.GetVolumeId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to find volume '%s': %v", req.GetVolumeId(), err)
+	}
+
+	if vol == nil {
+		return nil, status.Errorf(codes.NotFound, "no volume '%s' found", req.GetVolumeId())
+	}
+
+	healthIssue, err := d.linstorClient.GetVolumeHealthIssue(ctx, vol.ID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get health of volume '%s': %v", vol.ID, err)
+	}
+
+	return &csi.ControllerGetVolumeHealthResponse{
+		VolumeHealth: &csi.VolumeHealth{
+			VolumeId:       vol.String(),
+			HealthStatuses: csiHealthStatus(healthIssue),
+		},
+	}, nil
+}
+
 // GetCapacity https://github.com/container-storage-interface/spec/blob/v1.13.0/spec.md#getcapacity
 func (d *Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
 	params, err := volume.NewParameters(req.GetParameters(), d.topologyPrefix)
@@ -1137,6 +1230,17 @@ func (d *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Control
 			{Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: csi.ControllerServiceCapability_RPC_GET_SNAPSHOT,
+				},
+			}},
+			// Tell the CO we can report volume health.
+			{Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: csi.ControllerServiceCapability_RPC_GET_VOLUME_HEALTH,
+				},
+			}},
+			{Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: csi.ControllerServiceCapability_RPC_LIST_VOLUME_HEALTH,
 				},
 			}},
 			// No PUBLISH_READONLY here: LINSTOR does not support enforcement of RO state at the make-avail/controller

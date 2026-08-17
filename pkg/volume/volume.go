@@ -200,6 +200,30 @@ type VolumeStats struct {
 	UsedInodes      int64
 }
 
+// HealthStatus classifies how a volume's health is impaired.
+type HealthStatus string
+
+const (
+	// HealthStatusDegraded means the volume works, but some replicas have issues.
+	HealthStatusDegraded HealthStatus = "Degraded"
+	// HealthStatusInaccessible means no healthy replica is left.
+	HealthStatusInaccessible HealthStatus = "Inaccessible"
+)
+
+// HealthIssue describes a single health issue of a volume.
+type HealthIssue struct {
+	Status  HealthStatus
+	Reason  string
+	Message string
+}
+
+// Status describes a volume, including the health state.
+type Status struct {
+	Info
+	// HealthIssue is nil if the volume is healthy, otherwise it contains details about the degraded volume.
+	HealthIssue *HealthIssue
+}
+
 // Add the given prefix to the property name.
 // If the property is already prefixed (with "Aux/"), no modification is made.
 func maybeAddTopologyPrefix(prefix string, props ...string) []string {

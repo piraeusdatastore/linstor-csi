@@ -100,6 +100,10 @@ nextCandidate:
 }
 
 func GetDrbdLayer(layer *lapi.ResourceLayer) *lapi.DrbdResource {
+	if layer == nil {
+		return nil
+	}
+
 	if layer.Type == devicelayerkind.Drbd {
 		return layer.Drbd
 	}
