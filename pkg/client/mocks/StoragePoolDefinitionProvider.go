@@ -15,6 +15,14 @@ type StoragePoolDefinitionProvider struct {
 	mock.Mock
 }
 
+type StoragePoolDefinitionProvider_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *StoragePoolDefinitionProvider) EXPECT() *StoragePoolDefinitionProvider_Expecter {
+	return &StoragePoolDefinitionProvider_Expecter{mock: &_m.Mock}
+}
+
 // Create provides a mock function with given fields: ctx, spd
 func (_m *StoragePoolDefinitionProvider) Create(ctx context.Context, spd client.StoragePoolDefinition) error {
 	ret := _m.Called(ctx, spd)
@@ -33,6 +41,35 @@ func (_m *StoragePoolDefinitionProvider) Create(ctx context.Context, spd client.
 	return r0
 }
 
+// StoragePoolDefinitionProvider_Create_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Create'
+type StoragePoolDefinitionProvider_Create_Call struct {
+	*mock.Call
+}
+
+// Create is a helper method to define mock.On call
+//   - ctx context.Context
+//   - spd client.StoragePoolDefinition
+func (_e *StoragePoolDefinitionProvider_Expecter) Create(ctx interface{}, spd interface{}) *StoragePoolDefinitionProvider_Create_Call {
+	return &StoragePoolDefinitionProvider_Create_Call{Call: _e.mock.On("Create", ctx, spd)}
+}
+
+func (_c *StoragePoolDefinitionProvider_Create_Call) Run(run func(ctx context.Context, spd client.StoragePoolDefinition)) *StoragePoolDefinitionProvider_Create_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(client.StoragePoolDefinition))
+	})
+	return _c
+}
+
+func (_c *StoragePoolDefinitionProvider_Create_Call) Return(_a0 error) *StoragePoolDefinitionProvider_Create_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *StoragePoolDefinitionProvider_Create_Call) RunAndReturn(run func(context.Context, client.StoragePoolDefinition) error) *StoragePoolDefinitionProvider_Create_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Delete provides a mock function with given fields: ctx, spdName
 func (_m *StoragePoolDefinitionProvider) Delete(ctx context.Context, spdName string) error {
 	ret := _m.Called(ctx, spdName)
@@ -49,6 +86,35 @@ func (_m *StoragePoolDefinitionProvider) Delete(ctx context.Context, spdName str
 	}
 
 	return r0
+}
+
+// StoragePoolDefinitionProvider_Delete_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Delete'
+type StoragePoolDefinitionProvider_Delete_Call struct {
+	*mock.Call
+}
+
+// Delete is a helper method to define mock.On call
+//   - ctx context.Context
+//   - spdName string
+func (_e *StoragePoolDefinitionProvider_Expecter) Delete(ctx interface{}, spdName interface{}) *StoragePoolDefinitionProvider_Delete_Call {
+	return &StoragePoolDefinitionProvider_Delete_Call{Call: _e.mock.On("Delete", ctx, spdName)}
+}
+
+func (_c *StoragePoolDefinitionProvider_Delete_Call) Run(run func(ctx context.Context, spdName string)) *StoragePoolDefinitionProvider_Delete_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *StoragePoolDefinitionProvider_Delete_Call) Return(_a0 error) *StoragePoolDefinitionProvider_Delete_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *StoragePoolDefinitionProvider_Delete_Call) RunAndReturn(run func(context.Context, string) error) *StoragePoolDefinitionProvider_Delete_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // Get provides a mock function with given fields: ctx, spdName, opts
@@ -84,6 +150,43 @@ func (_m *StoragePoolDefinitionProvider) Get(ctx context.Context, spdName string
 	}
 
 	return r0, r1
+}
+
+// StoragePoolDefinitionProvider_Get_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Get'
+type StoragePoolDefinitionProvider_Get_Call struct {
+	*mock.Call
+}
+
+// Get is a helper method to define mock.On call
+//   - ctx context.Context
+//   - spdName string
+//   - opts ...*client.ListOpts
+func (_e *StoragePoolDefinitionProvider_Expecter) Get(ctx interface{}, spdName interface{}, opts ...interface{}) *StoragePoolDefinitionProvider_Get_Call {
+	return &StoragePoolDefinitionProvider_Get_Call{Call: _e.mock.On("Get",
+		append([]interface{}{ctx, spdName}, opts...)...)}
+}
+
+func (_c *StoragePoolDefinitionProvider_Get_Call) Run(run func(ctx context.Context, spdName string, opts ...*client.ListOpts)) *StoragePoolDefinitionProvider_Get_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *StoragePoolDefinitionProvider_Get_Call) Return(_a0 client.StoragePoolDefinition, _a1 error) *StoragePoolDefinitionProvider_Get_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *StoragePoolDefinitionProvider_Get_Call) RunAndReturn(run func(context.Context, string, ...*client.ListOpts) (client.StoragePoolDefinition, error)) *StoragePoolDefinitionProvider_Get_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetAll provides a mock function with given fields: ctx, opts
@@ -123,6 +226,42 @@ func (_m *StoragePoolDefinitionProvider) GetAll(ctx context.Context, opts ...*cl
 	return r0, r1
 }
 
+// StoragePoolDefinitionProvider_GetAll_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAll'
+type StoragePoolDefinitionProvider_GetAll_Call struct {
+	*mock.Call
+}
+
+// GetAll is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *StoragePoolDefinitionProvider_Expecter) GetAll(ctx interface{}, opts ...interface{}) *StoragePoolDefinitionProvider_GetAll_Call {
+	return &StoragePoolDefinitionProvider_GetAll_Call{Call: _e.mock.On("GetAll",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *StoragePoolDefinitionProvider_GetAll_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *StoragePoolDefinitionProvider_GetAll_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *StoragePoolDefinitionProvider_GetAll_Call) Return(_a0 []client.StoragePoolDefinition, _a1 error) *StoragePoolDefinitionProvider_GetAll_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *StoragePoolDefinitionProvider_GetAll_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) ([]client.StoragePoolDefinition, error)) *StoragePoolDefinitionProvider_GetAll_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetPropsInfos provides a mock function with given fields: ctx, opts
 func (_m *StoragePoolDefinitionProvider) GetPropsInfos(ctx context.Context, opts ...*client.ListOpts) ([]client.PropsInfo, error) {
 	_va := make([]interface{}, len(opts))
@@ -160,6 +299,42 @@ func (_m *StoragePoolDefinitionProvider) GetPropsInfos(ctx context.Context, opts
 	return r0, r1
 }
 
+// StoragePoolDefinitionProvider_GetPropsInfos_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetPropsInfos'
+type StoragePoolDefinitionProvider_GetPropsInfos_Call struct {
+	*mock.Call
+}
+
+// GetPropsInfos is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *StoragePoolDefinitionProvider_Expecter) GetPropsInfos(ctx interface{}, opts ...interface{}) *StoragePoolDefinitionProvider_GetPropsInfos_Call {
+	return &StoragePoolDefinitionProvider_GetPropsInfos_Call{Call: _e.mock.On("GetPropsInfos",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *StoragePoolDefinitionProvider_GetPropsInfos_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *StoragePoolDefinitionProvider_GetPropsInfos_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *StoragePoolDefinitionProvider_GetPropsInfos_Call) Return(_a0 []client.PropsInfo, _a1 error) *StoragePoolDefinitionProvider_GetPropsInfos_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *StoragePoolDefinitionProvider_GetPropsInfos_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) ([]client.PropsInfo, error)) *StoragePoolDefinitionProvider_GetPropsInfos_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Modify provides a mock function with given fields: ctx, spdName, props
 func (_m *StoragePoolDefinitionProvider) Modify(ctx context.Context, spdName string, props client.StoragePoolDefinitionModify) error {
 	ret := _m.Called(ctx, spdName, props)
@@ -176,6 +351,36 @@ func (_m *StoragePoolDefinitionProvider) Modify(ctx context.Context, spdName str
 	}
 
 	return r0
+}
+
+// StoragePoolDefinitionProvider_Modify_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Modify'
+type StoragePoolDefinitionProvider_Modify_Call struct {
+	*mock.Call
+}
+
+// Modify is a helper method to define mock.On call
+//   - ctx context.Context
+//   - spdName string
+//   - props client.StoragePoolDefinitionModify
+func (_e *StoragePoolDefinitionProvider_Expecter) Modify(ctx interface{}, spdName interface{}, props interface{}) *StoragePoolDefinitionProvider_Modify_Call {
+	return &StoragePoolDefinitionProvider_Modify_Call{Call: _e.mock.On("Modify", ctx, spdName, props)}
+}
+
+func (_c *StoragePoolDefinitionProvider_Modify_Call) Run(run func(ctx context.Context, spdName string, props client.StoragePoolDefinitionModify)) *StoragePoolDefinitionProvider_Modify_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.StoragePoolDefinitionModify))
+	})
+	return _c
+}
+
+func (_c *StoragePoolDefinitionProvider_Modify_Call) Return(_a0 error) *StoragePoolDefinitionProvider_Modify_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *StoragePoolDefinitionProvider_Modify_Call) RunAndReturn(run func(context.Context, string, client.StoragePoolDefinitionModify) error) *StoragePoolDefinitionProvider_Modify_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // NewStoragePoolDefinitionProvider creates a new instance of StoragePoolDefinitionProvider. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

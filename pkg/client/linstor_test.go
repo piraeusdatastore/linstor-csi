@@ -169,11 +169,9 @@ func TestLinstor_Attach(t *testing.T) {
 		m := mocks.ResourceProvider{}
 		rv, rvErr := fromJson(ResourceAllOnline)
 
-		m.ExpectedCalls = []*mock.Call{
-			{Method: "GetAll", Arguments: mock.Arguments{mock.Anything, ExampleResourceID}, ReturnArguments: mock.Arguments{rv, rvErr}},
-			{Method: "MakeAvailable", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-2", lapi.ResourceMakeAvailable{Diskful: false}}, ReturnArguments: mock.Arguments{nil}},
-			{Method: "GetVolume", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-2", 0}, ReturnArguments: mock.Arguments{lapi.Volume{DevicePath: "/dev/vol1"}, nil}},
-		}
+		m.EXPECT().GetAll(mock.Anything, ExampleResourceID).Return(rv, rvErr)
+		m.EXPECT().MakeAvailable(mock.Anything, ExampleResourceID, "node-2", lapi.ResourceMakeAvailable{Diskful: false}).Return(nil)
+		m.EXPECT().GetVolume(mock.Anything, ExampleResourceID, "node-2", 0).Return(lapi.Volume{DevicePath: "/dev/vol1"}, nil)
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
 		path, err := cl.Attach(context.Background(), volume.ID{ResourceName: ExampleResourceID}, "node-2", false)
@@ -186,11 +184,9 @@ func TestLinstor_Attach(t *testing.T) {
 		m := mocks.ResourceProvider{}
 		rv, rvErr := fromJson(ResourceOneOfflineQuorum)
 
-		m.ExpectedCalls = []*mock.Call{
-			{Method: "GetAll", Arguments: mock.Arguments{mock.Anything, ExampleResourceID}, ReturnArguments: mock.Arguments{rv, rvErr}},
-			{Method: "MakeAvailable", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", lapi.ResourceMakeAvailable{Diskful: false}}, ReturnArguments: mock.Arguments{nil}},
-			{Method: "GetVolume", Arguments: mock.Arguments{mock.Anything, ExampleResourceID, "node-3", 0}, ReturnArguments: mock.Arguments{lapi.Volume{DevicePath: "/dev/vol1"}, nil}},
-		}
+		m.EXPECT().GetAll(mock.Anything, ExampleResourceID).Return(rv, rvErr)
+		m.EXPECT().MakeAvailable(mock.Anything, ExampleResourceID, "node-3", lapi.ResourceMakeAvailable{Diskful: false}).Return(nil)
+		m.EXPECT().GetVolume(mock.Anything, ExampleResourceID, "node-3", 0).Return(lapi.Volume{DevicePath: "/dev/vol1"}, nil)
 		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name())}
 
 		path, err := cl.Attach(context.Background(), volume.ID{ResourceName: ExampleResourceID}, "node-3", false)
@@ -207,7 +203,7 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 
 	yes := true
 	opts := &lapi.ListOpts{Cached: &yes}
-	m.On("GetStoragePoolView", mock.Anything, opts).Return([]lapi.StoragePool{
+	m.EXPECT().GetStoragePoolView(mock.Anything, opts).Return([]lapi.StoragePool{
 		{
 			StoragePoolName: "pool-a",
 			NodeName:        "node-1",
@@ -234,8 +230,8 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 		},
 	}, nil)
 
-	m.On("GetAll", mock.Anything, &lapi.ListOpts{Prop: []string{"Aux/topology.kubernetes.io/zone=zone-1"}}).Return([]lapi.Node{{Name: "node-1"}}, nil)
-	m.On("GetAll", mock.Anything, mock.Anything).Return([]lapi.Node{{Name: "node-1"}, {Name: "node-2"}}, nil)
+	m.EXPECT().GetAll(mock.Anything, &lapi.ListOpts{Prop: []string{"Aux/topology.kubernetes.io/zone=zone-1"}}).Return([]lapi.Node{{Name: "node-1"}}, nil)
+	m.EXPECT().GetAll(mock.Anything, mock.Anything).Return([]lapi.Node{{Name: "node-1"}, {Name: "node-2"}}, nil)
 
 	cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Nodes: &m}, PropertyNamespace: lapiconsts.NamespcAuxiliary}, log: logrus.WithField("test", t.Name())}
 
@@ -324,7 +320,7 @@ func TestLinstor_SortByPreferred(t *testing.T) {
 	t.Parallel()
 
 	m := &mocks.NodeProvider{}
-	m.On("GetAll", mock.Anything, &lapi.ListOpts{Prop: []string{"Aux/zone=1"}}).Return([]lapi.Node{{Name: "node-b"}, {Name: "node-c"}}, nil)
+	m.EXPECT().GetAll(mock.Anything, &lapi.ListOpts{Prop: []string{"Aux/zone=1"}}).Return([]lapi.Node{{Name: "node-b"}, {Name: "node-c"}}, nil)
 
 	cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Nodes: m}, PropertyNamespace: lapiconsts.NamespcAuxiliary}, log: logrus.WithField("test", t.Name())}
 
@@ -729,7 +725,7 @@ func TestReconcileResourceDefinitionRGConflict(t *testing.T) {
 
 		t.Run(tc.name, func(t *testing.T) {
 			rd := &mocks.ResourceDefinitionProvider{}
-			rd.On("Get", mock.Anything, rdName).
+			rd.EXPECT().Get(mock.Anything, rdName).
 				Return(lapi.ResourceDefinition{Name: rdName, ResourceGroupName: tc.existingRG}, nil)
 
 			cl := &Linstor{

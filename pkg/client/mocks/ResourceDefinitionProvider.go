@@ -15,6 +15,14 @@ type ResourceDefinitionProvider struct {
 	mock.Mock
 }
 
+type ResourceDefinitionProvider_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *ResourceDefinitionProvider) EXPECT() *ResourceDefinitionProvider_Expecter {
+	return &ResourceDefinitionProvider_Expecter{mock: &_m.Mock}
+}
+
 // AttachExternalFile provides a mock function with given fields: ctx, resDefName, filePath
 func (_m *ResourceDefinitionProvider) AttachExternalFile(ctx context.Context, resDefName string, filePath string) error {
 	ret := _m.Called(ctx, resDefName, filePath)
@@ -31,6 +39,36 @@ func (_m *ResourceDefinitionProvider) AttachExternalFile(ctx context.Context, re
 	}
 
 	return r0
+}
+
+// ResourceDefinitionProvider_AttachExternalFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AttachExternalFile'
+type ResourceDefinitionProvider_AttachExternalFile_Call struct {
+	*mock.Call
+}
+
+// AttachExternalFile is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resDefName string
+//   - filePath string
+func (_e *ResourceDefinitionProvider_Expecter) AttachExternalFile(ctx interface{}, resDefName interface{}, filePath interface{}) *ResourceDefinitionProvider_AttachExternalFile_Call {
+	return &ResourceDefinitionProvider_AttachExternalFile_Call{Call: _e.mock.On("AttachExternalFile", ctx, resDefName, filePath)}
+}
+
+func (_c *ResourceDefinitionProvider_AttachExternalFile_Call) Run(run func(ctx context.Context, resDefName string, filePath string)) *ResourceDefinitionProvider_AttachExternalFile_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_AttachExternalFile_Call) Return(_a0 error) *ResourceDefinitionProvider_AttachExternalFile_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_AttachExternalFile_Call) RunAndReturn(run func(context.Context, string, string) error) *ResourceDefinitionProvider_AttachExternalFile_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // Clone provides a mock function with given fields: ctx, srcResDef, request
@@ -61,6 +99,36 @@ func (_m *ResourceDefinitionProvider) Clone(ctx context.Context, srcResDef strin
 	return r0, r1
 }
 
+// ResourceDefinitionProvider_Clone_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Clone'
+type ResourceDefinitionProvider_Clone_Call struct {
+	*mock.Call
+}
+
+// Clone is a helper method to define mock.On call
+//   - ctx context.Context
+//   - srcResDef string
+//   - request client.ResourceDefinitionCloneRequest
+func (_e *ResourceDefinitionProvider_Expecter) Clone(ctx interface{}, srcResDef interface{}, request interface{}) *ResourceDefinitionProvider_Clone_Call {
+	return &ResourceDefinitionProvider_Clone_Call{Call: _e.mock.On("Clone", ctx, srcResDef, request)}
+}
+
+func (_c *ResourceDefinitionProvider_Clone_Call) Run(run func(ctx context.Context, srcResDef string, request client.ResourceDefinitionCloneRequest)) *ResourceDefinitionProvider_Clone_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.ResourceDefinitionCloneRequest))
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_Clone_Call) Return(_a0 client.ResourceDefinitionCloneStarted, _a1 error) *ResourceDefinitionProvider_Clone_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_Clone_Call) RunAndReturn(run func(context.Context, string, client.ResourceDefinitionCloneRequest) (client.ResourceDefinitionCloneStarted, error)) *ResourceDefinitionProvider_Clone_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CloneStatus provides a mock function with given fields: ctx, srcResDef, targetResDef
 func (_m *ResourceDefinitionProvider) CloneStatus(ctx context.Context, srcResDef string, targetResDef string) (client.ResourceDefinitionCloneStatus, error) {
 	ret := _m.Called(ctx, srcResDef, targetResDef)
@@ -89,6 +157,36 @@ func (_m *ResourceDefinitionProvider) CloneStatus(ctx context.Context, srcResDef
 	return r0, r1
 }
 
+// ResourceDefinitionProvider_CloneStatus_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CloneStatus'
+type ResourceDefinitionProvider_CloneStatus_Call struct {
+	*mock.Call
+}
+
+// CloneStatus is a helper method to define mock.On call
+//   - ctx context.Context
+//   - srcResDef string
+//   - targetResDef string
+func (_e *ResourceDefinitionProvider_Expecter) CloneStatus(ctx interface{}, srcResDef interface{}, targetResDef interface{}) *ResourceDefinitionProvider_CloneStatus_Call {
+	return &ResourceDefinitionProvider_CloneStatus_Call{Call: _e.mock.On("CloneStatus", ctx, srcResDef, targetResDef)}
+}
+
+func (_c *ResourceDefinitionProvider_CloneStatus_Call) Run(run func(ctx context.Context, srcResDef string, targetResDef string)) *ResourceDefinitionProvider_CloneStatus_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_CloneStatus_Call) Return(_a0 client.ResourceDefinitionCloneStatus, _a1 error) *ResourceDefinitionProvider_CloneStatus_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_CloneStatus_Call) RunAndReturn(run func(context.Context, string, string) (client.ResourceDefinitionCloneStatus, error)) *ResourceDefinitionProvider_CloneStatus_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Create provides a mock function with given fields: ctx, resDef
 func (_m *ResourceDefinitionProvider) Create(ctx context.Context, resDef client.ResourceDefinitionCreate) error {
 	ret := _m.Called(ctx, resDef)
@@ -105,6 +203,35 @@ func (_m *ResourceDefinitionProvider) Create(ctx context.Context, resDef client.
 	}
 
 	return r0
+}
+
+// ResourceDefinitionProvider_Create_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Create'
+type ResourceDefinitionProvider_Create_Call struct {
+	*mock.Call
+}
+
+// Create is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resDef client.ResourceDefinitionCreate
+func (_e *ResourceDefinitionProvider_Expecter) Create(ctx interface{}, resDef interface{}) *ResourceDefinitionProvider_Create_Call {
+	return &ResourceDefinitionProvider_Create_Call{Call: _e.mock.On("Create", ctx, resDef)}
+}
+
+func (_c *ResourceDefinitionProvider_Create_Call) Run(run func(ctx context.Context, resDef client.ResourceDefinitionCreate)) *ResourceDefinitionProvider_Create_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(client.ResourceDefinitionCreate))
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_Create_Call) Return(_a0 error) *ResourceDefinitionProvider_Create_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_Create_Call) RunAndReturn(run func(context.Context, client.ResourceDefinitionCreate) error) *ResourceDefinitionProvider_Create_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // CreateVolumeDefinition provides a mock function with given fields: ctx, resDefName, volDef
@@ -125,6 +252,36 @@ func (_m *ResourceDefinitionProvider) CreateVolumeDefinition(ctx context.Context
 	return r0
 }
 
+// ResourceDefinitionProvider_CreateVolumeDefinition_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateVolumeDefinition'
+type ResourceDefinitionProvider_CreateVolumeDefinition_Call struct {
+	*mock.Call
+}
+
+// CreateVolumeDefinition is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resDefName string
+//   - volDef client.VolumeDefinitionCreate
+func (_e *ResourceDefinitionProvider_Expecter) CreateVolumeDefinition(ctx interface{}, resDefName interface{}, volDef interface{}) *ResourceDefinitionProvider_CreateVolumeDefinition_Call {
+	return &ResourceDefinitionProvider_CreateVolumeDefinition_Call{Call: _e.mock.On("CreateVolumeDefinition", ctx, resDefName, volDef)}
+}
+
+func (_c *ResourceDefinitionProvider_CreateVolumeDefinition_Call) Run(run func(ctx context.Context, resDefName string, volDef client.VolumeDefinitionCreate)) *ResourceDefinitionProvider_CreateVolumeDefinition_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.VolumeDefinitionCreate))
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_CreateVolumeDefinition_Call) Return(_a0 error) *ResourceDefinitionProvider_CreateVolumeDefinition_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_CreateVolumeDefinition_Call) RunAndReturn(run func(context.Context, string, client.VolumeDefinitionCreate) error) *ResourceDefinitionProvider_CreateVolumeDefinition_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Delete provides a mock function with given fields: ctx, resDefName
 func (_m *ResourceDefinitionProvider) Delete(ctx context.Context, resDefName string) error {
 	ret := _m.Called(ctx, resDefName)
@@ -141,6 +298,35 @@ func (_m *ResourceDefinitionProvider) Delete(ctx context.Context, resDefName str
 	}
 
 	return r0
+}
+
+// ResourceDefinitionProvider_Delete_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Delete'
+type ResourceDefinitionProvider_Delete_Call struct {
+	*mock.Call
+}
+
+// Delete is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resDefName string
+func (_e *ResourceDefinitionProvider_Expecter) Delete(ctx interface{}, resDefName interface{}) *ResourceDefinitionProvider_Delete_Call {
+	return &ResourceDefinitionProvider_Delete_Call{Call: _e.mock.On("Delete", ctx, resDefName)}
+}
+
+func (_c *ResourceDefinitionProvider_Delete_Call) Run(run func(ctx context.Context, resDefName string)) *ResourceDefinitionProvider_Delete_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_Delete_Call) Return(_a0 error) *ResourceDefinitionProvider_Delete_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_Delete_Call) RunAndReturn(run func(context.Context, string) error) *ResourceDefinitionProvider_Delete_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // DeleteVolumeDefinition provides a mock function with given fields: ctx, resDefName, volNr
@@ -161,6 +347,36 @@ func (_m *ResourceDefinitionProvider) DeleteVolumeDefinition(ctx context.Context
 	return r0
 }
 
+// ResourceDefinitionProvider_DeleteVolumeDefinition_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteVolumeDefinition'
+type ResourceDefinitionProvider_DeleteVolumeDefinition_Call struct {
+	*mock.Call
+}
+
+// DeleteVolumeDefinition is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resDefName string
+//   - volNr int
+func (_e *ResourceDefinitionProvider_Expecter) DeleteVolumeDefinition(ctx interface{}, resDefName interface{}, volNr interface{}) *ResourceDefinitionProvider_DeleteVolumeDefinition_Call {
+	return &ResourceDefinitionProvider_DeleteVolumeDefinition_Call{Call: _e.mock.On("DeleteVolumeDefinition", ctx, resDefName, volNr)}
+}
+
+func (_c *ResourceDefinitionProvider_DeleteVolumeDefinition_Call) Run(run func(ctx context.Context, resDefName string, volNr int)) *ResourceDefinitionProvider_DeleteVolumeDefinition_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(int))
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_DeleteVolumeDefinition_Call) Return(_a0 error) *ResourceDefinitionProvider_DeleteVolumeDefinition_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_DeleteVolumeDefinition_Call) RunAndReturn(run func(context.Context, string, int) error) *ResourceDefinitionProvider_DeleteVolumeDefinition_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DetachExternalFile provides a mock function with given fields: ctx, resDefName, filePath
 func (_m *ResourceDefinitionProvider) DetachExternalFile(ctx context.Context, resDefName string, filePath string) error {
 	ret := _m.Called(ctx, resDefName, filePath)
@@ -177,6 +393,36 @@ func (_m *ResourceDefinitionProvider) DetachExternalFile(ctx context.Context, re
 	}
 
 	return r0
+}
+
+// ResourceDefinitionProvider_DetachExternalFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DetachExternalFile'
+type ResourceDefinitionProvider_DetachExternalFile_Call struct {
+	*mock.Call
+}
+
+// DetachExternalFile is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resDefName string
+//   - filePath string
+func (_e *ResourceDefinitionProvider_Expecter) DetachExternalFile(ctx interface{}, resDefName interface{}, filePath interface{}) *ResourceDefinitionProvider_DetachExternalFile_Call {
+	return &ResourceDefinitionProvider_DetachExternalFile_Call{Call: _e.mock.On("DetachExternalFile", ctx, resDefName, filePath)}
+}
+
+func (_c *ResourceDefinitionProvider_DetachExternalFile_Call) Run(run func(ctx context.Context, resDefName string, filePath string)) *ResourceDefinitionProvider_DetachExternalFile_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_DetachExternalFile_Call) Return(_a0 error) *ResourceDefinitionProvider_DetachExternalFile_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_DetachExternalFile_Call) RunAndReturn(run func(context.Context, string, string) error) *ResourceDefinitionProvider_DetachExternalFile_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // Get provides a mock function with given fields: ctx, resDefName, opts
@@ -214,6 +460,43 @@ func (_m *ResourceDefinitionProvider) Get(ctx context.Context, resDefName string
 	return r0, r1
 }
 
+// ResourceDefinitionProvider_Get_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Get'
+type ResourceDefinitionProvider_Get_Call struct {
+	*mock.Call
+}
+
+// Get is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resDefName string
+//   - opts ...*client.ListOpts
+func (_e *ResourceDefinitionProvider_Expecter) Get(ctx interface{}, resDefName interface{}, opts ...interface{}) *ResourceDefinitionProvider_Get_Call {
+	return &ResourceDefinitionProvider_Get_Call{Call: _e.mock.On("Get",
+		append([]interface{}{ctx, resDefName}, opts...)...)}
+}
+
+func (_c *ResourceDefinitionProvider_Get_Call) Run(run func(ctx context.Context, resDefName string, opts ...*client.ListOpts)) *ResourceDefinitionProvider_Get_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_Get_Call) Return(_a0 client.ResourceDefinition, _a1 error) *ResourceDefinitionProvider_Get_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_Get_Call) RunAndReturn(run func(context.Context, string, ...*client.ListOpts) (client.ResourceDefinition, error)) *ResourceDefinitionProvider_Get_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetAll provides a mock function with given fields: ctx, request
 func (_m *ResourceDefinitionProvider) GetAll(ctx context.Context, request client.RDGetAllRequest) ([]client.ResourceDefinitionWithVolumeDefinition, error) {
 	ret := _m.Called(ctx, request)
@@ -242,6 +525,35 @@ func (_m *ResourceDefinitionProvider) GetAll(ctx context.Context, request client
 	}
 
 	return r0, r1
+}
+
+// ResourceDefinitionProvider_GetAll_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAll'
+type ResourceDefinitionProvider_GetAll_Call struct {
+	*mock.Call
+}
+
+// GetAll is a helper method to define mock.On call
+//   - ctx context.Context
+//   - request client.RDGetAllRequest
+func (_e *ResourceDefinitionProvider_Expecter) GetAll(ctx interface{}, request interface{}) *ResourceDefinitionProvider_GetAll_Call {
+	return &ResourceDefinitionProvider_GetAll_Call{Call: _e.mock.On("GetAll", ctx, request)}
+}
+
+func (_c *ResourceDefinitionProvider_GetAll_Call) Run(run func(ctx context.Context, request client.RDGetAllRequest)) *ResourceDefinitionProvider_GetAll_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(client.RDGetAllRequest))
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_GetAll_Call) Return(_a0 []client.ResourceDefinitionWithVolumeDefinition, _a1 error) *ResourceDefinitionProvider_GetAll_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_GetAll_Call) RunAndReturn(run func(context.Context, client.RDGetAllRequest) ([]client.ResourceDefinitionWithVolumeDefinition, error)) *ResourceDefinitionProvider_GetAll_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetDRBDProxyPropsInfos provides a mock function with given fields: ctx, resDefName, opts
@@ -281,6 +593,43 @@ func (_m *ResourceDefinitionProvider) GetDRBDProxyPropsInfos(ctx context.Context
 	return r0, r1
 }
 
+// ResourceDefinitionProvider_GetDRBDProxyPropsInfos_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDRBDProxyPropsInfos'
+type ResourceDefinitionProvider_GetDRBDProxyPropsInfos_Call struct {
+	*mock.Call
+}
+
+// GetDRBDProxyPropsInfos is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resDefName string
+//   - opts ...*client.ListOpts
+func (_e *ResourceDefinitionProvider_Expecter) GetDRBDProxyPropsInfos(ctx interface{}, resDefName interface{}, opts ...interface{}) *ResourceDefinitionProvider_GetDRBDProxyPropsInfos_Call {
+	return &ResourceDefinitionProvider_GetDRBDProxyPropsInfos_Call{Call: _e.mock.On("GetDRBDProxyPropsInfos",
+		append([]interface{}{ctx, resDefName}, opts...)...)}
+}
+
+func (_c *ResourceDefinitionProvider_GetDRBDProxyPropsInfos_Call) Run(run func(ctx context.Context, resDefName string, opts ...*client.ListOpts)) *ResourceDefinitionProvider_GetDRBDProxyPropsInfos_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_GetDRBDProxyPropsInfos_Call) Return(_a0 []client.PropsInfo, _a1 error) *ResourceDefinitionProvider_GetDRBDProxyPropsInfos_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_GetDRBDProxyPropsInfos_Call) RunAndReturn(run func(context.Context, string, ...*client.ListOpts) ([]client.PropsInfo, error)) *ResourceDefinitionProvider_GetDRBDProxyPropsInfos_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetPropsInfos provides a mock function with given fields: ctx, opts
 func (_m *ResourceDefinitionProvider) GetPropsInfos(ctx context.Context, opts ...*client.ListOpts) ([]client.PropsInfo, error) {
 	_va := make([]interface{}, len(opts))
@@ -318,6 +667,42 @@ func (_m *ResourceDefinitionProvider) GetPropsInfos(ctx context.Context, opts ..
 	return r0, r1
 }
 
+// ResourceDefinitionProvider_GetPropsInfos_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetPropsInfos'
+type ResourceDefinitionProvider_GetPropsInfos_Call struct {
+	*mock.Call
+}
+
+// GetPropsInfos is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *ResourceDefinitionProvider_Expecter) GetPropsInfos(ctx interface{}, opts ...interface{}) *ResourceDefinitionProvider_GetPropsInfos_Call {
+	return &ResourceDefinitionProvider_GetPropsInfos_Call{Call: _e.mock.On("GetPropsInfos",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *ResourceDefinitionProvider_GetPropsInfos_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *ResourceDefinitionProvider_GetPropsInfos_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_GetPropsInfos_Call) Return(_a0 []client.PropsInfo, _a1 error) *ResourceDefinitionProvider_GetPropsInfos_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_GetPropsInfos_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) ([]client.PropsInfo, error)) *ResourceDefinitionProvider_GetPropsInfos_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetVolumeDefinition provides a mock function with given fields: ctx, resDefName, volNr, opts
 func (_m *ResourceDefinitionProvider) GetVolumeDefinition(ctx context.Context, resDefName string, volNr int, opts ...*client.ListOpts) (client.VolumeDefinition, error) {
 	_va := make([]interface{}, len(opts))
@@ -351,6 +736,44 @@ func (_m *ResourceDefinitionProvider) GetVolumeDefinition(ctx context.Context, r
 	}
 
 	return r0, r1
+}
+
+// ResourceDefinitionProvider_GetVolumeDefinition_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetVolumeDefinition'
+type ResourceDefinitionProvider_GetVolumeDefinition_Call struct {
+	*mock.Call
+}
+
+// GetVolumeDefinition is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resDefName string
+//   - volNr int
+//   - opts ...*client.ListOpts
+func (_e *ResourceDefinitionProvider_Expecter) GetVolumeDefinition(ctx interface{}, resDefName interface{}, volNr interface{}, opts ...interface{}) *ResourceDefinitionProvider_GetVolumeDefinition_Call {
+	return &ResourceDefinitionProvider_GetVolumeDefinition_Call{Call: _e.mock.On("GetVolumeDefinition",
+		append([]interface{}{ctx, resDefName, volNr}, opts...)...)}
+}
+
+func (_c *ResourceDefinitionProvider_GetVolumeDefinition_Call) Run(run func(ctx context.Context, resDefName string, volNr int, opts ...*client.ListOpts)) *ResourceDefinitionProvider_GetVolumeDefinition_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-3)
+		for i, a := range args[3:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), args[2].(int), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_GetVolumeDefinition_Call) Return(_a0 client.VolumeDefinition, _a1 error) *ResourceDefinitionProvider_GetVolumeDefinition_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_GetVolumeDefinition_Call) RunAndReturn(run func(context.Context, string, int, ...*client.ListOpts) (client.VolumeDefinition, error)) *ResourceDefinitionProvider_GetVolumeDefinition_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetVolumeDefinitions provides a mock function with given fields: ctx, resDefName, opts
@@ -390,6 +813,43 @@ func (_m *ResourceDefinitionProvider) GetVolumeDefinitions(ctx context.Context, 
 	return r0, r1
 }
 
+// ResourceDefinitionProvider_GetVolumeDefinitions_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetVolumeDefinitions'
+type ResourceDefinitionProvider_GetVolumeDefinitions_Call struct {
+	*mock.Call
+}
+
+// GetVolumeDefinitions is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resDefName string
+//   - opts ...*client.ListOpts
+func (_e *ResourceDefinitionProvider_Expecter) GetVolumeDefinitions(ctx interface{}, resDefName interface{}, opts ...interface{}) *ResourceDefinitionProvider_GetVolumeDefinitions_Call {
+	return &ResourceDefinitionProvider_GetVolumeDefinitions_Call{Call: _e.mock.On("GetVolumeDefinitions",
+		append([]interface{}{ctx, resDefName}, opts...)...)}
+}
+
+func (_c *ResourceDefinitionProvider_GetVolumeDefinitions_Call) Run(run func(ctx context.Context, resDefName string, opts ...*client.ListOpts)) *ResourceDefinitionProvider_GetVolumeDefinitions_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_GetVolumeDefinitions_Call) Return(_a0 []client.VolumeDefinition, _a1 error) *ResourceDefinitionProvider_GetVolumeDefinitions_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_GetVolumeDefinitions_Call) RunAndReturn(run func(context.Context, string, ...*client.ListOpts) ([]client.VolumeDefinition, error)) *ResourceDefinitionProvider_GetVolumeDefinitions_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Modify provides a mock function with given fields: ctx, resDefName, props
 func (_m *ResourceDefinitionProvider) Modify(ctx context.Context, resDefName string, props client.GenericPropsModify) error {
 	ret := _m.Called(ctx, resDefName, props)
@@ -408,6 +868,36 @@ func (_m *ResourceDefinitionProvider) Modify(ctx context.Context, resDefName str
 	return r0
 }
 
+// ResourceDefinitionProvider_Modify_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Modify'
+type ResourceDefinitionProvider_Modify_Call struct {
+	*mock.Call
+}
+
+// Modify is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resDefName string
+//   - props client.GenericPropsModify
+func (_e *ResourceDefinitionProvider_Expecter) Modify(ctx interface{}, resDefName interface{}, props interface{}) *ResourceDefinitionProvider_Modify_Call {
+	return &ResourceDefinitionProvider_Modify_Call{Call: _e.mock.On("Modify", ctx, resDefName, props)}
+}
+
+func (_c *ResourceDefinitionProvider_Modify_Call) Run(run func(ctx context.Context, resDefName string, props client.GenericPropsModify)) *ResourceDefinitionProvider_Modify_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.GenericPropsModify))
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_Modify_Call) Return(_a0 error) *ResourceDefinitionProvider_Modify_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_Modify_Call) RunAndReturn(run func(context.Context, string, client.GenericPropsModify) error) *ResourceDefinitionProvider_Modify_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ModifyVolumeDefinition provides a mock function with given fields: ctx, resDefName, volNr, props
 func (_m *ResourceDefinitionProvider) ModifyVolumeDefinition(ctx context.Context, resDefName string, volNr int, props client.VolumeDefinitionModify) error {
 	ret := _m.Called(ctx, resDefName, volNr, props)
@@ -424,6 +914,37 @@ func (_m *ResourceDefinitionProvider) ModifyVolumeDefinition(ctx context.Context
 	}
 
 	return r0
+}
+
+// ResourceDefinitionProvider_ModifyVolumeDefinition_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ModifyVolumeDefinition'
+type ResourceDefinitionProvider_ModifyVolumeDefinition_Call struct {
+	*mock.Call
+}
+
+// ModifyVolumeDefinition is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resDefName string
+//   - volNr int
+//   - props client.VolumeDefinitionModify
+func (_e *ResourceDefinitionProvider_Expecter) ModifyVolumeDefinition(ctx interface{}, resDefName interface{}, volNr interface{}, props interface{}) *ResourceDefinitionProvider_ModifyVolumeDefinition_Call {
+	return &ResourceDefinitionProvider_ModifyVolumeDefinition_Call{Call: _e.mock.On("ModifyVolumeDefinition", ctx, resDefName, volNr, props)}
+}
+
+func (_c *ResourceDefinitionProvider_ModifyVolumeDefinition_Call) Run(run func(ctx context.Context, resDefName string, volNr int, props client.VolumeDefinitionModify)) *ResourceDefinitionProvider_ModifyVolumeDefinition_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(int), args[3].(client.VolumeDefinitionModify))
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_ModifyVolumeDefinition_Call) Return(_a0 error) *ResourceDefinitionProvider_ModifyVolumeDefinition_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_ModifyVolumeDefinition_Call) RunAndReturn(run func(context.Context, string, int, client.VolumeDefinitionModify) error) *ResourceDefinitionProvider_ModifyVolumeDefinition_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // SyncStatus provides a mock function with given fields: ctx, resDef
@@ -454,6 +975,35 @@ func (_m *ResourceDefinitionProvider) SyncStatus(ctx context.Context, resDef str
 	return r0, r1
 }
 
+// ResourceDefinitionProvider_SyncStatus_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SyncStatus'
+type ResourceDefinitionProvider_SyncStatus_Call struct {
+	*mock.Call
+}
+
+// SyncStatus is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resDef string
+func (_e *ResourceDefinitionProvider_Expecter) SyncStatus(ctx interface{}, resDef interface{}) *ResourceDefinitionProvider_SyncStatus_Call {
+	return &ResourceDefinitionProvider_SyncStatus_Call{Call: _e.mock.On("SyncStatus", ctx, resDef)}
+}
+
+func (_c *ResourceDefinitionProvider_SyncStatus_Call) Run(run func(ctx context.Context, resDef string)) *ResourceDefinitionProvider_SyncStatus_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_SyncStatus_Call) Return(_a0 client.ResourceDefinitionSyncStatus, _a1 error) *ResourceDefinitionProvider_SyncStatus_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_SyncStatus_Call) RunAndReturn(run func(context.Context, string) (client.ResourceDefinitionSyncStatus, error)) *ResourceDefinitionProvider_SyncStatus_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Truncate provides a mock function with given fields: ctx, resDefName, opts
 func (_m *ResourceDefinitionProvider) Truncate(ctx context.Context, resDefName string, opts ...*client.ResourceDefinitionTruncateOpts) error {
 	_va := make([]interface{}, len(opts))
@@ -477,6 +1027,43 @@ func (_m *ResourceDefinitionProvider) Truncate(ctx context.Context, resDefName s
 	}
 
 	return r0
+}
+
+// ResourceDefinitionProvider_Truncate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Truncate'
+type ResourceDefinitionProvider_Truncate_Call struct {
+	*mock.Call
+}
+
+// Truncate is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resDefName string
+//   - opts ...*client.ResourceDefinitionTruncateOpts
+func (_e *ResourceDefinitionProvider_Expecter) Truncate(ctx interface{}, resDefName interface{}, opts ...interface{}) *ResourceDefinitionProvider_Truncate_Call {
+	return &ResourceDefinitionProvider_Truncate_Call{Call: _e.mock.On("Truncate",
+		append([]interface{}{ctx, resDefName}, opts...)...)}
+}
+
+func (_c *ResourceDefinitionProvider_Truncate_Call) Run(run func(ctx context.Context, resDefName string, opts ...*client.ResourceDefinitionTruncateOpts)) *ResourceDefinitionProvider_Truncate_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ResourceDefinitionTruncateOpts, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ResourceDefinitionTruncateOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_Truncate_Call) Return(_a0 error) *ResourceDefinitionProvider_Truncate_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceDefinitionProvider_Truncate_Call) RunAndReturn(run func(context.Context, string, ...*client.ResourceDefinitionTruncateOpts) error) *ResourceDefinitionProvider_Truncate_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // NewResourceDefinitionProvider creates a new instance of ResourceDefinitionProvider. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

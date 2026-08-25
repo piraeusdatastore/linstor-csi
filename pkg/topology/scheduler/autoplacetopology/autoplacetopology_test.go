@@ -43,13 +43,9 @@ func TestScheduler_Create(t *testing.T) {
 		nm := mocks.NodeProvider{}
 		sched := autoplacetopology.NewScheduler(&lc.HighLevelClient{Client: &lapi.Client{Resources: &rm, Nodes: &nm}}, logrus.WithField("test", t.Name()))
 
-		rm.ExpectedCalls = []*mock.Call{
-			{Method: "GetAll", Arguments: mock.Arguments{mock.Anything, volumeId}, ReturnArguments: mock.Arguments{nil, nil}},
-			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node1", "node2", "node3", "node4"}}}}, ReturnArguments: mock.Arguments{nil}},
-		}
-		nm.ExpectedCalls = []*mock.Call{
-			{Method: "GetAll", Arguments: mock.Arguments{mock.Anything, &lapi.ListOpts{}}, ReturnArguments: mock.Arguments{nodes, nil}},
-		}
+		rm.EXPECT().GetAll(mock.Anything, volumeId).Return(nil, nil)
+		rm.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node1", "node2", "node3", "node4"}}}).Return(nil)
+		nm.EXPECT().GetAll(mock.Anything, &lapi.ListOpts{}).Return(nodes, nil)
 
 		err := sched.Create(ctx, volumeId, params, nil)
 		assert.NoError(t, err)
@@ -63,14 +59,10 @@ func TestScheduler_Create(t *testing.T) {
 		nm := mocks.NodeProvider{}
 		sched := autoplacetopology.NewScheduler(&lc.HighLevelClient{Client: &lapi.Client{Resources: &rm, Nodes: &nm}}, logrus.WithField("test", t.Name()))
 
-		rm.ExpectedCalls = []*mock.Call{
-			{Method: "GetAll", Arguments: mock.Arguments{mock.Anything, volumeId}, ReturnArguments: mock.Arguments{nil, nil}},
-			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{AdditionalPlaceCount: 1, PlaceCount: 1, NodeNameList: []string{"node3"}}}}, ReturnArguments: mock.Arguments{nil}},
-			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node1", "node2", "node3", "node4"}}}}, ReturnArguments: mock.Arguments{nil}},
-		}
-		nm.ExpectedCalls = []*mock.Call{
-			{Method: "GetAll", Arguments: mock.Arguments{mock.Anything, &lapi.ListOpts{}}, ReturnArguments: mock.Arguments{nodes, nil}},
-		}
+		rm.EXPECT().GetAll(mock.Anything, volumeId).Return(nil, nil)
+		rm.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{AdditionalPlaceCount: 1, PlaceCount: 1, NodeNameList: []string{"node3"}}}).Return(nil)
+		rm.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node1", "node2", "node3", "node4"}}}).Return(nil)
+		nm.EXPECT().GetAll(mock.Anything, &lapi.ListOpts{}).Return(nodes, nil)
 
 		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
 			Preferred: []*csi.Topology{
@@ -90,15 +82,11 @@ func TestScheduler_Create(t *testing.T) {
 		nm := mocks.NodeProvider{}
 		sched := autoplacetopology.NewScheduler(&lc.HighLevelClient{Client: &lapi.Client{Resources: &rm, Nodes: &nm}}, logrus.WithField("test", t.Name()))
 
-		rm.ExpectedCalls = []*mock.Call{
-			{Method: "GetAll", Arguments: mock.Arguments{mock.Anything, volumeId}, ReturnArguments: mock.Arguments{nil, nil}},
-			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{AdditionalPlaceCount: 1, PlaceCount: 1, NodeNameList: []string{"node3"}}}}, ReturnArguments: mock.Arguments{autoplaceError}},
-			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{AdditionalPlaceCount: 1, PlaceCount: 1, NodeNameList: []string{"node1"}}}}, ReturnArguments: mock.Arguments{nil}},
-			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node1", "node2", "node3", "node4"}}}}, ReturnArguments: mock.Arguments{nil}},
-		}
-		nm.ExpectedCalls = []*mock.Call{
-			{Method: "GetAll", Arguments: mock.Arguments{mock.Anything, &lapi.ListOpts{}}, ReturnArguments: mock.Arguments{nodes, nil}},
-		}
+		rm.EXPECT().GetAll(mock.Anything, volumeId).Return(nil, nil)
+		rm.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{AdditionalPlaceCount: 1, PlaceCount: 1, NodeNameList: []string{"node3"}}}).Return(autoplaceError)
+		rm.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{AdditionalPlaceCount: 1, PlaceCount: 1, NodeNameList: []string{"node1"}}}).Return(nil)
+		rm.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node1", "node2", "node3", "node4"}}}).Return(nil)
+		nm.EXPECT().GetAll(mock.Anything, &lapi.ListOpts{}).Return(nodes, nil)
 
 		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
 			Preferred: []*csi.Topology{
@@ -117,11 +105,9 @@ func TestScheduler_Create(t *testing.T) {
 		m := mocks.ResourceProvider{}
 		sched := autoplacetopology.NewScheduler(&lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, logrus.WithField("test", t.Name()))
 
-		m.ExpectedCalls = []*mock.Call{
-			{Method: "GetAll", Arguments: mock.Arguments{mock.Anything, volumeId}, ReturnArguments: mock.Arguments{nil, nil}},
-			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{AdditionalPlaceCount: 1, PlaceCount: 1, NodeNameList: []string{"node2"}}}}, ReturnArguments: mock.Arguments{nil}},
-			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node1", "node2", "node3", "node4"}}}}, ReturnArguments: mock.Arguments{nil}},
-		}
+		m.EXPECT().GetAll(mock.Anything, volumeId).Return(nil, nil)
+		m.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{AdditionalPlaceCount: 1, PlaceCount: 1, NodeNameList: []string{"node2"}}}).Return(nil)
+		m.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node1", "node2", "node3", "node4"}}}).Return(nil)
 
 		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
 			Requisite: []*csi.Topology{
@@ -144,10 +130,8 @@ func TestScheduler_Create(t *testing.T) {
 		m := mocks.ResourceProvider{}
 		sched := autoplacetopology.NewScheduler(&lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, logrus.WithField("test", t.Name()))
 
-		m.ExpectedCalls = []*mock.Call{
-			{Method: "GetAll", Arguments: mock.Arguments{mock.Anything, volumeId}, ReturnArguments: mock.Arguments{nil, nil}},
-			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node2", "node3", "node4"}}}}, ReturnArguments: mock.Arguments{nil}},
-		}
+		m.EXPECT().GetAll(mock.Anything, volumeId).Return(nil, nil)
+		m.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node2", "node3", "node4"}}}).Return(nil)
 
 		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
 			Requisite: []*csi.Topology{
@@ -165,10 +149,8 @@ func TestScheduler_Create(t *testing.T) {
 		m := mocks.ResourceProvider{}
 		sched := autoplacetopology.NewScheduler(&lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, logrus.WithField("test", t.Name()))
 
-		m.ExpectedCalls = []*mock.Call{
-			{Method: "GetAll", Arguments: mock.Arguments{mock.Anything, volumeId}, ReturnArguments: mock.Arguments{nil, nil}},
-			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node2", "node3", "node4"}}}}, ReturnArguments: mock.Arguments{autoplaceError}},
-		}
+		m.EXPECT().GetAll(mock.Anything, volumeId).Return(nil, nil)
+		m.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node2", "node3", "node4"}}}).Return(autoplaceError)
 
 		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
 			Requisite: []*csi.Topology{
@@ -187,11 +169,9 @@ func TestScheduler_Create(t *testing.T) {
 		m := mocks.ResourceProvider{}
 		sched := autoplacetopology.NewScheduler(&lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, logrus.WithField("test", t.Name()))
 
-		m.ExpectedCalls = []*mock.Call{
-			{Method: "GetAll", Arguments: mock.Arguments{mock.Anything, volumeId}, ReturnArguments: mock.Arguments{nil, nil}},
-			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{PlaceCount: 2, NodeNameList: []string{"node1", "node2"}}}}, ReturnArguments: mock.Arguments{nil}},
-			{Method: "Autoplace", Arguments: mock.Arguments{mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{}}}, ReturnArguments: mock.Arguments{nil}},
-		}
+		m.EXPECT().GetAll(mock.Anything, volumeId).Return(nil, nil)
+		m.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{PlaceCount: 2, NodeNameList: []string{"node1", "node2"}}}).Return(nil)
+		m.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{}}).Return(nil)
 
 		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
 			Requisite: []*csi.Topology{

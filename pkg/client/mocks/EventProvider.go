@@ -15,6 +15,14 @@ type EventProvider struct {
 	mock.Mock
 }
 
+type EventProvider_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *EventProvider) EXPECT() *EventProvider_Expecter {
+	return &EventProvider_Expecter{mock: &_m.Mock}
+}
+
 // DRBDPromotion provides a mock function with given fields: ctx, lastEventId
 func (_m *EventProvider) DRBDPromotion(ctx context.Context, lastEventId string) (*client.DRBDMayPromoteStream, error) {
 	ret := _m.Called(ctx, lastEventId)
@@ -43,6 +51,35 @@ func (_m *EventProvider) DRBDPromotion(ctx context.Context, lastEventId string) 
 	}
 
 	return r0, r1
+}
+
+// EventProvider_DRBDPromotion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DRBDPromotion'
+type EventProvider_DRBDPromotion_Call struct {
+	*mock.Call
+}
+
+// DRBDPromotion is a helper method to define mock.On call
+//   - ctx context.Context
+//   - lastEventId string
+func (_e *EventProvider_Expecter) DRBDPromotion(ctx interface{}, lastEventId interface{}) *EventProvider_DRBDPromotion_Call {
+	return &EventProvider_DRBDPromotion_Call{Call: _e.mock.On("DRBDPromotion", ctx, lastEventId)}
+}
+
+func (_c *EventProvider_DRBDPromotion_Call) Run(run func(ctx context.Context, lastEventId string)) *EventProvider_DRBDPromotion_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *EventProvider_DRBDPromotion_Call) Return(_a0 *client.DRBDMayPromoteStream, _a1 error) *EventProvider_DRBDPromotion_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *EventProvider_DRBDPromotion_Call) RunAndReturn(run func(context.Context, string) (*client.DRBDMayPromoteStream, error)) *EventProvider_DRBDPromotion_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // NewEventProvider creates a new instance of EventProvider. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

@@ -9,12 +9,56 @@ type LeveledLogger struct {
 	mock.Mock
 }
 
+type LeveledLogger_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *LeveledLogger) EXPECT() *LeveledLogger_Expecter {
+	return &LeveledLogger_Expecter{mock: &_m.Mock}
+}
+
 // Debugf provides a mock function with given fields: _a0, _a1
 func (_m *LeveledLogger) Debugf(_a0 string, _a1 ...interface{}) {
 	var _ca []interface{}
 	_ca = append(_ca, _a0)
 	_ca = append(_ca, _a1...)
 	_m.Called(_ca...)
+}
+
+// LeveledLogger_Debugf_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Debugf'
+type LeveledLogger_Debugf_Call struct {
+	*mock.Call
+}
+
+// Debugf is a helper method to define mock.On call
+//   - _a0 string
+//   - _a1 ...interface{}
+func (_e *LeveledLogger_Expecter) Debugf(_a0 interface{}, _a1 ...interface{}) *LeveledLogger_Debugf_Call {
+	return &LeveledLogger_Debugf_Call{Call: _e.mock.On("Debugf",
+		append([]interface{}{_a0}, _a1...)...)}
+}
+
+func (_c *LeveledLogger_Debugf_Call) Run(run func(_a0 string, _a1 ...interface{})) *LeveledLogger_Debugf_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]interface{}, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(interface{})
+			}
+		}
+		run(args[0].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *LeveledLogger_Debugf_Call) Return() *LeveledLogger_Debugf_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *LeveledLogger_Debugf_Call) RunAndReturn(run func(string, ...interface{})) *LeveledLogger_Debugf_Call {
+	_c.Run(run)
+	return _c
 }
 
 // Errorf provides a mock function with given fields: _a0, _a1
@@ -25,6 +69,42 @@ func (_m *LeveledLogger) Errorf(_a0 string, _a1 ...interface{}) {
 	_m.Called(_ca...)
 }
 
+// LeveledLogger_Errorf_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Errorf'
+type LeveledLogger_Errorf_Call struct {
+	*mock.Call
+}
+
+// Errorf is a helper method to define mock.On call
+//   - _a0 string
+//   - _a1 ...interface{}
+func (_e *LeveledLogger_Expecter) Errorf(_a0 interface{}, _a1 ...interface{}) *LeveledLogger_Errorf_Call {
+	return &LeveledLogger_Errorf_Call{Call: _e.mock.On("Errorf",
+		append([]interface{}{_a0}, _a1...)...)}
+}
+
+func (_c *LeveledLogger_Errorf_Call) Run(run func(_a0 string, _a1 ...interface{})) *LeveledLogger_Errorf_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]interface{}, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(interface{})
+			}
+		}
+		run(args[0].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *LeveledLogger_Errorf_Call) Return() *LeveledLogger_Errorf_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *LeveledLogger_Errorf_Call) RunAndReturn(run func(string, ...interface{})) *LeveledLogger_Errorf_Call {
+	_c.Run(run)
+	return _c
+}
+
 // Infof provides a mock function with given fields: _a0, _a1
 func (_m *LeveledLogger) Infof(_a0 string, _a1 ...interface{}) {
 	var _ca []interface{}
@@ -33,12 +113,84 @@ func (_m *LeveledLogger) Infof(_a0 string, _a1 ...interface{}) {
 	_m.Called(_ca...)
 }
 
+// LeveledLogger_Infof_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Infof'
+type LeveledLogger_Infof_Call struct {
+	*mock.Call
+}
+
+// Infof is a helper method to define mock.On call
+//   - _a0 string
+//   - _a1 ...interface{}
+func (_e *LeveledLogger_Expecter) Infof(_a0 interface{}, _a1 ...interface{}) *LeveledLogger_Infof_Call {
+	return &LeveledLogger_Infof_Call{Call: _e.mock.On("Infof",
+		append([]interface{}{_a0}, _a1...)...)}
+}
+
+func (_c *LeveledLogger_Infof_Call) Run(run func(_a0 string, _a1 ...interface{})) *LeveledLogger_Infof_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]interface{}, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(interface{})
+			}
+		}
+		run(args[0].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *LeveledLogger_Infof_Call) Return() *LeveledLogger_Infof_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *LeveledLogger_Infof_Call) RunAndReturn(run func(string, ...interface{})) *LeveledLogger_Infof_Call {
+	_c.Run(run)
+	return _c
+}
+
 // Warnf provides a mock function with given fields: _a0, _a1
 func (_m *LeveledLogger) Warnf(_a0 string, _a1 ...interface{}) {
 	var _ca []interface{}
 	_ca = append(_ca, _a0)
 	_ca = append(_ca, _a1...)
 	_m.Called(_ca...)
+}
+
+// LeveledLogger_Warnf_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Warnf'
+type LeveledLogger_Warnf_Call struct {
+	*mock.Call
+}
+
+// Warnf is a helper method to define mock.On call
+//   - _a0 string
+//   - _a1 ...interface{}
+func (_e *LeveledLogger_Expecter) Warnf(_a0 interface{}, _a1 ...interface{}) *LeveledLogger_Warnf_Call {
+	return &LeveledLogger_Warnf_Call{Call: _e.mock.On("Warnf",
+		append([]interface{}{_a0}, _a1...)...)}
+}
+
+func (_c *LeveledLogger_Warnf_Call) Run(run func(_a0 string, _a1 ...interface{})) *LeveledLogger_Warnf_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]interface{}, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(interface{})
+			}
+		}
+		run(args[0].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *LeveledLogger_Warnf_Call) Return() *LeveledLogger_Warnf_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *LeveledLogger_Warnf_Call) RunAndReturn(run func(string, ...interface{})) *LeveledLogger_Warnf_Call {
+	_c.Run(run)
+	return _c
 }
 
 // NewLeveledLogger creates a new instance of LeveledLogger. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

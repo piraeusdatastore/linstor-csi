@@ -15,6 +15,14 @@ type ResourceGroupProvider struct {
 	mock.Mock
 }
 
+type ResourceGroupProvider_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *ResourceGroupProvider) EXPECT() *ResourceGroupProvider_Expecter {
+	return &ResourceGroupProvider_Expecter{mock: &_m.Mock}
+}
+
 // Adjust provides a mock function with given fields: ctx, resGrpName, adjust
 func (_m *ResourceGroupProvider) Adjust(ctx context.Context, resGrpName string, adjust client.ResourceGroupAdjust) error {
 	ret := _m.Called(ctx, resGrpName, adjust)
@@ -31,6 +39,36 @@ func (_m *ResourceGroupProvider) Adjust(ctx context.Context, resGrpName string, 
 	}
 
 	return r0
+}
+
+// ResourceGroupProvider_Adjust_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Adjust'
+type ResourceGroupProvider_Adjust_Call struct {
+	*mock.Call
+}
+
+// Adjust is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resGrpName string
+//   - adjust client.ResourceGroupAdjust
+func (_e *ResourceGroupProvider_Expecter) Adjust(ctx interface{}, resGrpName interface{}, adjust interface{}) *ResourceGroupProvider_Adjust_Call {
+	return &ResourceGroupProvider_Adjust_Call{Call: _e.mock.On("Adjust", ctx, resGrpName, adjust)}
+}
+
+func (_c *ResourceGroupProvider_Adjust_Call) Run(run func(ctx context.Context, resGrpName string, adjust client.ResourceGroupAdjust)) *ResourceGroupProvider_Adjust_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.ResourceGroupAdjust))
+	})
+	return _c
+}
+
+func (_c *ResourceGroupProvider_Adjust_Call) Return(_a0 error) *ResourceGroupProvider_Adjust_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceGroupProvider_Adjust_Call) RunAndReturn(run func(context.Context, string, client.ResourceGroupAdjust) error) *ResourceGroupProvider_Adjust_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // AdjustAll provides a mock function with given fields: ctx, adjust
@@ -51,6 +89,35 @@ func (_m *ResourceGroupProvider) AdjustAll(ctx context.Context, adjust client.Re
 	return r0
 }
 
+// ResourceGroupProvider_AdjustAll_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AdjustAll'
+type ResourceGroupProvider_AdjustAll_Call struct {
+	*mock.Call
+}
+
+// AdjustAll is a helper method to define mock.On call
+//   - ctx context.Context
+//   - adjust client.ResourceGroupAdjust
+func (_e *ResourceGroupProvider_Expecter) AdjustAll(ctx interface{}, adjust interface{}) *ResourceGroupProvider_AdjustAll_Call {
+	return &ResourceGroupProvider_AdjustAll_Call{Call: _e.mock.On("AdjustAll", ctx, adjust)}
+}
+
+func (_c *ResourceGroupProvider_AdjustAll_Call) Run(run func(ctx context.Context, adjust client.ResourceGroupAdjust)) *ResourceGroupProvider_AdjustAll_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(client.ResourceGroupAdjust))
+	})
+	return _c
+}
+
+func (_c *ResourceGroupProvider_AdjustAll_Call) Return(_a0 error) *ResourceGroupProvider_AdjustAll_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceGroupProvider_AdjustAll_Call) RunAndReturn(run func(context.Context, client.ResourceGroupAdjust) error) *ResourceGroupProvider_AdjustAll_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Create provides a mock function with given fields: ctx, resGrp
 func (_m *ResourceGroupProvider) Create(ctx context.Context, resGrp client.ResourceGroup) error {
 	ret := _m.Called(ctx, resGrp)
@@ -67,6 +134,35 @@ func (_m *ResourceGroupProvider) Create(ctx context.Context, resGrp client.Resou
 	}
 
 	return r0
+}
+
+// ResourceGroupProvider_Create_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Create'
+type ResourceGroupProvider_Create_Call struct {
+	*mock.Call
+}
+
+// Create is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resGrp client.ResourceGroup
+func (_e *ResourceGroupProvider_Expecter) Create(ctx interface{}, resGrp interface{}) *ResourceGroupProvider_Create_Call {
+	return &ResourceGroupProvider_Create_Call{Call: _e.mock.On("Create", ctx, resGrp)}
+}
+
+func (_c *ResourceGroupProvider_Create_Call) Run(run func(ctx context.Context, resGrp client.ResourceGroup)) *ResourceGroupProvider_Create_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(client.ResourceGroup))
+	})
+	return _c
+}
+
+func (_c *ResourceGroupProvider_Create_Call) Return(_a0 error) *ResourceGroupProvider_Create_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceGroupProvider_Create_Call) RunAndReturn(run func(context.Context, client.ResourceGroup) error) *ResourceGroupProvider_Create_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // CreateVolumeGroup provides a mock function with given fields: ctx, resGrpName, volGrp
@@ -87,6 +183,36 @@ func (_m *ResourceGroupProvider) CreateVolumeGroup(ctx context.Context, resGrpNa
 	return r0
 }
 
+// ResourceGroupProvider_CreateVolumeGroup_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateVolumeGroup'
+type ResourceGroupProvider_CreateVolumeGroup_Call struct {
+	*mock.Call
+}
+
+// CreateVolumeGroup is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resGrpName string
+//   - volGrp client.VolumeGroup
+func (_e *ResourceGroupProvider_Expecter) CreateVolumeGroup(ctx interface{}, resGrpName interface{}, volGrp interface{}) *ResourceGroupProvider_CreateVolumeGroup_Call {
+	return &ResourceGroupProvider_CreateVolumeGroup_Call{Call: _e.mock.On("CreateVolumeGroup", ctx, resGrpName, volGrp)}
+}
+
+func (_c *ResourceGroupProvider_CreateVolumeGroup_Call) Run(run func(ctx context.Context, resGrpName string, volGrp client.VolumeGroup)) *ResourceGroupProvider_CreateVolumeGroup_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.VolumeGroup))
+	})
+	return _c
+}
+
+func (_c *ResourceGroupProvider_CreateVolumeGroup_Call) Return(_a0 error) *ResourceGroupProvider_CreateVolumeGroup_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceGroupProvider_CreateVolumeGroup_Call) RunAndReturn(run func(context.Context, string, client.VolumeGroup) error) *ResourceGroupProvider_CreateVolumeGroup_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Delete provides a mock function with given fields: ctx, resGrpName
 func (_m *ResourceGroupProvider) Delete(ctx context.Context, resGrpName string) error {
 	ret := _m.Called(ctx, resGrpName)
@@ -105,6 +231,35 @@ func (_m *ResourceGroupProvider) Delete(ctx context.Context, resGrpName string) 
 	return r0
 }
 
+// ResourceGroupProvider_Delete_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Delete'
+type ResourceGroupProvider_Delete_Call struct {
+	*mock.Call
+}
+
+// Delete is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resGrpName string
+func (_e *ResourceGroupProvider_Expecter) Delete(ctx interface{}, resGrpName interface{}) *ResourceGroupProvider_Delete_Call {
+	return &ResourceGroupProvider_Delete_Call{Call: _e.mock.On("Delete", ctx, resGrpName)}
+}
+
+func (_c *ResourceGroupProvider_Delete_Call) Run(run func(ctx context.Context, resGrpName string)) *ResourceGroupProvider_Delete_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *ResourceGroupProvider_Delete_Call) Return(_a0 error) *ResourceGroupProvider_Delete_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceGroupProvider_Delete_Call) RunAndReturn(run func(context.Context, string) error) *ResourceGroupProvider_Delete_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DeleteVolumeGroup provides a mock function with given fields: ctx, resGrpName, volNr
 func (_m *ResourceGroupProvider) DeleteVolumeGroup(ctx context.Context, resGrpName string, volNr int) error {
 	ret := _m.Called(ctx, resGrpName, volNr)
@@ -121,6 +276,36 @@ func (_m *ResourceGroupProvider) DeleteVolumeGroup(ctx context.Context, resGrpNa
 	}
 
 	return r0
+}
+
+// ResourceGroupProvider_DeleteVolumeGroup_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteVolumeGroup'
+type ResourceGroupProvider_DeleteVolumeGroup_Call struct {
+	*mock.Call
+}
+
+// DeleteVolumeGroup is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resGrpName string
+//   - volNr int
+func (_e *ResourceGroupProvider_Expecter) DeleteVolumeGroup(ctx interface{}, resGrpName interface{}, volNr interface{}) *ResourceGroupProvider_DeleteVolumeGroup_Call {
+	return &ResourceGroupProvider_DeleteVolumeGroup_Call{Call: _e.mock.On("DeleteVolumeGroup", ctx, resGrpName, volNr)}
+}
+
+func (_c *ResourceGroupProvider_DeleteVolumeGroup_Call) Run(run func(ctx context.Context, resGrpName string, volNr int)) *ResourceGroupProvider_DeleteVolumeGroup_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(int))
+	})
+	return _c
+}
+
+func (_c *ResourceGroupProvider_DeleteVolumeGroup_Call) Return(_a0 error) *ResourceGroupProvider_DeleteVolumeGroup_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceGroupProvider_DeleteVolumeGroup_Call) RunAndReturn(run func(context.Context, string, int) error) *ResourceGroupProvider_DeleteVolumeGroup_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // Get provides a mock function with given fields: ctx, resGrpName, opts
@@ -156,6 +341,43 @@ func (_m *ResourceGroupProvider) Get(ctx context.Context, resGrpName string, opt
 	}
 
 	return r0, r1
+}
+
+// ResourceGroupProvider_Get_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Get'
+type ResourceGroupProvider_Get_Call struct {
+	*mock.Call
+}
+
+// Get is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resGrpName string
+//   - opts ...*client.ListOpts
+func (_e *ResourceGroupProvider_Expecter) Get(ctx interface{}, resGrpName interface{}, opts ...interface{}) *ResourceGroupProvider_Get_Call {
+	return &ResourceGroupProvider_Get_Call{Call: _e.mock.On("Get",
+		append([]interface{}{ctx, resGrpName}, opts...)...)}
+}
+
+func (_c *ResourceGroupProvider_Get_Call) Run(run func(ctx context.Context, resGrpName string, opts ...*client.ListOpts)) *ResourceGroupProvider_Get_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ResourceGroupProvider_Get_Call) Return(_a0 client.ResourceGroup, _a1 error) *ResourceGroupProvider_Get_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ResourceGroupProvider_Get_Call) RunAndReturn(run func(context.Context, string, ...*client.ListOpts) (client.ResourceGroup, error)) *ResourceGroupProvider_Get_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetAll provides a mock function with given fields: ctx, opts
@@ -195,6 +417,42 @@ func (_m *ResourceGroupProvider) GetAll(ctx context.Context, opts ...*client.Lis
 	return r0, r1
 }
 
+// ResourceGroupProvider_GetAll_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAll'
+type ResourceGroupProvider_GetAll_Call struct {
+	*mock.Call
+}
+
+// GetAll is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *ResourceGroupProvider_Expecter) GetAll(ctx interface{}, opts ...interface{}) *ResourceGroupProvider_GetAll_Call {
+	return &ResourceGroupProvider_GetAll_Call{Call: _e.mock.On("GetAll",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *ResourceGroupProvider_GetAll_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *ResourceGroupProvider_GetAll_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ResourceGroupProvider_GetAll_Call) Return(_a0 []client.ResourceGroup, _a1 error) *ResourceGroupProvider_GetAll_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ResourceGroupProvider_GetAll_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) ([]client.ResourceGroup, error)) *ResourceGroupProvider_GetAll_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetPropsInfos provides a mock function with given fields: ctx, opts
 func (_m *ResourceGroupProvider) GetPropsInfos(ctx context.Context, opts ...*client.ListOpts) ([]client.PropsInfo, error) {
 	_va := make([]interface{}, len(opts))
@@ -232,6 +490,42 @@ func (_m *ResourceGroupProvider) GetPropsInfos(ctx context.Context, opts ...*cli
 	return r0, r1
 }
 
+// ResourceGroupProvider_GetPropsInfos_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetPropsInfos'
+type ResourceGroupProvider_GetPropsInfos_Call struct {
+	*mock.Call
+}
+
+// GetPropsInfos is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *ResourceGroupProvider_Expecter) GetPropsInfos(ctx interface{}, opts ...interface{}) *ResourceGroupProvider_GetPropsInfos_Call {
+	return &ResourceGroupProvider_GetPropsInfos_Call{Call: _e.mock.On("GetPropsInfos",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *ResourceGroupProvider_GetPropsInfos_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *ResourceGroupProvider_GetPropsInfos_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ResourceGroupProvider_GetPropsInfos_Call) Return(_a0 []client.PropsInfo, _a1 error) *ResourceGroupProvider_GetPropsInfos_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ResourceGroupProvider_GetPropsInfos_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) ([]client.PropsInfo, error)) *ResourceGroupProvider_GetPropsInfos_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetVolumeGroup provides a mock function with given fields: ctx, resGrpName, volNr, opts
 func (_m *ResourceGroupProvider) GetVolumeGroup(ctx context.Context, resGrpName string, volNr int, opts ...*client.ListOpts) (client.VolumeGroup, error) {
 	_va := make([]interface{}, len(opts))
@@ -265,6 +559,44 @@ func (_m *ResourceGroupProvider) GetVolumeGroup(ctx context.Context, resGrpName 
 	}
 
 	return r0, r1
+}
+
+// ResourceGroupProvider_GetVolumeGroup_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetVolumeGroup'
+type ResourceGroupProvider_GetVolumeGroup_Call struct {
+	*mock.Call
+}
+
+// GetVolumeGroup is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resGrpName string
+//   - volNr int
+//   - opts ...*client.ListOpts
+func (_e *ResourceGroupProvider_Expecter) GetVolumeGroup(ctx interface{}, resGrpName interface{}, volNr interface{}, opts ...interface{}) *ResourceGroupProvider_GetVolumeGroup_Call {
+	return &ResourceGroupProvider_GetVolumeGroup_Call{Call: _e.mock.On("GetVolumeGroup",
+		append([]interface{}{ctx, resGrpName, volNr}, opts...)...)}
+}
+
+func (_c *ResourceGroupProvider_GetVolumeGroup_Call) Run(run func(ctx context.Context, resGrpName string, volNr int, opts ...*client.ListOpts)) *ResourceGroupProvider_GetVolumeGroup_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-3)
+		for i, a := range args[3:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), args[2].(int), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ResourceGroupProvider_GetVolumeGroup_Call) Return(_a0 client.VolumeGroup, _a1 error) *ResourceGroupProvider_GetVolumeGroup_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ResourceGroupProvider_GetVolumeGroup_Call) RunAndReturn(run func(context.Context, string, int, ...*client.ListOpts) (client.VolumeGroup, error)) *ResourceGroupProvider_GetVolumeGroup_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetVolumeGroupPropsInfos provides a mock function with given fields: ctx, resGrpName, opts
@@ -304,6 +636,43 @@ func (_m *ResourceGroupProvider) GetVolumeGroupPropsInfos(ctx context.Context, r
 	return r0, r1
 }
 
+// ResourceGroupProvider_GetVolumeGroupPropsInfos_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetVolumeGroupPropsInfos'
+type ResourceGroupProvider_GetVolumeGroupPropsInfos_Call struct {
+	*mock.Call
+}
+
+// GetVolumeGroupPropsInfos is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resGrpName string
+//   - opts ...*client.ListOpts
+func (_e *ResourceGroupProvider_Expecter) GetVolumeGroupPropsInfos(ctx interface{}, resGrpName interface{}, opts ...interface{}) *ResourceGroupProvider_GetVolumeGroupPropsInfos_Call {
+	return &ResourceGroupProvider_GetVolumeGroupPropsInfos_Call{Call: _e.mock.On("GetVolumeGroupPropsInfos",
+		append([]interface{}{ctx, resGrpName}, opts...)...)}
+}
+
+func (_c *ResourceGroupProvider_GetVolumeGroupPropsInfos_Call) Run(run func(ctx context.Context, resGrpName string, opts ...*client.ListOpts)) *ResourceGroupProvider_GetVolumeGroupPropsInfos_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ResourceGroupProvider_GetVolumeGroupPropsInfos_Call) Return(_a0 []client.PropsInfo, _a1 error) *ResourceGroupProvider_GetVolumeGroupPropsInfos_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ResourceGroupProvider_GetVolumeGroupPropsInfos_Call) RunAndReturn(run func(context.Context, string, ...*client.ListOpts) ([]client.PropsInfo, error)) *ResourceGroupProvider_GetVolumeGroupPropsInfos_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetVolumeGroups provides a mock function with given fields: ctx, resGrpName, opts
 func (_m *ResourceGroupProvider) GetVolumeGroups(ctx context.Context, resGrpName string, opts ...*client.ListOpts) ([]client.VolumeGroup, error) {
 	_va := make([]interface{}, len(opts))
@@ -341,6 +710,43 @@ func (_m *ResourceGroupProvider) GetVolumeGroups(ctx context.Context, resGrpName
 	return r0, r1
 }
 
+// ResourceGroupProvider_GetVolumeGroups_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetVolumeGroups'
+type ResourceGroupProvider_GetVolumeGroups_Call struct {
+	*mock.Call
+}
+
+// GetVolumeGroups is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resGrpName string
+//   - opts ...*client.ListOpts
+func (_e *ResourceGroupProvider_Expecter) GetVolumeGroups(ctx interface{}, resGrpName interface{}, opts ...interface{}) *ResourceGroupProvider_GetVolumeGroups_Call {
+	return &ResourceGroupProvider_GetVolumeGroups_Call{Call: _e.mock.On("GetVolumeGroups",
+		append([]interface{}{ctx, resGrpName}, opts...)...)}
+}
+
+func (_c *ResourceGroupProvider_GetVolumeGroups_Call) Run(run func(ctx context.Context, resGrpName string, opts ...*client.ListOpts)) *ResourceGroupProvider_GetVolumeGroups_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ResourceGroupProvider_GetVolumeGroups_Call) Return(_a0 []client.VolumeGroup, _a1 error) *ResourceGroupProvider_GetVolumeGroups_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ResourceGroupProvider_GetVolumeGroups_Call) RunAndReturn(run func(context.Context, string, ...*client.ListOpts) ([]client.VolumeGroup, error)) *ResourceGroupProvider_GetVolumeGroups_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Modify provides a mock function with given fields: ctx, resGrpName, props
 func (_m *ResourceGroupProvider) Modify(ctx context.Context, resGrpName string, props client.ResourceGroupModify) error {
 	ret := _m.Called(ctx, resGrpName, props)
@@ -359,6 +765,36 @@ func (_m *ResourceGroupProvider) Modify(ctx context.Context, resGrpName string, 
 	return r0
 }
 
+// ResourceGroupProvider_Modify_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Modify'
+type ResourceGroupProvider_Modify_Call struct {
+	*mock.Call
+}
+
+// Modify is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resGrpName string
+//   - props client.ResourceGroupModify
+func (_e *ResourceGroupProvider_Expecter) Modify(ctx interface{}, resGrpName interface{}, props interface{}) *ResourceGroupProvider_Modify_Call {
+	return &ResourceGroupProvider_Modify_Call{Call: _e.mock.On("Modify", ctx, resGrpName, props)}
+}
+
+func (_c *ResourceGroupProvider_Modify_Call) Run(run func(ctx context.Context, resGrpName string, props client.ResourceGroupModify)) *ResourceGroupProvider_Modify_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.ResourceGroupModify))
+	})
+	return _c
+}
+
+func (_c *ResourceGroupProvider_Modify_Call) Return(_a0 error) *ResourceGroupProvider_Modify_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceGroupProvider_Modify_Call) RunAndReturn(run func(context.Context, string, client.ResourceGroupModify) error) *ResourceGroupProvider_Modify_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ModifyVolumeGroup provides a mock function with given fields: ctx, resGrpName, volNr, props
 func (_m *ResourceGroupProvider) ModifyVolumeGroup(ctx context.Context, resGrpName string, volNr int, props client.VolumeGroupModify) error {
 	ret := _m.Called(ctx, resGrpName, volNr, props)
@@ -375,6 +811,37 @@ func (_m *ResourceGroupProvider) ModifyVolumeGroup(ctx context.Context, resGrpNa
 	}
 
 	return r0
+}
+
+// ResourceGroupProvider_ModifyVolumeGroup_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ModifyVolumeGroup'
+type ResourceGroupProvider_ModifyVolumeGroup_Call struct {
+	*mock.Call
+}
+
+// ModifyVolumeGroup is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resGrpName string
+//   - volNr int
+//   - props client.VolumeGroupModify
+func (_e *ResourceGroupProvider_Expecter) ModifyVolumeGroup(ctx interface{}, resGrpName interface{}, volNr interface{}, props interface{}) *ResourceGroupProvider_ModifyVolumeGroup_Call {
+	return &ResourceGroupProvider_ModifyVolumeGroup_Call{Call: _e.mock.On("ModifyVolumeGroup", ctx, resGrpName, volNr, props)}
+}
+
+func (_c *ResourceGroupProvider_ModifyVolumeGroup_Call) Run(run func(ctx context.Context, resGrpName string, volNr int, props client.VolumeGroupModify)) *ResourceGroupProvider_ModifyVolumeGroup_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(int), args[3].(client.VolumeGroupModify))
+	})
+	return _c
+}
+
+func (_c *ResourceGroupProvider_ModifyVolumeGroup_Call) Return(_a0 error) *ResourceGroupProvider_ModifyVolumeGroup_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceGroupProvider_ModifyVolumeGroup_Call) RunAndReturn(run func(context.Context, string, int, client.VolumeGroupModify) error) *ResourceGroupProvider_ModifyVolumeGroup_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // QuerySizeInfo provides a mock function with given fields: ctx, resGrpName, req
@@ -405,6 +872,36 @@ func (_m *ResourceGroupProvider) QuerySizeInfo(ctx context.Context, resGrpName s
 	return r0, r1
 }
 
+// ResourceGroupProvider_QuerySizeInfo_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'QuerySizeInfo'
+type ResourceGroupProvider_QuerySizeInfo_Call struct {
+	*mock.Call
+}
+
+// QuerySizeInfo is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resGrpName string
+//   - req client.QuerySizeInfoRequest
+func (_e *ResourceGroupProvider_Expecter) QuerySizeInfo(ctx interface{}, resGrpName interface{}, req interface{}) *ResourceGroupProvider_QuerySizeInfo_Call {
+	return &ResourceGroupProvider_QuerySizeInfo_Call{Call: _e.mock.On("QuerySizeInfo", ctx, resGrpName, req)}
+}
+
+func (_c *ResourceGroupProvider_QuerySizeInfo_Call) Run(run func(ctx context.Context, resGrpName string, req client.QuerySizeInfoRequest)) *ResourceGroupProvider_QuerySizeInfo_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.QuerySizeInfoRequest))
+	})
+	return _c
+}
+
+func (_c *ResourceGroupProvider_QuerySizeInfo_Call) Return(_a0 client.QuerySizeInfoResponse, _a1 error) *ResourceGroupProvider_QuerySizeInfo_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ResourceGroupProvider_QuerySizeInfo_Call) RunAndReturn(run func(context.Context, string, client.QuerySizeInfoRequest) (client.QuerySizeInfoResponse, error)) *ResourceGroupProvider_QuerySizeInfo_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Spawn provides a mock function with given fields: ctx, resGrpName, resGrpSpwn
 func (_m *ResourceGroupProvider) Spawn(ctx context.Context, resGrpName string, resGrpSpwn client.ResourceGroupSpawn) error {
 	ret := _m.Called(ctx, resGrpName, resGrpSpwn)
@@ -421,6 +918,36 @@ func (_m *ResourceGroupProvider) Spawn(ctx context.Context, resGrpName string, r
 	}
 
 	return r0
+}
+
+// ResourceGroupProvider_Spawn_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Spawn'
+type ResourceGroupProvider_Spawn_Call struct {
+	*mock.Call
+}
+
+// Spawn is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resGrpName string
+//   - resGrpSpwn client.ResourceGroupSpawn
+func (_e *ResourceGroupProvider_Expecter) Spawn(ctx interface{}, resGrpName interface{}, resGrpSpwn interface{}) *ResourceGroupProvider_Spawn_Call {
+	return &ResourceGroupProvider_Spawn_Call{Call: _e.mock.On("Spawn", ctx, resGrpName, resGrpSpwn)}
+}
+
+func (_c *ResourceGroupProvider_Spawn_Call) Run(run func(ctx context.Context, resGrpName string, resGrpSpwn client.ResourceGroupSpawn)) *ResourceGroupProvider_Spawn_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.ResourceGroupSpawn))
+	})
+	return _c
+}
+
+func (_c *ResourceGroupProvider_Spawn_Call) Return(_a0 error) *ResourceGroupProvider_Spawn_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ResourceGroupProvider_Spawn_Call) RunAndReturn(run func(context.Context, string, client.ResourceGroupSpawn) error) *ResourceGroupProvider_Spawn_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // NewResourceGroupProvider creates a new instance of ResourceGroupProvider. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

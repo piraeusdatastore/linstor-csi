@@ -15,6 +15,14 @@ type NodeProvider struct {
 	mock.Mock
 }
 
+type NodeProvider_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *NodeProvider) EXPECT() *NodeProvider_Expecter {
+	return &NodeProvider_Expecter{mock: &_m.Mock}
+}
+
 // Create provides a mock function with given fields: ctx, node
 func (_m *NodeProvider) Create(ctx context.Context, node client.Node) error {
 	ret := _m.Called(ctx, node)
@@ -31,6 +39,35 @@ func (_m *NodeProvider) Create(ctx context.Context, node client.Node) error {
 	}
 
 	return r0
+}
+
+// NodeProvider_Create_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Create'
+type NodeProvider_Create_Call struct {
+	*mock.Call
+}
+
+// Create is a helper method to define mock.On call
+//   - ctx context.Context
+//   - node client.Node
+func (_e *NodeProvider_Expecter) Create(ctx interface{}, node interface{}) *NodeProvider_Create_Call {
+	return &NodeProvider_Create_Call{Call: _e.mock.On("Create", ctx, node)}
+}
+
+func (_c *NodeProvider_Create_Call) Run(run func(ctx context.Context, node client.Node)) *NodeProvider_Create_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(client.Node))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_Create_Call) Return(_a0 error) *NodeProvider_Create_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *NodeProvider_Create_Call) RunAndReturn(run func(context.Context, client.Node) error) *NodeProvider_Create_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // CreateDevicePool provides a mock function with given fields: ctx, nodeName, psc
@@ -51,6 +88,36 @@ func (_m *NodeProvider) CreateDevicePool(ctx context.Context, nodeName string, p
 	return r0
 }
 
+// NodeProvider_CreateDevicePool_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateDevicePool'
+type NodeProvider_CreateDevicePool_Call struct {
+	*mock.Call
+}
+
+// CreateDevicePool is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+//   - psc client.PhysicalStorageCreate
+func (_e *NodeProvider_Expecter) CreateDevicePool(ctx interface{}, nodeName interface{}, psc interface{}) *NodeProvider_CreateDevicePool_Call {
+	return &NodeProvider_CreateDevicePool_Call{Call: _e.mock.On("CreateDevicePool", ctx, nodeName, psc)}
+}
+
+func (_c *NodeProvider_CreateDevicePool_Call) Run(run func(ctx context.Context, nodeName string, psc client.PhysicalStorageCreate)) *NodeProvider_CreateDevicePool_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.PhysicalStorageCreate))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_CreateDevicePool_Call) Return(_a0 error) *NodeProvider_CreateDevicePool_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *NodeProvider_CreateDevicePool_Call) RunAndReturn(run func(context.Context, string, client.PhysicalStorageCreate) error) *NodeProvider_CreateDevicePool_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateEbsNode provides a mock function with given fields: ctx, name, remoteName
 func (_m *NodeProvider) CreateEbsNode(ctx context.Context, name string, remoteName string) error {
 	ret := _m.Called(ctx, name, remoteName)
@@ -67,6 +134,36 @@ func (_m *NodeProvider) CreateEbsNode(ctx context.Context, name string, remoteNa
 	}
 
 	return r0
+}
+
+// NodeProvider_CreateEbsNode_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateEbsNode'
+type NodeProvider_CreateEbsNode_Call struct {
+	*mock.Call
+}
+
+// CreateEbsNode is a helper method to define mock.On call
+//   - ctx context.Context
+//   - name string
+//   - remoteName string
+func (_e *NodeProvider_Expecter) CreateEbsNode(ctx interface{}, name interface{}, remoteName interface{}) *NodeProvider_CreateEbsNode_Call {
+	return &NodeProvider_CreateEbsNode_Call{Call: _e.mock.On("CreateEbsNode", ctx, name, remoteName)}
+}
+
+func (_c *NodeProvider_CreateEbsNode_Call) Run(run func(ctx context.Context, name string, remoteName string)) *NodeProvider_CreateEbsNode_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_CreateEbsNode_Call) Return(_a0 error) *NodeProvider_CreateEbsNode_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *NodeProvider_CreateEbsNode_Call) RunAndReturn(run func(context.Context, string, string) error) *NodeProvider_CreateEbsNode_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // CreateNetInterface provides a mock function with given fields: ctx, nodeName, nif
@@ -87,6 +184,36 @@ func (_m *NodeProvider) CreateNetInterface(ctx context.Context, nodeName string,
 	return r0
 }
 
+// NodeProvider_CreateNetInterface_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateNetInterface'
+type NodeProvider_CreateNetInterface_Call struct {
+	*mock.Call
+}
+
+// CreateNetInterface is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+//   - nif client.NetInterface
+func (_e *NodeProvider_Expecter) CreateNetInterface(ctx interface{}, nodeName interface{}, nif interface{}) *NodeProvider_CreateNetInterface_Call {
+	return &NodeProvider_CreateNetInterface_Call{Call: _e.mock.On("CreateNetInterface", ctx, nodeName, nif)}
+}
+
+func (_c *NodeProvider_CreateNetInterface_Call) Run(run func(ctx context.Context, nodeName string, nif client.NetInterface)) *NodeProvider_CreateNetInterface_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.NetInterface))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_CreateNetInterface_Call) Return(_a0 error) *NodeProvider_CreateNetInterface_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *NodeProvider_CreateNetInterface_Call) RunAndReturn(run func(context.Context, string, client.NetInterface) error) *NodeProvider_CreateNetInterface_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateStoragePool provides a mock function with given fields: ctx, nodeName, sp
 func (_m *NodeProvider) CreateStoragePool(ctx context.Context, nodeName string, sp client.StoragePool) error {
 	ret := _m.Called(ctx, nodeName, sp)
@@ -103,6 +230,36 @@ func (_m *NodeProvider) CreateStoragePool(ctx context.Context, nodeName string, 
 	}
 
 	return r0
+}
+
+// NodeProvider_CreateStoragePool_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateStoragePool'
+type NodeProvider_CreateStoragePool_Call struct {
+	*mock.Call
+}
+
+// CreateStoragePool is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+//   - sp client.StoragePool
+func (_e *NodeProvider_Expecter) CreateStoragePool(ctx interface{}, nodeName interface{}, sp interface{}) *NodeProvider_CreateStoragePool_Call {
+	return &NodeProvider_CreateStoragePool_Call{Call: _e.mock.On("CreateStoragePool", ctx, nodeName, sp)}
+}
+
+func (_c *NodeProvider_CreateStoragePool_Call) Run(run func(ctx context.Context, nodeName string, sp client.StoragePool)) *NodeProvider_CreateStoragePool_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.StoragePool))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_CreateStoragePool_Call) Return(_a0 error) *NodeProvider_CreateStoragePool_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *NodeProvider_CreateStoragePool_Call) RunAndReturn(run func(context.Context, string, client.StoragePool) error) *NodeProvider_CreateStoragePool_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // Delete provides a mock function with given fields: ctx, nodeName
@@ -123,6 +280,35 @@ func (_m *NodeProvider) Delete(ctx context.Context, nodeName string) error {
 	return r0
 }
 
+// NodeProvider_Delete_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Delete'
+type NodeProvider_Delete_Call struct {
+	*mock.Call
+}
+
+// Delete is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+func (_e *NodeProvider_Expecter) Delete(ctx interface{}, nodeName interface{}) *NodeProvider_Delete_Call {
+	return &NodeProvider_Delete_Call{Call: _e.mock.On("Delete", ctx, nodeName)}
+}
+
+func (_c *NodeProvider_Delete_Call) Run(run func(ctx context.Context, nodeName string)) *NodeProvider_Delete_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_Delete_Call) Return(_a0 error) *NodeProvider_Delete_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *NodeProvider_Delete_Call) RunAndReturn(run func(context.Context, string) error) *NodeProvider_Delete_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DeleteNetinterface provides a mock function with given fields: ctx, nodeName, nifName
 func (_m *NodeProvider) DeleteNetinterface(ctx context.Context, nodeName string, nifName string) error {
 	ret := _m.Called(ctx, nodeName, nifName)
@@ -139,6 +325,36 @@ func (_m *NodeProvider) DeleteNetinterface(ctx context.Context, nodeName string,
 	}
 
 	return r0
+}
+
+// NodeProvider_DeleteNetinterface_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteNetinterface'
+type NodeProvider_DeleteNetinterface_Call struct {
+	*mock.Call
+}
+
+// DeleteNetinterface is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+//   - nifName string
+func (_e *NodeProvider_Expecter) DeleteNetinterface(ctx interface{}, nodeName interface{}, nifName interface{}) *NodeProvider_DeleteNetinterface_Call {
+	return &NodeProvider_DeleteNetinterface_Call{Call: _e.mock.On("DeleteNetinterface", ctx, nodeName, nifName)}
+}
+
+func (_c *NodeProvider_DeleteNetinterface_Call) Run(run func(ctx context.Context, nodeName string, nifName string)) *NodeProvider_DeleteNetinterface_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_DeleteNetinterface_Call) Return(_a0 error) *NodeProvider_DeleteNetinterface_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *NodeProvider_DeleteNetinterface_Call) RunAndReturn(run func(context.Context, string, string) error) *NodeProvider_DeleteNetinterface_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // DeleteStoragePool provides a mock function with given fields: ctx, nodeName, spName
@@ -159,6 +375,36 @@ func (_m *NodeProvider) DeleteStoragePool(ctx context.Context, nodeName string, 
 	return r0
 }
 
+// NodeProvider_DeleteStoragePool_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteStoragePool'
+type NodeProvider_DeleteStoragePool_Call struct {
+	*mock.Call
+}
+
+// DeleteStoragePool is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+//   - spName string
+func (_e *NodeProvider_Expecter) DeleteStoragePool(ctx interface{}, nodeName interface{}, spName interface{}) *NodeProvider_DeleteStoragePool_Call {
+	return &NodeProvider_DeleteStoragePool_Call{Call: _e.mock.On("DeleteStoragePool", ctx, nodeName, spName)}
+}
+
+func (_c *NodeProvider_DeleteStoragePool_Call) Run(run func(ctx context.Context, nodeName string, spName string)) *NodeProvider_DeleteStoragePool_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_DeleteStoragePool_Call) Return(_a0 error) *NodeProvider_DeleteStoragePool_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *NodeProvider_DeleteStoragePool_Call) RunAndReturn(run func(context.Context, string, string) error) *NodeProvider_DeleteStoragePool_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Evacuate provides a mock function with given fields: ctx, nodeName, evacuate
 func (_m *NodeProvider) Evacuate(ctx context.Context, nodeName string, evacuate client.NodeEvacuate) error {
 	ret := _m.Called(ctx, nodeName, evacuate)
@@ -177,6 +423,36 @@ func (_m *NodeProvider) Evacuate(ctx context.Context, nodeName string, evacuate 
 	return r0
 }
 
+// NodeProvider_Evacuate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Evacuate'
+type NodeProvider_Evacuate_Call struct {
+	*mock.Call
+}
+
+// Evacuate is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+//   - evacuate client.NodeEvacuate
+func (_e *NodeProvider_Expecter) Evacuate(ctx interface{}, nodeName interface{}, evacuate interface{}) *NodeProvider_Evacuate_Call {
+	return &NodeProvider_Evacuate_Call{Call: _e.mock.On("Evacuate", ctx, nodeName, evacuate)}
+}
+
+func (_c *NodeProvider_Evacuate_Call) Run(run func(ctx context.Context, nodeName string, evacuate client.NodeEvacuate)) *NodeProvider_Evacuate_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.NodeEvacuate))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_Evacuate_Call) Return(_a0 error) *NodeProvider_Evacuate_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *NodeProvider_Evacuate_Call) RunAndReturn(run func(context.Context, string, client.NodeEvacuate) error) *NodeProvider_Evacuate_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Evict provides a mock function with given fields: ctx, nodeName
 func (_m *NodeProvider) Evict(ctx context.Context, nodeName string) error {
 	ret := _m.Called(ctx, nodeName)
@@ -193,6 +469,35 @@ func (_m *NodeProvider) Evict(ctx context.Context, nodeName string) error {
 	}
 
 	return r0
+}
+
+// NodeProvider_Evict_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Evict'
+type NodeProvider_Evict_Call struct {
+	*mock.Call
+}
+
+// Evict is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+func (_e *NodeProvider_Expecter) Evict(ctx interface{}, nodeName interface{}) *NodeProvider_Evict_Call {
+	return &NodeProvider_Evict_Call{Call: _e.mock.On("Evict", ctx, nodeName)}
+}
+
+func (_c *NodeProvider_Evict_Call) Run(run func(ctx context.Context, nodeName string)) *NodeProvider_Evict_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_Evict_Call) Return(_a0 error) *NodeProvider_Evict_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *NodeProvider_Evict_Call) RunAndReturn(run func(context.Context, string) error) *NodeProvider_Evict_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // Get provides a mock function with given fields: ctx, nodeName, opts
@@ -228,6 +533,43 @@ func (_m *NodeProvider) Get(ctx context.Context, nodeName string, opts ...*clien
 	}
 
 	return r0, r1
+}
+
+// NodeProvider_Get_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Get'
+type NodeProvider_Get_Call struct {
+	*mock.Call
+}
+
+// Get is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+//   - opts ...*client.ListOpts
+func (_e *NodeProvider_Expecter) Get(ctx interface{}, nodeName interface{}, opts ...interface{}) *NodeProvider_Get_Call {
+	return &NodeProvider_Get_Call{Call: _e.mock.On("Get",
+		append([]interface{}{ctx, nodeName}, opts...)...)}
+}
+
+func (_c *NodeProvider_Get_Call) Run(run func(ctx context.Context, nodeName string, opts ...*client.ListOpts)) *NodeProvider_Get_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *NodeProvider_Get_Call) Return(_a0 client.Node, _a1 error) *NodeProvider_Get_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *NodeProvider_Get_Call) RunAndReturn(run func(context.Context, string, ...*client.ListOpts) (client.Node, error)) *NodeProvider_Get_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetAll provides a mock function with given fields: ctx, opts
@@ -267,6 +609,42 @@ func (_m *NodeProvider) GetAll(ctx context.Context, opts ...*client.ListOpts) ([
 	return r0, r1
 }
 
+// NodeProvider_GetAll_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAll'
+type NodeProvider_GetAll_Call struct {
+	*mock.Call
+}
+
+// GetAll is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *NodeProvider_Expecter) GetAll(ctx interface{}, opts ...interface{}) *NodeProvider_GetAll_Call {
+	return &NodeProvider_GetAll_Call{Call: _e.mock.On("GetAll",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *NodeProvider_GetAll_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *NodeProvider_GetAll_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *NodeProvider_GetAll_Call) Return(_a0 []client.Node, _a1 error) *NodeProvider_GetAll_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *NodeProvider_GetAll_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) ([]client.Node, error)) *NodeProvider_GetAll_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetNetInterface provides a mock function with given fields: ctx, nodeName, nifName, opts
 func (_m *NodeProvider) GetNetInterface(ctx context.Context, nodeName string, nifName string, opts ...*client.ListOpts) (client.NetInterface, error) {
 	_va := make([]interface{}, len(opts))
@@ -300,6 +678,44 @@ func (_m *NodeProvider) GetNetInterface(ctx context.Context, nodeName string, ni
 	}
 
 	return r0, r1
+}
+
+// NodeProvider_GetNetInterface_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetNetInterface'
+type NodeProvider_GetNetInterface_Call struct {
+	*mock.Call
+}
+
+// GetNetInterface is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+//   - nifName string
+//   - opts ...*client.ListOpts
+func (_e *NodeProvider_Expecter) GetNetInterface(ctx interface{}, nodeName interface{}, nifName interface{}, opts ...interface{}) *NodeProvider_GetNetInterface_Call {
+	return &NodeProvider_GetNetInterface_Call{Call: _e.mock.On("GetNetInterface",
+		append([]interface{}{ctx, nodeName, nifName}, opts...)...)}
+}
+
+func (_c *NodeProvider_GetNetInterface_Call) Run(run func(ctx context.Context, nodeName string, nifName string, opts ...*client.ListOpts)) *NodeProvider_GetNetInterface_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-3)
+		for i, a := range args[3:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), args[2].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *NodeProvider_GetNetInterface_Call) Return(_a0 client.NetInterface, _a1 error) *NodeProvider_GetNetInterface_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *NodeProvider_GetNetInterface_Call) RunAndReturn(run func(context.Context, string, string, ...*client.ListOpts) (client.NetInterface, error)) *NodeProvider_GetNetInterface_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetNetInterfaces provides a mock function with given fields: ctx, nodeName, opts
@@ -339,6 +755,43 @@ func (_m *NodeProvider) GetNetInterfaces(ctx context.Context, nodeName string, o
 	return r0, r1
 }
 
+// NodeProvider_GetNetInterfaces_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetNetInterfaces'
+type NodeProvider_GetNetInterfaces_Call struct {
+	*mock.Call
+}
+
+// GetNetInterfaces is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+//   - opts ...*client.ListOpts
+func (_e *NodeProvider_Expecter) GetNetInterfaces(ctx interface{}, nodeName interface{}, opts ...interface{}) *NodeProvider_GetNetInterfaces_Call {
+	return &NodeProvider_GetNetInterfaces_Call{Call: _e.mock.On("GetNetInterfaces",
+		append([]interface{}{ctx, nodeName}, opts...)...)}
+}
+
+func (_c *NodeProvider_GetNetInterfaces_Call) Run(run func(ctx context.Context, nodeName string, opts ...*client.ListOpts)) *NodeProvider_GetNetInterfaces_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *NodeProvider_GetNetInterfaces_Call) Return(_a0 []client.NetInterface, _a1 error) *NodeProvider_GetNetInterfaces_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *NodeProvider_GetNetInterfaces_Call) RunAndReturn(run func(context.Context, string, ...*client.ListOpts) ([]client.NetInterface, error)) *NodeProvider_GetNetInterfaces_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetPhysicalStorage provides a mock function with given fields: ctx, nodeName
 func (_m *NodeProvider) GetPhysicalStorage(ctx context.Context, nodeName string) ([]client.PhysicalStorageNode, error) {
 	ret := _m.Called(ctx, nodeName)
@@ -367,6 +820,35 @@ func (_m *NodeProvider) GetPhysicalStorage(ctx context.Context, nodeName string)
 	}
 
 	return r0, r1
+}
+
+// NodeProvider_GetPhysicalStorage_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetPhysicalStorage'
+type NodeProvider_GetPhysicalStorage_Call struct {
+	*mock.Call
+}
+
+// GetPhysicalStorage is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+func (_e *NodeProvider_Expecter) GetPhysicalStorage(ctx interface{}, nodeName interface{}) *NodeProvider_GetPhysicalStorage_Call {
+	return &NodeProvider_GetPhysicalStorage_Call{Call: _e.mock.On("GetPhysicalStorage", ctx, nodeName)}
+}
+
+func (_c *NodeProvider_GetPhysicalStorage_Call) Run(run func(ctx context.Context, nodeName string)) *NodeProvider_GetPhysicalStorage_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_GetPhysicalStorage_Call) Return(_a0 []client.PhysicalStorageNode, _a1 error) *NodeProvider_GetPhysicalStorage_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *NodeProvider_GetPhysicalStorage_Call) RunAndReturn(run func(context.Context, string) ([]client.PhysicalStorageNode, error)) *NodeProvider_GetPhysicalStorage_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetPhysicalStorageView provides a mock function with given fields: ctx, opts
@@ -406,6 +888,42 @@ func (_m *NodeProvider) GetPhysicalStorageView(ctx context.Context, opts ...*cli
 	return r0, r1
 }
 
+// NodeProvider_GetPhysicalStorageView_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetPhysicalStorageView'
+type NodeProvider_GetPhysicalStorageView_Call struct {
+	*mock.Call
+}
+
+// GetPhysicalStorageView is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *NodeProvider_Expecter) GetPhysicalStorageView(ctx interface{}, opts ...interface{}) *NodeProvider_GetPhysicalStorageView_Call {
+	return &NodeProvider_GetPhysicalStorageView_Call{Call: _e.mock.On("GetPhysicalStorageView",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *NodeProvider_GetPhysicalStorageView_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *NodeProvider_GetPhysicalStorageView_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *NodeProvider_GetPhysicalStorageView_Call) Return(_a0 []client.PhysicalStorageViewItem, _a1 error) *NodeProvider_GetPhysicalStorageView_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *NodeProvider_GetPhysicalStorageView_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) ([]client.PhysicalStorageViewItem, error)) *NodeProvider_GetPhysicalStorageView_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetPropsInfos provides a mock function with given fields: ctx, opts
 func (_m *NodeProvider) GetPropsInfos(ctx context.Context, opts ...*client.ListOpts) ([]client.PropsInfo, error) {
 	_va := make([]interface{}, len(opts))
@@ -443,6 +961,42 @@ func (_m *NodeProvider) GetPropsInfos(ctx context.Context, opts ...*client.ListO
 	return r0, r1
 }
 
+// NodeProvider_GetPropsInfos_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetPropsInfos'
+type NodeProvider_GetPropsInfos_Call struct {
+	*mock.Call
+}
+
+// GetPropsInfos is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *NodeProvider_Expecter) GetPropsInfos(ctx interface{}, opts ...interface{}) *NodeProvider_GetPropsInfos_Call {
+	return &NodeProvider_GetPropsInfos_Call{Call: _e.mock.On("GetPropsInfos",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *NodeProvider_GetPropsInfos_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *NodeProvider_GetPropsInfos_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *NodeProvider_GetPropsInfos_Call) Return(_a0 []client.PropsInfo, _a1 error) *NodeProvider_GetPropsInfos_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *NodeProvider_GetPropsInfos_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) ([]client.PropsInfo, error)) *NodeProvider_GetPropsInfos_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetStoragePool provides a mock function with given fields: ctx, nodeName, spName, opts
 func (_m *NodeProvider) GetStoragePool(ctx context.Context, nodeName string, spName string, opts ...*client.ListOpts) (client.StoragePool, error) {
 	_va := make([]interface{}, len(opts))
@@ -476,6 +1030,44 @@ func (_m *NodeProvider) GetStoragePool(ctx context.Context, nodeName string, spN
 	}
 
 	return r0, r1
+}
+
+// NodeProvider_GetStoragePool_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetStoragePool'
+type NodeProvider_GetStoragePool_Call struct {
+	*mock.Call
+}
+
+// GetStoragePool is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+//   - spName string
+//   - opts ...*client.ListOpts
+func (_e *NodeProvider_Expecter) GetStoragePool(ctx interface{}, nodeName interface{}, spName interface{}, opts ...interface{}) *NodeProvider_GetStoragePool_Call {
+	return &NodeProvider_GetStoragePool_Call{Call: _e.mock.On("GetStoragePool",
+		append([]interface{}{ctx, nodeName, spName}, opts...)...)}
+}
+
+func (_c *NodeProvider_GetStoragePool_Call) Run(run func(ctx context.Context, nodeName string, spName string, opts ...*client.ListOpts)) *NodeProvider_GetStoragePool_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-3)
+		for i, a := range args[3:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), args[2].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *NodeProvider_GetStoragePool_Call) Return(_a0 client.StoragePool, _a1 error) *NodeProvider_GetStoragePool_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *NodeProvider_GetStoragePool_Call) RunAndReturn(run func(context.Context, string, string, ...*client.ListOpts) (client.StoragePool, error)) *NodeProvider_GetStoragePool_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetStoragePoolPropsInfos provides a mock function with given fields: ctx, nodeName, opts
@@ -515,6 +1107,43 @@ func (_m *NodeProvider) GetStoragePoolPropsInfos(ctx context.Context, nodeName s
 	return r0, r1
 }
 
+// NodeProvider_GetStoragePoolPropsInfos_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetStoragePoolPropsInfos'
+type NodeProvider_GetStoragePoolPropsInfos_Call struct {
+	*mock.Call
+}
+
+// GetStoragePoolPropsInfos is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+//   - opts ...*client.ListOpts
+func (_e *NodeProvider_Expecter) GetStoragePoolPropsInfos(ctx interface{}, nodeName interface{}, opts ...interface{}) *NodeProvider_GetStoragePoolPropsInfos_Call {
+	return &NodeProvider_GetStoragePoolPropsInfos_Call{Call: _e.mock.On("GetStoragePoolPropsInfos",
+		append([]interface{}{ctx, nodeName}, opts...)...)}
+}
+
+func (_c *NodeProvider_GetStoragePoolPropsInfos_Call) Run(run func(ctx context.Context, nodeName string, opts ...*client.ListOpts)) *NodeProvider_GetStoragePoolPropsInfos_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *NodeProvider_GetStoragePoolPropsInfos_Call) Return(_a0 []client.PropsInfo, _a1 error) *NodeProvider_GetStoragePoolPropsInfos_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *NodeProvider_GetStoragePoolPropsInfos_Call) RunAndReturn(run func(context.Context, string, ...*client.ListOpts) ([]client.PropsInfo, error)) *NodeProvider_GetStoragePoolPropsInfos_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetStoragePoolView provides a mock function with given fields: ctx, opts
 func (_m *NodeProvider) GetStoragePoolView(ctx context.Context, opts ...*client.ListOpts) ([]client.StoragePool, error) {
 	_va := make([]interface{}, len(opts))
@@ -550,6 +1179,42 @@ func (_m *NodeProvider) GetStoragePoolView(ctx context.Context, opts ...*client.
 	}
 
 	return r0, r1
+}
+
+// NodeProvider_GetStoragePoolView_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetStoragePoolView'
+type NodeProvider_GetStoragePoolView_Call struct {
+	*mock.Call
+}
+
+// GetStoragePoolView is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *NodeProvider_Expecter) GetStoragePoolView(ctx interface{}, opts ...interface{}) *NodeProvider_GetStoragePoolView_Call {
+	return &NodeProvider_GetStoragePoolView_Call{Call: _e.mock.On("GetStoragePoolView",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *NodeProvider_GetStoragePoolView_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *NodeProvider_GetStoragePoolView_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *NodeProvider_GetStoragePoolView_Call) Return(_a0 []client.StoragePool, _a1 error) *NodeProvider_GetStoragePoolView_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *NodeProvider_GetStoragePoolView_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) ([]client.StoragePool, error)) *NodeProvider_GetStoragePoolView_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetStoragePools provides a mock function with given fields: ctx, nodeName, opts
@@ -589,6 +1254,43 @@ func (_m *NodeProvider) GetStoragePools(ctx context.Context, nodeName string, op
 	return r0, r1
 }
 
+// NodeProvider_GetStoragePools_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetStoragePools'
+type NodeProvider_GetStoragePools_Call struct {
+	*mock.Call
+}
+
+// GetStoragePools is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+//   - opts ...*client.ListOpts
+func (_e *NodeProvider_Expecter) GetStoragePools(ctx interface{}, nodeName interface{}, opts ...interface{}) *NodeProvider_GetStoragePools_Call {
+	return &NodeProvider_GetStoragePools_Call{Call: _e.mock.On("GetStoragePools",
+		append([]interface{}{ctx, nodeName}, opts...)...)}
+}
+
+func (_c *NodeProvider_GetStoragePools_Call) Run(run func(ctx context.Context, nodeName string, opts ...*client.ListOpts)) *NodeProvider_GetStoragePools_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *NodeProvider_GetStoragePools_Call) Return(_a0 []client.StoragePool, _a1 error) *NodeProvider_GetStoragePools_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *NodeProvider_GetStoragePools_Call) RunAndReturn(run func(context.Context, string, ...*client.ListOpts) ([]client.StoragePool, error)) *NodeProvider_GetStoragePools_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Lost provides a mock function with given fields: ctx, nodeName
 func (_m *NodeProvider) Lost(ctx context.Context, nodeName string) error {
 	ret := _m.Called(ctx, nodeName)
@@ -605,6 +1307,35 @@ func (_m *NodeProvider) Lost(ctx context.Context, nodeName string) error {
 	}
 
 	return r0
+}
+
+// NodeProvider_Lost_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Lost'
+type NodeProvider_Lost_Call struct {
+	*mock.Call
+}
+
+// Lost is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+func (_e *NodeProvider_Expecter) Lost(ctx interface{}, nodeName interface{}) *NodeProvider_Lost_Call {
+	return &NodeProvider_Lost_Call{Call: _e.mock.On("Lost", ctx, nodeName)}
+}
+
+func (_c *NodeProvider_Lost_Call) Run(run func(ctx context.Context, nodeName string)) *NodeProvider_Lost_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_Lost_Call) Return(_a0 error) *NodeProvider_Lost_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *NodeProvider_Lost_Call) RunAndReturn(run func(context.Context, string) error) *NodeProvider_Lost_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // Modify provides a mock function with given fields: ctx, nodeName, props
@@ -625,6 +1356,36 @@ func (_m *NodeProvider) Modify(ctx context.Context, nodeName string, props clien
 	return r0
 }
 
+// NodeProvider_Modify_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Modify'
+type NodeProvider_Modify_Call struct {
+	*mock.Call
+}
+
+// Modify is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+//   - props client.NodeModify
+func (_e *NodeProvider_Expecter) Modify(ctx interface{}, nodeName interface{}, props interface{}) *NodeProvider_Modify_Call {
+	return &NodeProvider_Modify_Call{Call: _e.mock.On("Modify", ctx, nodeName, props)}
+}
+
+func (_c *NodeProvider_Modify_Call) Run(run func(ctx context.Context, nodeName string, props client.NodeModify)) *NodeProvider_Modify_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.NodeModify))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_Modify_Call) Return(_a0 error) *NodeProvider_Modify_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *NodeProvider_Modify_Call) RunAndReturn(run func(context.Context, string, client.NodeModify) error) *NodeProvider_Modify_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ModifyNetInterface provides a mock function with given fields: ctx, nodeName, nifName, nif
 func (_m *NodeProvider) ModifyNetInterface(ctx context.Context, nodeName string, nifName string, nif client.NetInterface) error {
 	ret := _m.Called(ctx, nodeName, nifName, nif)
@@ -641,6 +1402,37 @@ func (_m *NodeProvider) ModifyNetInterface(ctx context.Context, nodeName string,
 	}
 
 	return r0
+}
+
+// NodeProvider_ModifyNetInterface_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ModifyNetInterface'
+type NodeProvider_ModifyNetInterface_Call struct {
+	*mock.Call
+}
+
+// ModifyNetInterface is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+//   - nifName string
+//   - nif client.NetInterface
+func (_e *NodeProvider_Expecter) ModifyNetInterface(ctx interface{}, nodeName interface{}, nifName interface{}, nif interface{}) *NodeProvider_ModifyNetInterface_Call {
+	return &NodeProvider_ModifyNetInterface_Call{Call: _e.mock.On("ModifyNetInterface", ctx, nodeName, nifName, nif)}
+}
+
+func (_c *NodeProvider_ModifyNetInterface_Call) Run(run func(ctx context.Context, nodeName string, nifName string, nif client.NetInterface)) *NodeProvider_ModifyNetInterface_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(client.NetInterface))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_ModifyNetInterface_Call) Return(_a0 error) *NodeProvider_ModifyNetInterface_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *NodeProvider_ModifyNetInterface_Call) RunAndReturn(run func(context.Context, string, string, client.NetInterface) error) *NodeProvider_ModifyNetInterface_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // ModifyStoragePool provides a mock function with given fields: ctx, nodeName, spName, genericProps
@@ -661,6 +1453,37 @@ func (_m *NodeProvider) ModifyStoragePool(ctx context.Context, nodeName string, 
 	return r0
 }
 
+// NodeProvider_ModifyStoragePool_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ModifyStoragePool'
+type NodeProvider_ModifyStoragePool_Call struct {
+	*mock.Call
+}
+
+// ModifyStoragePool is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+//   - spName string
+//   - genericProps client.GenericPropsModify
+func (_e *NodeProvider_Expecter) ModifyStoragePool(ctx interface{}, nodeName interface{}, spName interface{}, genericProps interface{}) *NodeProvider_ModifyStoragePool_Call {
+	return &NodeProvider_ModifyStoragePool_Call{Call: _e.mock.On("ModifyStoragePool", ctx, nodeName, spName, genericProps)}
+}
+
+func (_c *NodeProvider_ModifyStoragePool_Call) Run(run func(ctx context.Context, nodeName string, spName string, genericProps client.GenericPropsModify)) *NodeProvider_ModifyStoragePool_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(client.GenericPropsModify))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_ModifyStoragePool_Call) Return(_a0 error) *NodeProvider_ModifyStoragePool_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *NodeProvider_ModifyStoragePool_Call) RunAndReturn(run func(context.Context, string, string, client.GenericPropsModify) error) *NodeProvider_ModifyStoragePool_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Reconnect provides a mock function with given fields: ctx, nodeName
 func (_m *NodeProvider) Reconnect(ctx context.Context, nodeName string) error {
 	ret := _m.Called(ctx, nodeName)
@@ -679,6 +1502,35 @@ func (_m *NodeProvider) Reconnect(ctx context.Context, nodeName string) error {
 	return r0
 }
 
+// NodeProvider_Reconnect_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Reconnect'
+type NodeProvider_Reconnect_Call struct {
+	*mock.Call
+}
+
+// Reconnect is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+func (_e *NodeProvider_Expecter) Reconnect(ctx interface{}, nodeName interface{}) *NodeProvider_Reconnect_Call {
+	return &NodeProvider_Reconnect_Call{Call: _e.mock.On("Reconnect", ctx, nodeName)}
+}
+
+func (_c *NodeProvider_Reconnect_Call) Run(run func(ctx context.Context, nodeName string)) *NodeProvider_Reconnect_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_Reconnect_Call) Return(_a0 error) *NodeProvider_Reconnect_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *NodeProvider_Reconnect_Call) RunAndReturn(run func(context.Context, string) error) *NodeProvider_Reconnect_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Restore provides a mock function with given fields: ctx, nodeName, restore
 func (_m *NodeProvider) Restore(ctx context.Context, nodeName string, restore client.NodeRestore) error {
 	ret := _m.Called(ctx, nodeName, restore)
@@ -695,6 +1547,36 @@ func (_m *NodeProvider) Restore(ctx context.Context, nodeName string, restore cl
 	}
 
 	return r0
+}
+
+// NodeProvider_Restore_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Restore'
+type NodeProvider_Restore_Call struct {
+	*mock.Call
+}
+
+// Restore is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeName string
+//   - restore client.NodeRestore
+func (_e *NodeProvider_Expecter) Restore(ctx interface{}, nodeName interface{}, restore interface{}) *NodeProvider_Restore_Call {
+	return &NodeProvider_Restore_Call{Call: _e.mock.On("Restore", ctx, nodeName, restore)}
+}
+
+func (_c *NodeProvider_Restore_Call) Run(run func(ctx context.Context, nodeName string, restore client.NodeRestore)) *NodeProvider_Restore_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.NodeRestore))
+	})
+	return _c
+}
+
+func (_c *NodeProvider_Restore_Call) Return(_a0 error) *NodeProvider_Restore_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *NodeProvider_Restore_Call) RunAndReturn(run func(context.Context, string, client.NodeRestore) error) *NodeProvider_Restore_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // NewNodeProvider creates a new instance of NodeProvider. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

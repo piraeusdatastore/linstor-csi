@@ -15,6 +15,14 @@ type RemoteProvider struct {
 	mock.Mock
 }
 
+type RemoteProvider_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *RemoteProvider) EXPECT() *RemoteProvider_Expecter {
+	return &RemoteProvider_Expecter{mock: &_m.Mock}
+}
+
 // CreateEbs provides a mock function with given fields: ctx, create
 func (_m *RemoteProvider) CreateEbs(ctx context.Context, create client.EbsRemote) error {
 	ret := _m.Called(ctx, create)
@@ -31,6 +39,35 @@ func (_m *RemoteProvider) CreateEbs(ctx context.Context, create client.EbsRemote
 	}
 
 	return r0
+}
+
+// RemoteProvider_CreateEbs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateEbs'
+type RemoteProvider_CreateEbs_Call struct {
+	*mock.Call
+}
+
+// CreateEbs is a helper method to define mock.On call
+//   - ctx context.Context
+//   - create client.EbsRemote
+func (_e *RemoteProvider_Expecter) CreateEbs(ctx interface{}, create interface{}) *RemoteProvider_CreateEbs_Call {
+	return &RemoteProvider_CreateEbs_Call{Call: _e.mock.On("CreateEbs", ctx, create)}
+}
+
+func (_c *RemoteProvider_CreateEbs_Call) Run(run func(ctx context.Context, create client.EbsRemote)) *RemoteProvider_CreateEbs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(client.EbsRemote))
+	})
+	return _c
+}
+
+func (_c *RemoteProvider_CreateEbs_Call) Return(_a0 error) *RemoteProvider_CreateEbs_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *RemoteProvider_CreateEbs_Call) RunAndReturn(run func(context.Context, client.EbsRemote) error) *RemoteProvider_CreateEbs_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // CreateLinstor provides a mock function with given fields: ctx, create
@@ -51,6 +88,35 @@ func (_m *RemoteProvider) CreateLinstor(ctx context.Context, create client.Linst
 	return r0
 }
 
+// RemoteProvider_CreateLinstor_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateLinstor'
+type RemoteProvider_CreateLinstor_Call struct {
+	*mock.Call
+}
+
+// CreateLinstor is a helper method to define mock.On call
+//   - ctx context.Context
+//   - create client.LinstorRemote
+func (_e *RemoteProvider_Expecter) CreateLinstor(ctx interface{}, create interface{}) *RemoteProvider_CreateLinstor_Call {
+	return &RemoteProvider_CreateLinstor_Call{Call: _e.mock.On("CreateLinstor", ctx, create)}
+}
+
+func (_c *RemoteProvider_CreateLinstor_Call) Run(run func(ctx context.Context, create client.LinstorRemote)) *RemoteProvider_CreateLinstor_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(client.LinstorRemote))
+	})
+	return _c
+}
+
+func (_c *RemoteProvider_CreateLinstor_Call) Return(_a0 error) *RemoteProvider_CreateLinstor_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *RemoteProvider_CreateLinstor_Call) RunAndReturn(run func(context.Context, client.LinstorRemote) error) *RemoteProvider_CreateLinstor_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateS3 provides a mock function with given fields: ctx, create
 func (_m *RemoteProvider) CreateS3(ctx context.Context, create client.S3Remote) error {
 	ret := _m.Called(ctx, create)
@@ -69,6 +135,35 @@ func (_m *RemoteProvider) CreateS3(ctx context.Context, create client.S3Remote) 
 	return r0
 }
 
+// RemoteProvider_CreateS3_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateS3'
+type RemoteProvider_CreateS3_Call struct {
+	*mock.Call
+}
+
+// CreateS3 is a helper method to define mock.On call
+//   - ctx context.Context
+//   - create client.S3Remote
+func (_e *RemoteProvider_Expecter) CreateS3(ctx interface{}, create interface{}) *RemoteProvider_CreateS3_Call {
+	return &RemoteProvider_CreateS3_Call{Call: _e.mock.On("CreateS3", ctx, create)}
+}
+
+func (_c *RemoteProvider_CreateS3_Call) Run(run func(ctx context.Context, create client.S3Remote)) *RemoteProvider_CreateS3_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(client.S3Remote))
+	})
+	return _c
+}
+
+func (_c *RemoteProvider_CreateS3_Call) Return(_a0 error) *RemoteProvider_CreateS3_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *RemoteProvider_CreateS3_Call) RunAndReturn(run func(context.Context, client.S3Remote) error) *RemoteProvider_CreateS3_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Delete provides a mock function with given fields: ctx, remoteName
 func (_m *RemoteProvider) Delete(ctx context.Context, remoteName string) error {
 	ret := _m.Called(ctx, remoteName)
@@ -85,6 +180,35 @@ func (_m *RemoteProvider) Delete(ctx context.Context, remoteName string) error {
 	}
 
 	return r0
+}
+
+// RemoteProvider_Delete_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Delete'
+type RemoteProvider_Delete_Call struct {
+	*mock.Call
+}
+
+// Delete is a helper method to define mock.On call
+//   - ctx context.Context
+//   - remoteName string
+func (_e *RemoteProvider_Expecter) Delete(ctx interface{}, remoteName interface{}) *RemoteProvider_Delete_Call {
+	return &RemoteProvider_Delete_Call{Call: _e.mock.On("Delete", ctx, remoteName)}
+}
+
+func (_c *RemoteProvider_Delete_Call) Run(run func(ctx context.Context, remoteName string)) *RemoteProvider_Delete_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *RemoteProvider_Delete_Call) Return(_a0 error) *RemoteProvider_Delete_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *RemoteProvider_Delete_Call) RunAndReturn(run func(context.Context, string) error) *RemoteProvider_Delete_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetAll provides a mock function with given fields: ctx, opts
@@ -120,6 +244,42 @@ func (_m *RemoteProvider) GetAll(ctx context.Context, opts ...*client.ListOpts) 
 	}
 
 	return r0, r1
+}
+
+// RemoteProvider_GetAll_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAll'
+type RemoteProvider_GetAll_Call struct {
+	*mock.Call
+}
+
+// GetAll is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *RemoteProvider_Expecter) GetAll(ctx interface{}, opts ...interface{}) *RemoteProvider_GetAll_Call {
+	return &RemoteProvider_GetAll_Call{Call: _e.mock.On("GetAll",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *RemoteProvider_GetAll_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *RemoteProvider_GetAll_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *RemoteProvider_GetAll_Call) Return(_a0 client.RemoteList, _a1 error) *RemoteProvider_GetAll_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *RemoteProvider_GetAll_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) (client.RemoteList, error)) *RemoteProvider_GetAll_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetAllEbs provides a mock function with given fields: ctx, opts
@@ -159,6 +319,42 @@ func (_m *RemoteProvider) GetAllEbs(ctx context.Context, opts ...*client.ListOpt
 	return r0, r1
 }
 
+// RemoteProvider_GetAllEbs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAllEbs'
+type RemoteProvider_GetAllEbs_Call struct {
+	*mock.Call
+}
+
+// GetAllEbs is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *RemoteProvider_Expecter) GetAllEbs(ctx interface{}, opts ...interface{}) *RemoteProvider_GetAllEbs_Call {
+	return &RemoteProvider_GetAllEbs_Call{Call: _e.mock.On("GetAllEbs",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *RemoteProvider_GetAllEbs_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *RemoteProvider_GetAllEbs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *RemoteProvider_GetAllEbs_Call) Return(_a0 []client.EbsRemote, _a1 error) *RemoteProvider_GetAllEbs_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *RemoteProvider_GetAllEbs_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) ([]client.EbsRemote, error)) *RemoteProvider_GetAllEbs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetAllLinstor provides a mock function with given fields: ctx, opts
 func (_m *RemoteProvider) GetAllLinstor(ctx context.Context, opts ...*client.ListOpts) ([]client.LinstorRemote, error) {
 	_va := make([]interface{}, len(opts))
@@ -194,6 +390,42 @@ func (_m *RemoteProvider) GetAllLinstor(ctx context.Context, opts ...*client.Lis
 	}
 
 	return r0, r1
+}
+
+// RemoteProvider_GetAllLinstor_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAllLinstor'
+type RemoteProvider_GetAllLinstor_Call struct {
+	*mock.Call
+}
+
+// GetAllLinstor is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *RemoteProvider_Expecter) GetAllLinstor(ctx interface{}, opts ...interface{}) *RemoteProvider_GetAllLinstor_Call {
+	return &RemoteProvider_GetAllLinstor_Call{Call: _e.mock.On("GetAllLinstor",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *RemoteProvider_GetAllLinstor_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *RemoteProvider_GetAllLinstor_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *RemoteProvider_GetAllLinstor_Call) Return(_a0 []client.LinstorRemote, _a1 error) *RemoteProvider_GetAllLinstor_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *RemoteProvider_GetAllLinstor_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) ([]client.LinstorRemote, error)) *RemoteProvider_GetAllLinstor_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetAllS3 provides a mock function with given fields: ctx, opts
@@ -233,6 +465,42 @@ func (_m *RemoteProvider) GetAllS3(ctx context.Context, opts ...*client.ListOpts
 	return r0, r1
 }
 
+// RemoteProvider_GetAllS3_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAllS3'
+type RemoteProvider_GetAllS3_Call struct {
+	*mock.Call
+}
+
+// GetAllS3 is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *RemoteProvider_Expecter) GetAllS3(ctx interface{}, opts ...interface{}) *RemoteProvider_GetAllS3_Call {
+	return &RemoteProvider_GetAllS3_Call{Call: _e.mock.On("GetAllS3",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *RemoteProvider_GetAllS3_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *RemoteProvider_GetAllS3_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *RemoteProvider_GetAllS3_Call) Return(_a0 []client.S3Remote, _a1 error) *RemoteProvider_GetAllS3_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *RemoteProvider_GetAllS3_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) ([]client.S3Remote, error)) *RemoteProvider_GetAllS3_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ModifyEbs provides a mock function with given fields: ctx, remoteName, modify
 func (_m *RemoteProvider) ModifyEbs(ctx context.Context, remoteName string, modify client.EbsRemote) error {
 	ret := _m.Called(ctx, remoteName, modify)
@@ -249,6 +517,36 @@ func (_m *RemoteProvider) ModifyEbs(ctx context.Context, remoteName string, modi
 	}
 
 	return r0
+}
+
+// RemoteProvider_ModifyEbs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ModifyEbs'
+type RemoteProvider_ModifyEbs_Call struct {
+	*mock.Call
+}
+
+// ModifyEbs is a helper method to define mock.On call
+//   - ctx context.Context
+//   - remoteName string
+//   - modify client.EbsRemote
+func (_e *RemoteProvider_Expecter) ModifyEbs(ctx interface{}, remoteName interface{}, modify interface{}) *RemoteProvider_ModifyEbs_Call {
+	return &RemoteProvider_ModifyEbs_Call{Call: _e.mock.On("ModifyEbs", ctx, remoteName, modify)}
+}
+
+func (_c *RemoteProvider_ModifyEbs_Call) Run(run func(ctx context.Context, remoteName string, modify client.EbsRemote)) *RemoteProvider_ModifyEbs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.EbsRemote))
+	})
+	return _c
+}
+
+func (_c *RemoteProvider_ModifyEbs_Call) Return(_a0 error) *RemoteProvider_ModifyEbs_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *RemoteProvider_ModifyEbs_Call) RunAndReturn(run func(context.Context, string, client.EbsRemote) error) *RemoteProvider_ModifyEbs_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // ModifyLinstor provides a mock function with given fields: ctx, remoteName, modify
@@ -269,6 +567,36 @@ func (_m *RemoteProvider) ModifyLinstor(ctx context.Context, remoteName string, 
 	return r0
 }
 
+// RemoteProvider_ModifyLinstor_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ModifyLinstor'
+type RemoteProvider_ModifyLinstor_Call struct {
+	*mock.Call
+}
+
+// ModifyLinstor is a helper method to define mock.On call
+//   - ctx context.Context
+//   - remoteName string
+//   - modify client.LinstorRemote
+func (_e *RemoteProvider_Expecter) ModifyLinstor(ctx interface{}, remoteName interface{}, modify interface{}) *RemoteProvider_ModifyLinstor_Call {
+	return &RemoteProvider_ModifyLinstor_Call{Call: _e.mock.On("ModifyLinstor", ctx, remoteName, modify)}
+}
+
+func (_c *RemoteProvider_ModifyLinstor_Call) Run(run func(ctx context.Context, remoteName string, modify client.LinstorRemote)) *RemoteProvider_ModifyLinstor_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.LinstorRemote))
+	})
+	return _c
+}
+
+func (_c *RemoteProvider_ModifyLinstor_Call) Return(_a0 error) *RemoteProvider_ModifyLinstor_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *RemoteProvider_ModifyLinstor_Call) RunAndReturn(run func(context.Context, string, client.LinstorRemote) error) *RemoteProvider_ModifyLinstor_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ModifyS3 provides a mock function with given fields: ctx, remoteName, modify
 func (_m *RemoteProvider) ModifyS3(ctx context.Context, remoteName string, modify client.S3Remote) error {
 	ret := _m.Called(ctx, remoteName, modify)
@@ -285,6 +613,36 @@ func (_m *RemoteProvider) ModifyS3(ctx context.Context, remoteName string, modif
 	}
 
 	return r0
+}
+
+// RemoteProvider_ModifyS3_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ModifyS3'
+type RemoteProvider_ModifyS3_Call struct {
+	*mock.Call
+}
+
+// ModifyS3 is a helper method to define mock.On call
+//   - ctx context.Context
+//   - remoteName string
+//   - modify client.S3Remote
+func (_e *RemoteProvider_Expecter) ModifyS3(ctx interface{}, remoteName interface{}, modify interface{}) *RemoteProvider_ModifyS3_Call {
+	return &RemoteProvider_ModifyS3_Call{Call: _e.mock.On("ModifyS3", ctx, remoteName, modify)}
+}
+
+func (_c *RemoteProvider_ModifyS3_Call) Run(run func(ctx context.Context, remoteName string, modify client.S3Remote)) *RemoteProvider_ModifyS3_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.S3Remote))
+	})
+	return _c
+}
+
+func (_c *RemoteProvider_ModifyS3_Call) Return(_a0 error) *RemoteProvider_ModifyS3_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *RemoteProvider_ModifyS3_Call) RunAndReturn(run func(context.Context, string, client.S3Remote) error) *RemoteProvider_ModifyS3_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // NewRemoteProvider creates a new instance of RemoteProvider. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
