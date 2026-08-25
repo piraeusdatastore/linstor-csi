@@ -6,6 +6,7 @@ import (
 	context "context"
 
 	client "github.com/LINBIT/golinstor/client"
+
 	mock "github.com/stretchr/testify/mock"
 )
 
