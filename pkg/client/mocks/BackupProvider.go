@@ -15,6 +15,14 @@ type BackupProvider struct {
 	mock.Mock
 }
 
+type BackupProvider_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *BackupProvider) EXPECT() *BackupProvider_Expecter {
+	return &BackupProvider_Expecter{mock: &_m.Mock}
+}
+
 // Abort provides a mock function with given fields: ctx, remoteName, request
 func (_m *BackupProvider) Abort(ctx context.Context, remoteName string, request client.BackupAbortRequest) error {
 	ret := _m.Called(ctx, remoteName, request)
@@ -31,6 +39,36 @@ func (_m *BackupProvider) Abort(ctx context.Context, remoteName string, request 
 	}
 
 	return r0
+}
+
+// BackupProvider_Abort_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Abort'
+type BackupProvider_Abort_Call struct {
+	*mock.Call
+}
+
+// Abort is a helper method to define mock.On call
+//   - ctx context.Context
+//   - remoteName string
+//   - request client.BackupAbortRequest
+func (_e *BackupProvider_Expecter) Abort(ctx interface{}, remoteName interface{}, request interface{}) *BackupProvider_Abort_Call {
+	return &BackupProvider_Abort_Call{Call: _e.mock.On("Abort", ctx, remoteName, request)}
+}
+
+func (_c *BackupProvider_Abort_Call) Run(run func(ctx context.Context, remoteName string, request client.BackupAbortRequest)) *BackupProvider_Abort_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.BackupAbortRequest))
+	})
+	return _c
+}
+
+func (_c *BackupProvider_Abort_Call) Return(_a0 error) *BackupProvider_Abort_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *BackupProvider_Abort_Call) RunAndReturn(run func(context.Context, string, client.BackupAbortRequest) error) *BackupProvider_Abort_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // Create provides a mock function with given fields: ctx, remoteName, request
@@ -61,6 +99,36 @@ func (_m *BackupProvider) Create(ctx context.Context, remoteName string, request
 	return r0, r1
 }
 
+// BackupProvider_Create_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Create'
+type BackupProvider_Create_Call struct {
+	*mock.Call
+}
+
+// Create is a helper method to define mock.On call
+//   - ctx context.Context
+//   - remoteName string
+//   - request client.BackupCreate
+func (_e *BackupProvider_Expecter) Create(ctx interface{}, remoteName interface{}, request interface{}) *BackupProvider_Create_Call {
+	return &BackupProvider_Create_Call{Call: _e.mock.On("Create", ctx, remoteName, request)}
+}
+
+func (_c *BackupProvider_Create_Call) Run(run func(ctx context.Context, remoteName string, request client.BackupCreate)) *BackupProvider_Create_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.BackupCreate))
+	})
+	return _c
+}
+
+func (_c *BackupProvider_Create_Call) Return(_a0 string, _a1 error) *BackupProvider_Create_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *BackupProvider_Create_Call) RunAndReturn(run func(context.Context, string, client.BackupCreate) (string, error)) *BackupProvider_Create_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DeleteAll provides a mock function with given fields: ctx, remoteName, filter
 func (_m *BackupProvider) DeleteAll(ctx context.Context, remoteName string, filter client.BackupDeleteOpts) error {
 	ret := _m.Called(ctx, remoteName, filter)
@@ -77,6 +145,36 @@ func (_m *BackupProvider) DeleteAll(ctx context.Context, remoteName string, filt
 	}
 
 	return r0
+}
+
+// BackupProvider_DeleteAll_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteAll'
+type BackupProvider_DeleteAll_Call struct {
+	*mock.Call
+}
+
+// DeleteAll is a helper method to define mock.On call
+//   - ctx context.Context
+//   - remoteName string
+//   - filter client.BackupDeleteOpts
+func (_e *BackupProvider_Expecter) DeleteAll(ctx interface{}, remoteName interface{}, filter interface{}) *BackupProvider_DeleteAll_Call {
+	return &BackupProvider_DeleteAll_Call{Call: _e.mock.On("DeleteAll", ctx, remoteName, filter)}
+}
+
+func (_c *BackupProvider_DeleteAll_Call) Run(run func(ctx context.Context, remoteName string, filter client.BackupDeleteOpts)) *BackupProvider_DeleteAll_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.BackupDeleteOpts))
+	})
+	return _c
+}
+
+func (_c *BackupProvider_DeleteAll_Call) Return(_a0 error) *BackupProvider_DeleteAll_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *BackupProvider_DeleteAll_Call) RunAndReturn(run func(context.Context, string, client.BackupDeleteOpts) error) *BackupProvider_DeleteAll_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetAll provides a mock function with given fields: ctx, remoteName, rscName, snapName
@@ -109,6 +207,37 @@ func (_m *BackupProvider) GetAll(ctx context.Context, remoteName string, rscName
 	return r0, r1
 }
 
+// BackupProvider_GetAll_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAll'
+type BackupProvider_GetAll_Call struct {
+	*mock.Call
+}
+
+// GetAll is a helper method to define mock.On call
+//   - ctx context.Context
+//   - remoteName string
+//   - rscName string
+//   - snapName string
+func (_e *BackupProvider_Expecter) GetAll(ctx interface{}, remoteName interface{}, rscName interface{}, snapName interface{}) *BackupProvider_GetAll_Call {
+	return &BackupProvider_GetAll_Call{Call: _e.mock.On("GetAll", ctx, remoteName, rscName, snapName)}
+}
+
+func (_c *BackupProvider_GetAll_Call) Run(run func(ctx context.Context, remoteName string, rscName string, snapName string)) *BackupProvider_GetAll_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string))
+	})
+	return _c
+}
+
+func (_c *BackupProvider_GetAll_Call) Return(_a0 *client.BackupList, _a1 error) *BackupProvider_GetAll_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *BackupProvider_GetAll_Call) RunAndReturn(run func(context.Context, string, string, string) (*client.BackupList, error)) *BackupProvider_GetAll_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Info provides a mock function with given fields: ctx, remoteName, request
 func (_m *BackupProvider) Info(ctx context.Context, remoteName string, request client.BackupInfoRequest) (*client.BackupInfo, error) {
 	ret := _m.Called(ctx, remoteName, request)
@@ -139,6 +268,36 @@ func (_m *BackupProvider) Info(ctx context.Context, remoteName string, request c
 	return r0, r1
 }
 
+// BackupProvider_Info_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Info'
+type BackupProvider_Info_Call struct {
+	*mock.Call
+}
+
+// Info is a helper method to define mock.On call
+//   - ctx context.Context
+//   - remoteName string
+//   - request client.BackupInfoRequest
+func (_e *BackupProvider_Expecter) Info(ctx interface{}, remoteName interface{}, request interface{}) *BackupProvider_Info_Call {
+	return &BackupProvider_Info_Call{Call: _e.mock.On("Info", ctx, remoteName, request)}
+}
+
+func (_c *BackupProvider_Info_Call) Run(run func(ctx context.Context, remoteName string, request client.BackupInfoRequest)) *BackupProvider_Info_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.BackupInfoRequest))
+	})
+	return _c
+}
+
+func (_c *BackupProvider_Info_Call) Return(_a0 *client.BackupInfo, _a1 error) *BackupProvider_Info_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *BackupProvider_Info_Call) RunAndReturn(run func(context.Context, string, client.BackupInfoRequest) (*client.BackupInfo, error)) *BackupProvider_Info_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Restore provides a mock function with given fields: ctx, remoteName, request
 func (_m *BackupProvider) Restore(ctx context.Context, remoteName string, request client.BackupRestoreRequest) error {
 	ret := _m.Called(ctx, remoteName, request)
@@ -155,6 +314,36 @@ func (_m *BackupProvider) Restore(ctx context.Context, remoteName string, reques
 	}
 
 	return r0
+}
+
+// BackupProvider_Restore_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Restore'
+type BackupProvider_Restore_Call struct {
+	*mock.Call
+}
+
+// Restore is a helper method to define mock.On call
+//   - ctx context.Context
+//   - remoteName string
+//   - request client.BackupRestoreRequest
+func (_e *BackupProvider_Expecter) Restore(ctx interface{}, remoteName interface{}, request interface{}) *BackupProvider_Restore_Call {
+	return &BackupProvider_Restore_Call{Call: _e.mock.On("Restore", ctx, remoteName, request)}
+}
+
+func (_c *BackupProvider_Restore_Call) Run(run func(ctx context.Context, remoteName string, request client.BackupRestoreRequest)) *BackupProvider_Restore_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.BackupRestoreRequest))
+	})
+	return _c
+}
+
+func (_c *BackupProvider_Restore_Call) Return(_a0 error) *BackupProvider_Restore_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *BackupProvider_Restore_Call) RunAndReturn(run func(context.Context, string, client.BackupRestoreRequest) error) *BackupProvider_Restore_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // Ship provides a mock function with given fields: ctx, remoteName, request
@@ -183,6 +372,36 @@ func (_m *BackupProvider) Ship(ctx context.Context, remoteName string, request c
 	}
 
 	return r0, r1
+}
+
+// BackupProvider_Ship_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Ship'
+type BackupProvider_Ship_Call struct {
+	*mock.Call
+}
+
+// Ship is a helper method to define mock.On call
+//   - ctx context.Context
+//   - remoteName string
+//   - request client.BackupShipRequest
+func (_e *BackupProvider_Expecter) Ship(ctx interface{}, remoteName interface{}, request interface{}) *BackupProvider_Ship_Call {
+	return &BackupProvider_Ship_Call{Call: _e.mock.On("Ship", ctx, remoteName, request)}
+}
+
+func (_c *BackupProvider_Ship_Call) Run(run func(ctx context.Context, remoteName string, request client.BackupShipRequest)) *BackupProvider_Ship_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.BackupShipRequest))
+	})
+	return _c
+}
+
+func (_c *BackupProvider_Ship_Call) Return(_a0 string, _a1 error) *BackupProvider_Ship_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *BackupProvider_Ship_Call) RunAndReturn(run func(context.Context, string, client.BackupShipRequest) (string, error)) *BackupProvider_Ship_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // NewBackupProvider creates a new instance of BackupProvider. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

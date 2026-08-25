@@ -15,6 +15,14 @@ type EncryptionProvider struct {
 	mock.Mock
 }
 
+type EncryptionProvider_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *EncryptionProvider) EXPECT() *EncryptionProvider_Expecter {
+	return &EncryptionProvider_Expecter{mock: &_m.Mock}
+}
+
 // Create provides a mock function with given fields: ctx, passphrase
 func (_m *EncryptionProvider) Create(ctx context.Context, passphrase client.Passphrase) error {
 	ret := _m.Called(ctx, passphrase)
@@ -31,6 +39,35 @@ func (_m *EncryptionProvider) Create(ctx context.Context, passphrase client.Pass
 	}
 
 	return r0
+}
+
+// EncryptionProvider_Create_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Create'
+type EncryptionProvider_Create_Call struct {
+	*mock.Call
+}
+
+// Create is a helper method to define mock.On call
+//   - ctx context.Context
+//   - passphrase client.Passphrase
+func (_e *EncryptionProvider_Expecter) Create(ctx interface{}, passphrase interface{}) *EncryptionProvider_Create_Call {
+	return &EncryptionProvider_Create_Call{Call: _e.mock.On("Create", ctx, passphrase)}
+}
+
+func (_c *EncryptionProvider_Create_Call) Run(run func(ctx context.Context, passphrase client.Passphrase)) *EncryptionProvider_Create_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(client.Passphrase))
+	})
+	return _c
+}
+
+func (_c *EncryptionProvider_Create_Call) Return(_a0 error) *EncryptionProvider_Create_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *EncryptionProvider_Create_Call) RunAndReturn(run func(context.Context, client.Passphrase) error) *EncryptionProvider_Create_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // Enter provides a mock function with given fields: ctx, password
@@ -51,6 +88,35 @@ func (_m *EncryptionProvider) Enter(ctx context.Context, password string) error 
 	return r0
 }
 
+// EncryptionProvider_Enter_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Enter'
+type EncryptionProvider_Enter_Call struct {
+	*mock.Call
+}
+
+// Enter is a helper method to define mock.On call
+//   - ctx context.Context
+//   - password string
+func (_e *EncryptionProvider_Expecter) Enter(ctx interface{}, password interface{}) *EncryptionProvider_Enter_Call {
+	return &EncryptionProvider_Enter_Call{Call: _e.mock.On("Enter", ctx, password)}
+}
+
+func (_c *EncryptionProvider_Enter_Call) Run(run func(ctx context.Context, password string)) *EncryptionProvider_Enter_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *EncryptionProvider_Enter_Call) Return(_a0 error) *EncryptionProvider_Enter_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *EncryptionProvider_Enter_Call) RunAndReturn(run func(context.Context, string) error) *EncryptionProvider_Enter_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Modify provides a mock function with given fields: ctx, passphrase
 func (_m *EncryptionProvider) Modify(ctx context.Context, passphrase client.Passphrase) error {
 	ret := _m.Called(ctx, passphrase)
@@ -67,6 +133,35 @@ func (_m *EncryptionProvider) Modify(ctx context.Context, passphrase client.Pass
 	}
 
 	return r0
+}
+
+// EncryptionProvider_Modify_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Modify'
+type EncryptionProvider_Modify_Call struct {
+	*mock.Call
+}
+
+// Modify is a helper method to define mock.On call
+//   - ctx context.Context
+//   - passphrase client.Passphrase
+func (_e *EncryptionProvider_Expecter) Modify(ctx interface{}, passphrase interface{}) *EncryptionProvider_Modify_Call {
+	return &EncryptionProvider_Modify_Call{Call: _e.mock.On("Modify", ctx, passphrase)}
+}
+
+func (_c *EncryptionProvider_Modify_Call) Run(run func(ctx context.Context, passphrase client.Passphrase)) *EncryptionProvider_Modify_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(client.Passphrase))
+	})
+	return _c
+}
+
+func (_c *EncryptionProvider_Modify_Call) Return(_a0 error) *EncryptionProvider_Modify_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *EncryptionProvider_Modify_Call) RunAndReturn(run func(context.Context, client.Passphrase) error) *EncryptionProvider_Modify_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // NewEncryptionProvider creates a new instance of EncryptionProvider. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

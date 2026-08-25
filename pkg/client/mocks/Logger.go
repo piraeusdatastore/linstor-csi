@@ -9,12 +9,56 @@ type Logger struct {
 	mock.Mock
 }
 
+type Logger_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *Logger) EXPECT() *Logger_Expecter {
+	return &Logger_Expecter{mock: &_m.Mock}
+}
+
 // Printf provides a mock function with given fields: _a0, _a1
 func (_m *Logger) Printf(_a0 string, _a1 ...interface{}) {
 	var _ca []interface{}
 	_ca = append(_ca, _a0)
 	_ca = append(_ca, _a1...)
 	_m.Called(_ca...)
+}
+
+// Logger_Printf_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Printf'
+type Logger_Printf_Call struct {
+	*mock.Call
+}
+
+// Printf is a helper method to define mock.On call
+//   - _a0 string
+//   - _a1 ...interface{}
+func (_e *Logger_Expecter) Printf(_a0 interface{}, _a1 ...interface{}) *Logger_Printf_Call {
+	return &Logger_Printf_Call{Call: _e.mock.On("Printf",
+		append([]interface{}{_a0}, _a1...)...)}
+}
+
+func (_c *Logger_Printf_Call) Run(run func(_a0 string, _a1 ...interface{})) *Logger_Printf_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]interface{}, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(interface{})
+			}
+		}
+		run(args[0].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *Logger_Printf_Call) Return() *Logger_Printf_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *Logger_Printf_Call) RunAndReturn(run func(string, ...interface{})) *Logger_Printf_Call {
+	_c.Run(run)
+	return _c
 }
 
 // NewLogger creates a new instance of Logger. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

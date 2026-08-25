@@ -15,6 +15,14 @@ type KeyValueStoreProvider struct {
 	mock.Mock
 }
 
+type KeyValueStoreProvider_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *KeyValueStoreProvider) EXPECT() *KeyValueStoreProvider_Expecter {
+	return &KeyValueStoreProvider_Expecter{mock: &_m.Mock}
+}
+
 // CreateOrModify provides a mock function with given fields: ctx, kv, modify
 func (_m *KeyValueStoreProvider) CreateOrModify(ctx context.Context, kv string, modify client.GenericPropsModify) error {
 	ret := _m.Called(ctx, kv, modify)
@@ -33,6 +41,36 @@ func (_m *KeyValueStoreProvider) CreateOrModify(ctx context.Context, kv string, 
 	return r0
 }
 
+// KeyValueStoreProvider_CreateOrModify_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateOrModify'
+type KeyValueStoreProvider_CreateOrModify_Call struct {
+	*mock.Call
+}
+
+// CreateOrModify is a helper method to define mock.On call
+//   - ctx context.Context
+//   - kv string
+//   - modify client.GenericPropsModify
+func (_e *KeyValueStoreProvider_Expecter) CreateOrModify(ctx interface{}, kv interface{}, modify interface{}) *KeyValueStoreProvider_CreateOrModify_Call {
+	return &KeyValueStoreProvider_CreateOrModify_Call{Call: _e.mock.On("CreateOrModify", ctx, kv, modify)}
+}
+
+func (_c *KeyValueStoreProvider_CreateOrModify_Call) Run(run func(ctx context.Context, kv string, modify client.GenericPropsModify)) *KeyValueStoreProvider_CreateOrModify_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.GenericPropsModify))
+	})
+	return _c
+}
+
+func (_c *KeyValueStoreProvider_CreateOrModify_Call) Return(_a0 error) *KeyValueStoreProvider_CreateOrModify_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *KeyValueStoreProvider_CreateOrModify_Call) RunAndReturn(run func(context.Context, string, client.GenericPropsModify) error) *KeyValueStoreProvider_CreateOrModify_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Delete provides a mock function with given fields: ctx, kv
 func (_m *KeyValueStoreProvider) Delete(ctx context.Context, kv string) error {
 	ret := _m.Called(ctx, kv)
@@ -49,6 +87,35 @@ func (_m *KeyValueStoreProvider) Delete(ctx context.Context, kv string) error {
 	}
 
 	return r0
+}
+
+// KeyValueStoreProvider_Delete_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Delete'
+type KeyValueStoreProvider_Delete_Call struct {
+	*mock.Call
+}
+
+// Delete is a helper method to define mock.On call
+//   - ctx context.Context
+//   - kv string
+func (_e *KeyValueStoreProvider_Expecter) Delete(ctx interface{}, kv interface{}) *KeyValueStoreProvider_Delete_Call {
+	return &KeyValueStoreProvider_Delete_Call{Call: _e.mock.On("Delete", ctx, kv)}
+}
+
+func (_c *KeyValueStoreProvider_Delete_Call) Run(run func(ctx context.Context, kv string)) *KeyValueStoreProvider_Delete_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *KeyValueStoreProvider_Delete_Call) Return(_a0 error) *KeyValueStoreProvider_Delete_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *KeyValueStoreProvider_Delete_Call) RunAndReturn(run func(context.Context, string) error) *KeyValueStoreProvider_Delete_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // Get provides a mock function with given fields: ctx, kv
@@ -81,6 +148,35 @@ func (_m *KeyValueStoreProvider) Get(ctx context.Context, kv string) (*client.KV
 	return r0, r1
 }
 
+// KeyValueStoreProvider_Get_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Get'
+type KeyValueStoreProvider_Get_Call struct {
+	*mock.Call
+}
+
+// Get is a helper method to define mock.On call
+//   - ctx context.Context
+//   - kv string
+func (_e *KeyValueStoreProvider_Expecter) Get(ctx interface{}, kv interface{}) *KeyValueStoreProvider_Get_Call {
+	return &KeyValueStoreProvider_Get_Call{Call: _e.mock.On("Get", ctx, kv)}
+}
+
+func (_c *KeyValueStoreProvider_Get_Call) Run(run func(ctx context.Context, kv string)) *KeyValueStoreProvider_Get_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *KeyValueStoreProvider_Get_Call) Return(_a0 *client.KV, _a1 error) *KeyValueStoreProvider_Get_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *KeyValueStoreProvider_Get_Call) RunAndReturn(run func(context.Context, string) (*client.KV, error)) *KeyValueStoreProvider_Get_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // List provides a mock function with given fields: ctx
 func (_m *KeyValueStoreProvider) List(ctx context.Context) ([]client.KV, error) {
 	ret := _m.Called(ctx)
@@ -109,6 +205,34 @@ func (_m *KeyValueStoreProvider) List(ctx context.Context) ([]client.KV, error) 
 	}
 
 	return r0, r1
+}
+
+// KeyValueStoreProvider_List_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'List'
+type KeyValueStoreProvider_List_Call struct {
+	*mock.Call
+}
+
+// List is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *KeyValueStoreProvider_Expecter) List(ctx interface{}) *KeyValueStoreProvider_List_Call {
+	return &KeyValueStoreProvider_List_Call{Call: _e.mock.On("List", ctx)}
+}
+
+func (_c *KeyValueStoreProvider_List_Call) Run(run func(ctx context.Context)) *KeyValueStoreProvider_List_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context))
+	})
+	return _c
+}
+
+func (_c *KeyValueStoreProvider_List_Call) Return(_a0 []client.KV, _a1 error) *KeyValueStoreProvider_List_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *KeyValueStoreProvider_List_Call) RunAndReturn(run func(context.Context) ([]client.KV, error)) *KeyValueStoreProvider_List_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // NewKeyValueStoreProvider creates a new instance of KeyValueStoreProvider. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

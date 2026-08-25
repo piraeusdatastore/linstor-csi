@@ -33,9 +33,9 @@ func TestScheduler_Create(t *testing.T) {
 	ctx := context.Background()
 
 	m := mocks.ResourceProvider{}
-	m.On("MakeAvailable", mock.Anything, volumeId, brokenNode, mock.Anything).Return(&fakeError{})
-	m.On("MakeAvailable", mock.Anything, volumeId, mock.Anything, mock.Anything).Return(nil)
-	m.On("Autoplace", mock.Anything, volumeId, mock.Anything).Return(nil)
+	m.EXPECT().MakeAvailable(mock.Anything, volumeId, brokenNode, mock.Anything).Return(&fakeError{})
+	m.EXPECT().MakeAvailable(mock.Anything, volumeId, mock.Anything, mock.Anything).Return(nil)
+	m.EXPECT().Autoplace(mock.Anything, volumeId, mock.Anything).Return(nil)
 
 	sched := followtopology.NewScheduler(&lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, logrus.WithField("test", t.Name()))
 

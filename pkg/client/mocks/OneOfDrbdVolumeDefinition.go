@@ -9,9 +9,44 @@ type OneOfDrbdVolumeDefinition struct {
 	mock.Mock
 }
 
+type OneOfDrbdVolumeDefinition_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *OneOfDrbdVolumeDefinition) EXPECT() *OneOfDrbdVolumeDefinition_Expecter {
+	return &OneOfDrbdVolumeDefinition_Expecter{mock: &_m.Mock}
+}
+
 // isOneOfDrbdVolumeDefinition provides a mock function with no fields
 func (_m *OneOfDrbdVolumeDefinition) isOneOfDrbdVolumeDefinition() {
 	_m.Called()
+}
+
+// OneOfDrbdVolumeDefinition_isOneOfDrbdVolumeDefinition_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'isOneOfDrbdVolumeDefinition'
+type OneOfDrbdVolumeDefinition_isOneOfDrbdVolumeDefinition_Call struct {
+	*mock.Call
+}
+
+// isOneOfDrbdVolumeDefinition is a helper method to define mock.On call
+func (_e *OneOfDrbdVolumeDefinition_Expecter) isOneOfDrbdVolumeDefinition() *OneOfDrbdVolumeDefinition_isOneOfDrbdVolumeDefinition_Call {
+	return &OneOfDrbdVolumeDefinition_isOneOfDrbdVolumeDefinition_Call{Call: _e.mock.On("isOneOfDrbdVolumeDefinition")}
+}
+
+func (_c *OneOfDrbdVolumeDefinition_isOneOfDrbdVolumeDefinition_Call) Run(run func()) *OneOfDrbdVolumeDefinition_isOneOfDrbdVolumeDefinition_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *OneOfDrbdVolumeDefinition_isOneOfDrbdVolumeDefinition_Call) Return() *OneOfDrbdVolumeDefinition_isOneOfDrbdVolumeDefinition_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *OneOfDrbdVolumeDefinition_isOneOfDrbdVolumeDefinition_Call) RunAndReturn(run func()) *OneOfDrbdVolumeDefinition_isOneOfDrbdVolumeDefinition_Call {
+	_c.Run(run)
+	return _c
 }
 
 // NewOneOfDrbdVolumeDefinition creates a new instance of OneOfDrbdVolumeDefinition. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

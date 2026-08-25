@@ -15,6 +15,14 @@ type ConnectionProvider struct {
 	mock.Mock
 }
 
+type ConnectionProvider_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *ConnectionProvider) EXPECT() *ConnectionProvider_Expecter {
+	return &ConnectionProvider_Expecter{mock: &_m.Mock}
+}
+
 // GetNodeConnections provides a mock function with given fields: ctx, nodeA, nodeB
 func (_m *ConnectionProvider) GetNodeConnections(ctx context.Context, nodeA string, nodeB string) ([]client.Connection, error) {
 	ret := _m.Called(ctx, nodeA, nodeB)
@@ -43,6 +51,36 @@ func (_m *ConnectionProvider) GetNodeConnections(ctx context.Context, nodeA stri
 	}
 
 	return r0, r1
+}
+
+// ConnectionProvider_GetNodeConnections_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetNodeConnections'
+type ConnectionProvider_GetNodeConnections_Call struct {
+	*mock.Call
+}
+
+// GetNodeConnections is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeA string
+//   - nodeB string
+func (_e *ConnectionProvider_Expecter) GetNodeConnections(ctx interface{}, nodeA interface{}, nodeB interface{}) *ConnectionProvider_GetNodeConnections_Call {
+	return &ConnectionProvider_GetNodeConnections_Call{Call: _e.mock.On("GetNodeConnections", ctx, nodeA, nodeB)}
+}
+
+func (_c *ConnectionProvider_GetNodeConnections_Call) Run(run func(ctx context.Context, nodeA string, nodeB string)) *ConnectionProvider_GetNodeConnections_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *ConnectionProvider_GetNodeConnections_Call) Return(_a0 []client.Connection, _a1 error) *ConnectionProvider_GetNodeConnections_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ConnectionProvider_GetNodeConnections_Call) RunAndReturn(run func(context.Context, string, string) ([]client.Connection, error)) *ConnectionProvider_GetNodeConnections_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetResourceConnection provides a mock function with given fields: ctx, resource, nodeA, nodeB
@@ -75,6 +113,37 @@ func (_m *ConnectionProvider) GetResourceConnection(ctx context.Context, resourc
 	return r0, r1
 }
 
+// ConnectionProvider_GetResourceConnection_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetResourceConnection'
+type ConnectionProvider_GetResourceConnection_Call struct {
+	*mock.Call
+}
+
+// GetResourceConnection is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resource string
+//   - nodeA string
+//   - nodeB string
+func (_e *ConnectionProvider_Expecter) GetResourceConnection(ctx interface{}, resource interface{}, nodeA interface{}, nodeB interface{}) *ConnectionProvider_GetResourceConnection_Call {
+	return &ConnectionProvider_GetResourceConnection_Call{Call: _e.mock.On("GetResourceConnection", ctx, resource, nodeA, nodeB)}
+}
+
+func (_c *ConnectionProvider_GetResourceConnection_Call) Run(run func(ctx context.Context, resource string, nodeA string, nodeB string)) *ConnectionProvider_GetResourceConnection_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string))
+	})
+	return _c
+}
+
+func (_c *ConnectionProvider_GetResourceConnection_Call) Return(_a0 *client.Connection, _a1 error) *ConnectionProvider_GetResourceConnection_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ConnectionProvider_GetResourceConnection_Call) RunAndReturn(run func(context.Context, string, string, string) (*client.Connection, error)) *ConnectionProvider_GetResourceConnection_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetResourceConnections provides a mock function with given fields: ctx, resource
 func (_m *ConnectionProvider) GetResourceConnections(ctx context.Context, resource string) ([]client.Connection, error) {
 	ret := _m.Called(ctx, resource)
@@ -105,6 +174,35 @@ func (_m *ConnectionProvider) GetResourceConnections(ctx context.Context, resour
 	return r0, r1
 }
 
+// ConnectionProvider_GetResourceConnections_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetResourceConnections'
+type ConnectionProvider_GetResourceConnections_Call struct {
+	*mock.Call
+}
+
+// GetResourceConnections is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resource string
+func (_e *ConnectionProvider_Expecter) GetResourceConnections(ctx interface{}, resource interface{}) *ConnectionProvider_GetResourceConnections_Call {
+	return &ConnectionProvider_GetResourceConnections_Call{Call: _e.mock.On("GetResourceConnections", ctx, resource)}
+}
+
+func (_c *ConnectionProvider_GetResourceConnections_Call) Run(run func(ctx context.Context, resource string)) *ConnectionProvider_GetResourceConnections_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *ConnectionProvider_GetResourceConnections_Call) Return(_a0 []client.Connection, _a1 error) *ConnectionProvider_GetResourceConnections_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ConnectionProvider_GetResourceConnections_Call) RunAndReturn(run func(context.Context, string) ([]client.Connection, error)) *ConnectionProvider_GetResourceConnections_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SetNodeConnection provides a mock function with given fields: ctx, nodeA, nodeB, props
 func (_m *ConnectionProvider) SetNodeConnection(ctx context.Context, nodeA string, nodeB string, props client.GenericPropsModify) error {
 	ret := _m.Called(ctx, nodeA, nodeB, props)
@@ -123,6 +221,37 @@ func (_m *ConnectionProvider) SetNodeConnection(ctx context.Context, nodeA strin
 	return r0
 }
 
+// ConnectionProvider_SetNodeConnection_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetNodeConnection'
+type ConnectionProvider_SetNodeConnection_Call struct {
+	*mock.Call
+}
+
+// SetNodeConnection is a helper method to define mock.On call
+//   - ctx context.Context
+//   - nodeA string
+//   - nodeB string
+//   - props client.GenericPropsModify
+func (_e *ConnectionProvider_Expecter) SetNodeConnection(ctx interface{}, nodeA interface{}, nodeB interface{}, props interface{}) *ConnectionProvider_SetNodeConnection_Call {
+	return &ConnectionProvider_SetNodeConnection_Call{Call: _e.mock.On("SetNodeConnection", ctx, nodeA, nodeB, props)}
+}
+
+func (_c *ConnectionProvider_SetNodeConnection_Call) Run(run func(ctx context.Context, nodeA string, nodeB string, props client.GenericPropsModify)) *ConnectionProvider_SetNodeConnection_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(client.GenericPropsModify))
+	})
+	return _c
+}
+
+func (_c *ConnectionProvider_SetNodeConnection_Call) Return(_a0 error) *ConnectionProvider_SetNodeConnection_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ConnectionProvider_SetNodeConnection_Call) RunAndReturn(run func(context.Context, string, string, client.GenericPropsModify) error) *ConnectionProvider_SetNodeConnection_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SetResourceConnection provides a mock function with given fields: ctx, resource, nodeA, nodeB, props
 func (_m *ConnectionProvider) SetResourceConnection(ctx context.Context, resource string, nodeA string, nodeB string, props client.GenericPropsModify) error {
 	ret := _m.Called(ctx, resource, nodeA, nodeB, props)
@@ -139,6 +268,38 @@ func (_m *ConnectionProvider) SetResourceConnection(ctx context.Context, resourc
 	}
 
 	return r0
+}
+
+// ConnectionProvider_SetResourceConnection_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetResourceConnection'
+type ConnectionProvider_SetResourceConnection_Call struct {
+	*mock.Call
+}
+
+// SetResourceConnection is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resource string
+//   - nodeA string
+//   - nodeB string
+//   - props client.GenericPropsModify
+func (_e *ConnectionProvider_Expecter) SetResourceConnection(ctx interface{}, resource interface{}, nodeA interface{}, nodeB interface{}, props interface{}) *ConnectionProvider_SetResourceConnection_Call {
+	return &ConnectionProvider_SetResourceConnection_Call{Call: _e.mock.On("SetResourceConnection", ctx, resource, nodeA, nodeB, props)}
+}
+
+func (_c *ConnectionProvider_SetResourceConnection_Call) Run(run func(ctx context.Context, resource string, nodeA string, nodeB string, props client.GenericPropsModify)) *ConnectionProvider_SetResourceConnection_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string), args[4].(client.GenericPropsModify))
+	})
+	return _c
+}
+
+func (_c *ConnectionProvider_SetResourceConnection_Call) Return(_a0 error) *ConnectionProvider_SetResourceConnection_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ConnectionProvider_SetResourceConnection_Call) RunAndReturn(run func(context.Context, string, string, string, client.GenericPropsModify) error) *ConnectionProvider_SetResourceConnection_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // NewConnectionProvider creates a new instance of ConnectionProvider. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
