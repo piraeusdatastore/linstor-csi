@@ -1,0 +1,11 @@
+issue-845-fix: true
+resolve-type-alias: false
+with-expecter: false
+dir: mocks
+outpkg: mocks
+mockname: "{{.InterfaceName}}"
+filename: "{{.InterfaceName}}.go"
+packages:
+  github.com/LINBIT/golinstor/client:
+    config:
+      all: true
