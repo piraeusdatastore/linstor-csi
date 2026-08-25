@@ -17,3 +17,11 @@ repos:
       - id: go-imports
       - id: go-mod-tidy
       - id: golangci-lint
+  - repo: local
+    hooks:
+      - id: go-generate
+        name: go generate
+        entry: go generate ./...
+        language: system
+        files: (\.go|\.mockery\.yaml|go\.mod)$
+        pass_filenames: false
