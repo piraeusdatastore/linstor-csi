@@ -453,6 +453,31 @@ func (_m *ResourceDefinitionProvider) SyncStatus(ctx context.Context, resDef str
 	return r0, r1
 }
 
+// Truncate provides a mock function with given fields: ctx, resDefName, opts
+func (_m *ResourceDefinitionProvider) Truncate(ctx context.Context, resDefName string, opts ...*client.ResourceDefinitionTruncateOpts) error {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, resDefName)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Truncate")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, ...*client.ResourceDefinitionTruncateOpts) error); ok {
+		r0 = rf(ctx, resDefName, opts...)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // NewResourceDefinitionProvider creates a new instance of ResourceDefinitionProvider. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewResourceDefinitionProvider(t interface {

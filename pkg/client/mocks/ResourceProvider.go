@@ -154,11 +154,11 @@ func (_m *ResourceProvider) Delete(ctx context.Context, resName string, nodeName
 	return r0
 }
 
-// DeleteSnapshot provides a mock function with given fields: ctx, resName, snapName, nodes
-func (_m *ResourceProvider) DeleteSnapshot(ctx context.Context, resName string, snapName string, nodes ...string) error {
-	_va := make([]interface{}, len(nodes))
-	for _i := range nodes {
-		_va[_i] = nodes[_i]
+// DeleteSnapshot provides a mock function with given fields: ctx, resName, snapName, opts
+func (_m *ResourceProvider) DeleteSnapshot(ctx context.Context, resName string, snapName string, opts ...*client.SnapshotDeleteOpts) error {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
 	}
 	var _ca []interface{}
 	_ca = append(_ca, ctx, resName, snapName)
@@ -170,8 +170,8 @@ func (_m *ResourceProvider) DeleteSnapshot(ctx context.Context, resName string, 
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, ...string) error); ok {
-		r0 = rf(ctx, resName, snapName, nodes...)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, ...*client.SnapshotDeleteOpts) error); ok {
+		r0 = rf(ctx, resName, snapName, opts...)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -909,6 +909,24 @@ func (_m *ResourceProvider) RollbackSnapshot(ctx context.Context, resName string
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
 		r0 = rf(ctx, resName, snapName)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// UnmakeAvailable provides a mock function with given fields: ctx, resName, nodeName
+func (_m *ResourceProvider) UnmakeAvailable(ctx context.Context, resName string, nodeName string) error {
+	ret := _m.Called(ctx, resName, nodeName)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UnmakeAvailable")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, resName, nodeName)
 	} else {
 		r0 = ret.Error(0)
 	}
