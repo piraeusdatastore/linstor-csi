@@ -19,6 +19,14 @@ type ControllerProvider struct {
 	mock.Mock
 }
 
+type ControllerProvider_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *ControllerProvider) EXPECT() *ControllerProvider_Expecter {
+	return &ControllerProvider_Expecter{mock: &_m.Mock}
+}
+
 // CheckExternalFile provides a mock function with given fields: ctx, name, node
 func (_m *ControllerProvider) CheckExternalFile(ctx context.Context, name string, node string) (client.ExtFileCheckResult, error) {
 	ret := _m.Called(ctx, name, node)
@@ -47,6 +55,36 @@ func (_m *ControllerProvider) CheckExternalFile(ctx context.Context, name string
 	return r0, r1
 }
 
+// ControllerProvider_CheckExternalFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CheckExternalFile'
+type ControllerProvider_CheckExternalFile_Call struct {
+	*mock.Call
+}
+
+// CheckExternalFile is a helper method to define mock.On call
+//   - ctx context.Context
+//   - name string
+//   - node string
+func (_e *ControllerProvider_Expecter) CheckExternalFile(ctx interface{}, name interface{}, node interface{}) *ControllerProvider_CheckExternalFile_Call {
+	return &ControllerProvider_CheckExternalFile_Call{Call: _e.mock.On("CheckExternalFile", ctx, name, node)}
+}
+
+func (_c *ControllerProvider_CheckExternalFile_Call) Run(run func(ctx context.Context, name string, node string)) *ControllerProvider_CheckExternalFile_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_CheckExternalFile_Call) Return(_a0 client.ExtFileCheckResult, _a1 error) *ControllerProvider_CheckExternalFile_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ControllerProvider_CheckExternalFile_Call) RunAndReturn(run func(context.Context, string, string) (client.ExtFileCheckResult, error)) *ControllerProvider_CheckExternalFile_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateSOSReport provides a mock function with given fields: ctx, opts
 func (_m *ControllerProvider) CreateSOSReport(ctx context.Context, opts ...*client.ListOpts) error {
 	_va := make([]interface{}, len(opts))
@@ -72,6 +110,42 @@ func (_m *ControllerProvider) CreateSOSReport(ctx context.Context, opts ...*clie
 	return r0
 }
 
+// ControllerProvider_CreateSOSReport_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateSOSReport'
+type ControllerProvider_CreateSOSReport_Call struct {
+	*mock.Call
+}
+
+// CreateSOSReport is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *ControllerProvider_Expecter) CreateSOSReport(ctx interface{}, opts ...interface{}) *ControllerProvider_CreateSOSReport_Call {
+	return &ControllerProvider_CreateSOSReport_Call{Call: _e.mock.On("CreateSOSReport",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *ControllerProvider_CreateSOSReport_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *ControllerProvider_CreateSOSReport_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_CreateSOSReport_Call) Return(_a0 error) *ControllerProvider_CreateSOSReport_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ControllerProvider_CreateSOSReport_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) error) *ControllerProvider_CreateSOSReport_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DeleteErrorReports provides a mock function with given fields: ctx, del
 func (_m *ControllerProvider) DeleteErrorReports(ctx context.Context, del client.ErrorReportDelete) error {
 	ret := _m.Called(ctx, del)
@@ -88,6 +162,35 @@ func (_m *ControllerProvider) DeleteErrorReports(ctx context.Context, del client
 	}
 
 	return r0
+}
+
+// ControllerProvider_DeleteErrorReports_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteErrorReports'
+type ControllerProvider_DeleteErrorReports_Call struct {
+	*mock.Call
+}
+
+// DeleteErrorReports is a helper method to define mock.On call
+//   - ctx context.Context
+//   - del client.ErrorReportDelete
+func (_e *ControllerProvider_Expecter) DeleteErrorReports(ctx interface{}, del interface{}) *ControllerProvider_DeleteErrorReports_Call {
+	return &ControllerProvider_DeleteErrorReports_Call{Call: _e.mock.On("DeleteErrorReports", ctx, del)}
+}
+
+func (_c *ControllerProvider_DeleteErrorReports_Call) Run(run func(ctx context.Context, del client.ErrorReportDelete)) *ControllerProvider_DeleteErrorReports_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(client.ErrorReportDelete))
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_DeleteErrorReports_Call) Return(_a0 error) *ControllerProvider_DeleteErrorReports_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ControllerProvider_DeleteErrorReports_Call) RunAndReturn(run func(context.Context, client.ErrorReportDelete) error) *ControllerProvider_DeleteErrorReports_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // DeleteExternalFile provides a mock function with given fields: ctx, name
@@ -108,6 +211,35 @@ func (_m *ControllerProvider) DeleteExternalFile(ctx context.Context, name strin
 	return r0
 }
 
+// ControllerProvider_DeleteExternalFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteExternalFile'
+type ControllerProvider_DeleteExternalFile_Call struct {
+	*mock.Call
+}
+
+// DeleteExternalFile is a helper method to define mock.On call
+//   - ctx context.Context
+//   - name string
+func (_e *ControllerProvider_Expecter) DeleteExternalFile(ctx interface{}, name interface{}) *ControllerProvider_DeleteExternalFile_Call {
+	return &ControllerProvider_DeleteExternalFile_Call{Call: _e.mock.On("DeleteExternalFile", ctx, name)}
+}
+
+func (_c *ControllerProvider_DeleteExternalFile_Call) Run(run func(ctx context.Context, name string)) *ControllerProvider_DeleteExternalFile_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_DeleteExternalFile_Call) Return(_a0 error) *ControllerProvider_DeleteExternalFile_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ControllerProvider_DeleteExternalFile_Call) RunAndReturn(run func(context.Context, string) error) *ControllerProvider_DeleteExternalFile_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DeleteProp provides a mock function with given fields: ctx, prop
 func (_m *ControllerProvider) DeleteProp(ctx context.Context, prop string) error {
 	ret := _m.Called(ctx, prop)
@@ -124,6 +256,35 @@ func (_m *ControllerProvider) DeleteProp(ctx context.Context, prop string) error
 	}
 
 	return r0
+}
+
+// ControllerProvider_DeleteProp_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteProp'
+type ControllerProvider_DeleteProp_Call struct {
+	*mock.Call
+}
+
+// DeleteProp is a helper method to define mock.On call
+//   - ctx context.Context
+//   - prop string
+func (_e *ControllerProvider_Expecter) DeleteProp(ctx interface{}, prop interface{}) *ControllerProvider_DeleteProp_Call {
+	return &ControllerProvider_DeleteProp_Call{Call: _e.mock.On("DeleteProp", ctx, prop)}
+}
+
+func (_c *ControllerProvider_DeleteProp_Call) Run(run func(ctx context.Context, prop string)) *ControllerProvider_DeleteProp_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_DeleteProp_Call) Return(_a0 error) *ControllerProvider_DeleteProp_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ControllerProvider_DeleteProp_Call) RunAndReturn(run func(context.Context, string) error) *ControllerProvider_DeleteProp_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // DownloadSOSReport provides a mock function with given fields: ctx, w, opts
@@ -149,6 +310,43 @@ func (_m *ControllerProvider) DownloadSOSReport(ctx context.Context, w io.WriteC
 	}
 
 	return r0
+}
+
+// ControllerProvider_DownloadSOSReport_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DownloadSOSReport'
+type ControllerProvider_DownloadSOSReport_Call struct {
+	*mock.Call
+}
+
+// DownloadSOSReport is a helper method to define mock.On call
+//   - ctx context.Context
+//   - w io.WriteCloser
+//   - opts ...*client.ListOpts
+func (_e *ControllerProvider_Expecter) DownloadSOSReport(ctx interface{}, w interface{}, opts ...interface{}) *ControllerProvider_DownloadSOSReport_Call {
+	return &ControllerProvider_DownloadSOSReport_Call{Call: _e.mock.On("DownloadSOSReport",
+		append([]interface{}{ctx, w}, opts...)...)}
+}
+
+func (_c *ControllerProvider_DownloadSOSReport_Call) Run(run func(ctx context.Context, w io.WriteCloser, opts ...*client.ListOpts)) *ControllerProvider_DownloadSOSReport_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(io.WriteCloser), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_DownloadSOSReport_Call) Return(_a0 error) *ControllerProvider_DownloadSOSReport_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ControllerProvider_DownloadSOSReport_Call) RunAndReturn(run func(context.Context, io.WriteCloser, ...*client.ListOpts) error) *ControllerProvider_DownloadSOSReport_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetConfig provides a mock function with given fields: ctx, opts
@@ -186,6 +384,42 @@ func (_m *ControllerProvider) GetConfig(ctx context.Context, opts ...*client.Lis
 	return r0, r1
 }
 
+// ControllerProvider_GetConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetConfig'
+type ControllerProvider_GetConfig_Call struct {
+	*mock.Call
+}
+
+// GetConfig is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *ControllerProvider_Expecter) GetConfig(ctx interface{}, opts ...interface{}) *ControllerProvider_GetConfig_Call {
+	return &ControllerProvider_GetConfig_Call{Call: _e.mock.On("GetConfig",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *ControllerProvider_GetConfig_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *ControllerProvider_GetConfig_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_GetConfig_Call) Return(_a0 client.ControllerConfig, _a1 error) *ControllerProvider_GetConfig_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ControllerProvider_GetConfig_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) (client.ControllerConfig, error)) *ControllerProvider_GetConfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetErrorReport provides a mock function with given fields: ctx, id, opts
 func (_m *ControllerProvider) GetErrorReport(ctx context.Context, id string, opts ...*client.ListOpts) (client.ErrorReport, error) {
 	_va := make([]interface{}, len(opts))
@@ -219,6 +453,43 @@ func (_m *ControllerProvider) GetErrorReport(ctx context.Context, id string, opt
 	}
 
 	return r0, r1
+}
+
+// ControllerProvider_GetErrorReport_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetErrorReport'
+type ControllerProvider_GetErrorReport_Call struct {
+	*mock.Call
+}
+
+// GetErrorReport is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id string
+//   - opts ...*client.ListOpts
+func (_e *ControllerProvider_Expecter) GetErrorReport(ctx interface{}, id interface{}, opts ...interface{}) *ControllerProvider_GetErrorReport_Call {
+	return &ControllerProvider_GetErrorReport_Call{Call: _e.mock.On("GetErrorReport",
+		append([]interface{}{ctx, id}, opts...)...)}
+}
+
+func (_c *ControllerProvider_GetErrorReport_Call) Run(run func(ctx context.Context, id string, opts ...*client.ListOpts)) *ControllerProvider_GetErrorReport_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_GetErrorReport_Call) Return(_a0 client.ErrorReport, _a1 error) *ControllerProvider_GetErrorReport_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ControllerProvider_GetErrorReport_Call) RunAndReturn(run func(context.Context, string, ...*client.ListOpts) (client.ErrorReport, error)) *ControllerProvider_GetErrorReport_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetErrorReports provides a mock function with given fields: ctx, opts
@@ -258,6 +529,42 @@ func (_m *ControllerProvider) GetErrorReports(ctx context.Context, opts ...*clie
 	return r0, r1
 }
 
+// ControllerProvider_GetErrorReports_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetErrorReports'
+type ControllerProvider_GetErrorReports_Call struct {
+	*mock.Call
+}
+
+// GetErrorReports is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *ControllerProvider_Expecter) GetErrorReports(ctx interface{}, opts ...interface{}) *ControllerProvider_GetErrorReports_Call {
+	return &ControllerProvider_GetErrorReports_Call{Call: _e.mock.On("GetErrorReports",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *ControllerProvider_GetErrorReports_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *ControllerProvider_GetErrorReports_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_GetErrorReports_Call) Return(_a0 []client.ErrorReport, _a1 error) *ControllerProvider_GetErrorReports_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ControllerProvider_GetErrorReports_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) ([]client.ErrorReport, error)) *ControllerProvider_GetErrorReports_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetErrorReportsSince provides a mock function with given fields: ctx, since, opts
 func (_m *ControllerProvider) GetErrorReportsSince(ctx context.Context, since time.Time, opts ...*client.ListOpts) ([]client.ErrorReport, error) {
 	_va := make([]interface{}, len(opts))
@@ -295,6 +602,43 @@ func (_m *ControllerProvider) GetErrorReportsSince(ctx context.Context, since ti
 	return r0, r1
 }
 
+// ControllerProvider_GetErrorReportsSince_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetErrorReportsSince'
+type ControllerProvider_GetErrorReportsSince_Call struct {
+	*mock.Call
+}
+
+// GetErrorReportsSince is a helper method to define mock.On call
+//   - ctx context.Context
+//   - since time.Time
+//   - opts ...*client.ListOpts
+func (_e *ControllerProvider_Expecter) GetErrorReportsSince(ctx interface{}, since interface{}, opts ...interface{}) *ControllerProvider_GetErrorReportsSince_Call {
+	return &ControllerProvider_GetErrorReportsSince_Call{Call: _e.mock.On("GetErrorReportsSince",
+		append([]interface{}{ctx, since}, opts...)...)}
+}
+
+func (_c *ControllerProvider_GetErrorReportsSince_Call) Run(run func(ctx context.Context, since time.Time, opts ...*client.ListOpts)) *ControllerProvider_GetErrorReportsSince_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), args[1].(time.Time), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_GetErrorReportsSince_Call) Return(_a0 []client.ErrorReport, _a1 error) *ControllerProvider_GetErrorReportsSince_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ControllerProvider_GetErrorReportsSince_Call) RunAndReturn(run func(context.Context, time.Time, ...*client.ListOpts) ([]client.ErrorReport, error)) *ControllerProvider_GetErrorReportsSince_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetExternalFile provides a mock function with given fields: ctx, name
 func (_m *ControllerProvider) GetExternalFile(ctx context.Context, name string) (client.ExternalFile, error) {
 	ret := _m.Called(ctx, name)
@@ -321,6 +665,35 @@ func (_m *ControllerProvider) GetExternalFile(ctx context.Context, name string) 
 	}
 
 	return r0, r1
+}
+
+// ControllerProvider_GetExternalFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetExternalFile'
+type ControllerProvider_GetExternalFile_Call struct {
+	*mock.Call
+}
+
+// GetExternalFile is a helper method to define mock.On call
+//   - ctx context.Context
+//   - name string
+func (_e *ControllerProvider_Expecter) GetExternalFile(ctx interface{}, name interface{}) *ControllerProvider_GetExternalFile_Call {
+	return &ControllerProvider_GetExternalFile_Call{Call: _e.mock.On("GetExternalFile", ctx, name)}
+}
+
+func (_c *ControllerProvider_GetExternalFile_Call) Run(run func(ctx context.Context, name string)) *ControllerProvider_GetExternalFile_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_GetExternalFile_Call) Return(_a0 client.ExternalFile, _a1 error) *ControllerProvider_GetExternalFile_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ControllerProvider_GetExternalFile_Call) RunAndReturn(run func(context.Context, string) (client.ExternalFile, error)) *ControllerProvider_GetExternalFile_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetExternalFiles provides a mock function with given fields: ctx, opts
@@ -360,6 +733,42 @@ func (_m *ControllerProvider) GetExternalFiles(ctx context.Context, opts ...*cli
 	return r0, r1
 }
 
+// ControllerProvider_GetExternalFiles_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetExternalFiles'
+type ControllerProvider_GetExternalFiles_Call struct {
+	*mock.Call
+}
+
+// GetExternalFiles is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *ControllerProvider_Expecter) GetExternalFiles(ctx interface{}, opts ...interface{}) *ControllerProvider_GetExternalFiles_Call {
+	return &ControllerProvider_GetExternalFiles_Call{Call: _e.mock.On("GetExternalFiles",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *ControllerProvider_GetExternalFiles_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *ControllerProvider_GetExternalFiles_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_GetExternalFiles_Call) Return(_a0 []client.ExternalFile, _a1 error) *ControllerProvider_GetExternalFiles_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ControllerProvider_GetExternalFiles_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) ([]client.ExternalFile, error)) *ControllerProvider_GetExternalFiles_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetProps provides a mock function with given fields: ctx, opts
 func (_m *ControllerProvider) GetProps(ctx context.Context, opts ...*client.ListOpts) (client.ControllerProps, error) {
 	_va := make([]interface{}, len(opts))
@@ -395,6 +804,42 @@ func (_m *ControllerProvider) GetProps(ctx context.Context, opts ...*client.List
 	}
 
 	return r0, r1
+}
+
+// ControllerProvider_GetProps_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetProps'
+type ControllerProvider_GetProps_Call struct {
+	*mock.Call
+}
+
+// GetProps is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *ControllerProvider_Expecter) GetProps(ctx interface{}, opts ...interface{}) *ControllerProvider_GetProps_Call {
+	return &ControllerProvider_GetProps_Call{Call: _e.mock.On("GetProps",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *ControllerProvider_GetProps_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *ControllerProvider_GetProps_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_GetProps_Call) Return(_a0 client.ControllerProps, _a1 error) *ControllerProvider_GetProps_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ControllerProvider_GetProps_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) (client.ControllerProps, error)) *ControllerProvider_GetProps_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetPropsInfos provides a mock function with given fields: ctx, opts
@@ -434,6 +879,42 @@ func (_m *ControllerProvider) GetPropsInfos(ctx context.Context, opts ...*client
 	return r0, r1
 }
 
+// ControllerProvider_GetPropsInfos_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetPropsInfos'
+type ControllerProvider_GetPropsInfos_Call struct {
+	*mock.Call
+}
+
+// GetPropsInfos is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *ControllerProvider_Expecter) GetPropsInfos(ctx interface{}, opts ...interface{}) *ControllerProvider_GetPropsInfos_Call {
+	return &ControllerProvider_GetPropsInfos_Call{Call: _e.mock.On("GetPropsInfos",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *ControllerProvider_GetPropsInfos_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *ControllerProvider_GetPropsInfos_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_GetPropsInfos_Call) Return(_a0 []client.PropsInfo, _a1 error) *ControllerProvider_GetPropsInfos_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ControllerProvider_GetPropsInfos_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) ([]client.PropsInfo, error)) *ControllerProvider_GetPropsInfos_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetPropsInfosAll provides a mock function with given fields: ctx, opts
 func (_m *ControllerProvider) GetPropsInfosAll(ctx context.Context, opts ...*client.ListOpts) ([]client.PropsInfo, error) {
 	_va := make([]interface{}, len(opts))
@@ -471,6 +952,42 @@ func (_m *ControllerProvider) GetPropsInfosAll(ctx context.Context, opts ...*cli
 	return r0, r1
 }
 
+// ControllerProvider_GetPropsInfosAll_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetPropsInfosAll'
+type ControllerProvider_GetPropsInfosAll_Call struct {
+	*mock.Call
+}
+
+// GetPropsInfosAll is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *ControllerProvider_Expecter) GetPropsInfosAll(ctx interface{}, opts ...interface{}) *ControllerProvider_GetPropsInfosAll_Call {
+	return &ControllerProvider_GetPropsInfosAll_Call{Call: _e.mock.On("GetPropsInfosAll",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *ControllerProvider_GetPropsInfosAll_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *ControllerProvider_GetPropsInfosAll_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_GetPropsInfosAll_Call) Return(_a0 []client.PropsInfo, _a1 error) *ControllerProvider_GetPropsInfosAll_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ControllerProvider_GetPropsInfosAll_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) ([]client.PropsInfo, error)) *ControllerProvider_GetPropsInfosAll_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetSatelliteConfig provides a mock function with given fields: ctx, node
 func (_m *ControllerProvider) GetSatelliteConfig(ctx context.Context, node string) (client.SatelliteConfig, error) {
 	ret := _m.Called(ctx, node)
@@ -497,6 +1014,35 @@ func (_m *ControllerProvider) GetSatelliteConfig(ctx context.Context, node strin
 	}
 
 	return r0, r1
+}
+
+// ControllerProvider_GetSatelliteConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSatelliteConfig'
+type ControllerProvider_GetSatelliteConfig_Call struct {
+	*mock.Call
+}
+
+// GetSatelliteConfig is a helper method to define mock.On call
+//   - ctx context.Context
+//   - node string
+func (_e *ControllerProvider_Expecter) GetSatelliteConfig(ctx interface{}, node interface{}) *ControllerProvider_GetSatelliteConfig_Call {
+	return &ControllerProvider_GetSatelliteConfig_Call{Call: _e.mock.On("GetSatelliteConfig", ctx, node)}
+}
+
+func (_c *ControllerProvider_GetSatelliteConfig_Call) Run(run func(ctx context.Context, node string)) *ControllerProvider_GetSatelliteConfig_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_GetSatelliteConfig_Call) Return(_a0 client.SatelliteConfig, _a1 error) *ControllerProvider_GetSatelliteConfig_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ControllerProvider_GetSatelliteConfig_Call) RunAndReturn(run func(context.Context, string) (client.SatelliteConfig, error)) *ControllerProvider_GetSatelliteConfig_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetVersion provides a mock function with given fields: ctx, opts
@@ -534,6 +1080,42 @@ func (_m *ControllerProvider) GetVersion(ctx context.Context, opts ...*client.Li
 	return r0, r1
 }
 
+// ControllerProvider_GetVersion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetVersion'
+type ControllerProvider_GetVersion_Call struct {
+	*mock.Call
+}
+
+// GetVersion is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...*client.ListOpts
+func (_e *ControllerProvider_Expecter) GetVersion(ctx interface{}, opts ...interface{}) *ControllerProvider_GetVersion_Call {
+	return &ControllerProvider_GetVersion_Call{Call: _e.mock.On("GetVersion",
+		append([]interface{}{ctx}, opts...)...)}
+}
+
+func (_c *ControllerProvider_GetVersion_Call) Run(run func(ctx context.Context, opts ...*client.ListOpts)) *ControllerProvider_GetVersion_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]*client.ListOpts, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(*client.ListOpts)
+			}
+		}
+		run(args[0].(context.Context), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_GetVersion_Call) Return(_a0 client.ControllerVersion, _a1 error) *ControllerProvider_GetVersion_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ControllerProvider_GetVersion_Call) RunAndReturn(run func(context.Context, ...*client.ListOpts) (client.ControllerVersion, error)) *ControllerProvider_GetVersion_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Modify provides a mock function with given fields: ctx, props
 func (_m *ControllerProvider) Modify(ctx context.Context, props client.GenericPropsModify) error {
 	ret := _m.Called(ctx, props)
@@ -550,6 +1132,35 @@ func (_m *ControllerProvider) Modify(ctx context.Context, props client.GenericPr
 	}
 
 	return r0
+}
+
+// ControllerProvider_Modify_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Modify'
+type ControllerProvider_Modify_Call struct {
+	*mock.Call
+}
+
+// Modify is a helper method to define mock.On call
+//   - ctx context.Context
+//   - props client.GenericPropsModify
+func (_e *ControllerProvider_Expecter) Modify(ctx interface{}, props interface{}) *ControllerProvider_Modify_Call {
+	return &ControllerProvider_Modify_Call{Call: _e.mock.On("Modify", ctx, props)}
+}
+
+func (_c *ControllerProvider_Modify_Call) Run(run func(ctx context.Context, props client.GenericPropsModify)) *ControllerProvider_Modify_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(client.GenericPropsModify))
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_Modify_Call) Return(_a0 error) *ControllerProvider_Modify_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ControllerProvider_Modify_Call) RunAndReturn(run func(context.Context, client.GenericPropsModify) error) *ControllerProvider_Modify_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // ModifyExternalFile provides a mock function with given fields: ctx, name, file
@@ -570,6 +1181,36 @@ func (_m *ControllerProvider) ModifyExternalFile(ctx context.Context, name strin
 	return r0
 }
 
+// ControllerProvider_ModifyExternalFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ModifyExternalFile'
+type ControllerProvider_ModifyExternalFile_Call struct {
+	*mock.Call
+}
+
+// ModifyExternalFile is a helper method to define mock.On call
+//   - ctx context.Context
+//   - name string
+//   - file client.ExternalFile
+func (_e *ControllerProvider_Expecter) ModifyExternalFile(ctx interface{}, name interface{}, file interface{}) *ControllerProvider_ModifyExternalFile_Call {
+	return &ControllerProvider_ModifyExternalFile_Call{Call: _e.mock.On("ModifyExternalFile", ctx, name, file)}
+}
+
+func (_c *ControllerProvider_ModifyExternalFile_Call) Run(run func(ctx context.Context, name string, file client.ExternalFile)) *ControllerProvider_ModifyExternalFile_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.ExternalFile))
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_ModifyExternalFile_Call) Return(_a0 error) *ControllerProvider_ModifyExternalFile_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ControllerProvider_ModifyExternalFile_Call) RunAndReturn(run func(context.Context, string, client.ExternalFile) error) *ControllerProvider_ModifyExternalFile_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ModifySatelliteConfig provides a mock function with given fields: ctx, node, cfg
 func (_m *ControllerProvider) ModifySatelliteConfig(ctx context.Context, node string, cfg client.SatelliteConfig) error {
 	ret := _m.Called(ctx, node, cfg)
@@ -586,6 +1227,36 @@ func (_m *ControllerProvider) ModifySatelliteConfig(ctx context.Context, node st
 	}
 
 	return r0
+}
+
+// ControllerProvider_ModifySatelliteConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ModifySatelliteConfig'
+type ControllerProvider_ModifySatelliteConfig_Call struct {
+	*mock.Call
+}
+
+// ModifySatelliteConfig is a helper method to define mock.On call
+//   - ctx context.Context
+//   - node string
+//   - cfg client.SatelliteConfig
+func (_e *ControllerProvider_Expecter) ModifySatelliteConfig(ctx interface{}, node interface{}, cfg interface{}) *ControllerProvider_ModifySatelliteConfig_Call {
+	return &ControllerProvider_ModifySatelliteConfig_Call{Call: _e.mock.On("ModifySatelliteConfig", ctx, node, cfg)}
+}
+
+func (_c *ControllerProvider_ModifySatelliteConfig_Call) Run(run func(ctx context.Context, node string, cfg client.SatelliteConfig)) *ControllerProvider_ModifySatelliteConfig_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(client.SatelliteConfig))
+	})
+	return _c
+}
+
+func (_c *ControllerProvider_ModifySatelliteConfig_Call) Return(_a0 error) *ControllerProvider_ModifySatelliteConfig_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ControllerProvider_ModifySatelliteConfig_Call) RunAndReturn(run func(context.Context, string, client.SatelliteConfig) error) *ControllerProvider_ModifySatelliteConfig_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // NewControllerProvider creates a new instance of ControllerProvider. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
