@@ -18,7 +18,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 package client
 
-//go:generate go tool mockery --srcpkg github.com/LINBIT/golinstor/client --all
+//go:generate go tool mockery
 
 import (
 	"context"
