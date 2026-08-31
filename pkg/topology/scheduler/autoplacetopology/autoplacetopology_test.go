@@ -45,7 +45,7 @@ func TestScheduler_Create(t *testing.T) {
 
 		rm.EXPECT().GetAll(mock.Anything, volumeId).Return(nil, nil)
 		rm.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node1", "node2", "node3", "node4"}}}).Return(nil)
-		nm.EXPECT().GetAll(mock.Anything, &lapi.ListOpts{}).Return(nodes, nil)
+		nm.EXPECT().GetAll(mock.Anything, []*lapi.ListOpts{{}}).Return(nodes, nil)
 
 		err := sched.Create(ctx, volumeId, params, nil)
 		assert.NoError(t, err)
@@ -62,7 +62,7 @@ func TestScheduler_Create(t *testing.T) {
 		rm.EXPECT().GetAll(mock.Anything, volumeId).Return(nil, nil)
 		rm.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{AdditionalPlaceCount: 1, PlaceCount: 1, NodeNameList: []string{"node3"}}}).Return(nil)
 		rm.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node1", "node2", "node3", "node4"}}}).Return(nil)
-		nm.EXPECT().GetAll(mock.Anything, &lapi.ListOpts{}).Return(nodes, nil)
+		nm.EXPECT().GetAll(mock.Anything, []*lapi.ListOpts{{}}).Return(nodes, nil)
 
 		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
 			Preferred: []*csi.Topology{
@@ -86,7 +86,7 @@ func TestScheduler_Create(t *testing.T) {
 		rm.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{AdditionalPlaceCount: 1, PlaceCount: 1, NodeNameList: []string{"node3"}}}).Return(autoplaceError)
 		rm.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{AdditionalPlaceCount: 1, PlaceCount: 1, NodeNameList: []string{"node1"}}}).Return(nil)
 		rm.EXPECT().Autoplace(mock.Anything, volumeId, lapi.AutoPlaceRequest{SelectFilter: lapi.AutoSelectFilter{NodeNameList: []string{"node1", "node2", "node3", "node4"}}}).Return(nil)
-		nm.EXPECT().GetAll(mock.Anything, &lapi.ListOpts{}).Return(nodes, nil)
+		nm.EXPECT().GetAll(mock.Anything, []*lapi.ListOpts{{}}).Return(nodes, nil)
 
 		err := sched.Create(ctx, volumeId, params, &csi.TopologyRequirement{
 			Preferred: []*csi.Topology{
