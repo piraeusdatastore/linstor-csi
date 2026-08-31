@@ -18,6 +18,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 package client
 
+//go:generate rm -rf mocks
 //go:generate go tool mockery
 
 import (
