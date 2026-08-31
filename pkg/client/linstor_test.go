@@ -182,7 +182,7 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 
 	yes := true
 	opts := &lapi.ListOpts{Cached: &yes}
-	m.EXPECT().GetStoragePoolView(mock.Anything, opts).Return([]lapi.StoragePool{
+	m.EXPECT().GetStoragePoolView(mock.Anything, []*lapi.ListOpts{opts}).Return([]lapi.StoragePool{
 		{
 			StoragePoolName: "pool-a",
 			NodeName:        "node-1",
@@ -209,8 +209,9 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 		},
 	}, nil)
 
-	m.EXPECT().GetAll(mock.Anything, &lapi.ListOpts{Prop: []string{"Aux/topology.kubernetes.io/zone=zone-1"}}).Return([]lapi.Node{{Name: "node-1"}}, nil)
+	m.EXPECT().GetAll(mock.Anything, []*lapi.ListOpts{{Prop: []string{"Aux/topology.kubernetes.io/zone=zone-1"}}}).Return([]lapi.Node{{Name: "node-1"}}, nil)
 	m.EXPECT().GetAll(mock.Anything, mock.Anything).Return([]lapi.Node{{Name: "node-1"}, {Name: "node-2"}}, nil)
+	m.EXPECT().GetAll(mock.Anything).Return([]lapi.Node{{Name: "node-1"}, {Name: "node-2"}}, nil)
 
 	cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Nodes: &m}, PropertyNamespace: lapiconsts.NamespcAuxiliary}, log: logrus.WithField("test", t.Name())}
 
@@ -343,7 +344,7 @@ func TestLinstor_OnlySharedStoragePools(t *testing.T) {
 			// Without a pool selection the result is known without fetching the view.
 			if len(testcase.pools) > 0 {
 				yes := true
-				m.EXPECT().GetStoragePoolView(mock.Anything, &lapi.ListOpts{Cached: &yes}).Return(view, nil)
+				m.EXPECT().GetStoragePoolView(mock.Anything, []*lapi.ListOpts{{Cached: &yes}}).Return(view, nil)
 			}
 
 			cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Nodes: &m}}, log: logrus.WithField("test", t.Name())}
@@ -365,7 +366,7 @@ func TestLinstor_SortByPreferred(t *testing.T) {
 	t.Parallel()
 
 	m := &mocks.NodeProvider{}
-	m.EXPECT().GetAll(mock.Anything, &lapi.ListOpts{Prop: []string{"Aux/zone=1"}}).Return([]lapi.Node{{Name: "node-b"}, {Name: "node-c"}}, nil)
+	m.EXPECT().GetAll(mock.Anything, []*lapi.ListOpts{{Prop: []string{"Aux/zone=1"}}}).Return([]lapi.Node{{Name: "node-b"}, {Name: "node-c"}}, nil)
 
 	cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Nodes: m}, PropertyNamespace: lapiconsts.NamespcAuxiliary}, log: logrus.WithField("test", t.Name())}
 
