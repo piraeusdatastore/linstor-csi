@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The driver now requires LINSTOR 1.35 or newer and refuses to start against
   older controllers.
 
+### Fixed
+
+- The NFS server image installs NFS-Ganesha from Debian backports (9.14 instead
+  of 6.5). Ganesha 6.5 answers `GET_DIR_DELEGATION` with `OP_ILLEGAL` rather
+  than `NFS4ERR_NOTSUPP`, which fails the whole COMPOUND and reaches userspace
+  as `EREMOTEIO` on RWX volumes. Linux 6.19 and newer request directory
+  delegations by default, so every client on such a kernel was affected.
+
 ## [1.12.0] - 2026-07-24
 
 ### Added

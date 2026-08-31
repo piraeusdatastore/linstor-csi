@@ -28,13 +28,19 @@ RUN --mount=type=cache,target=/var/cache,sharing=private \
     wget https://packages.linbit.com/public/linbit-keyring/trixie/linbit-keyring.deb -O /var/cache/linbit-keyring.deb && \
     dpkg -i /var/cache/linbit-keyring.deb && \
     . /etc/os-release && \
-    echo "deb [signed-by=/etc/apt/trusted.gpg.d/linbit-keyring.gpg] http://packages.linbit.com/public $VERSION_CODENAME misc" > /etc/apt/sources.list.d/linbit.list
+    echo "deb [signed-by=/etc/apt/trusted.gpg.d/linbit-keyring.gpg] http://packages.linbit.com/public $VERSION_CODENAME misc" > /etc/apt/sources.list.d/linbit.list && \
+    echo "deb http://deb.debian.org/debian $VERSION_CODENAME-backports main" > /etc/apt/sources.list.d/backports.list
 
+# Ganesha is pulled from backports: 6.5 in trixie answers GET_DIR_DELEGATION with
+# OP_ILLEGAL, failing the COMPOUND and surfacing as EREMOTEIO on clients that ask
+# for a directory delegation (Linux 6.19+ does by default).
 RUN --mount=type=cache,target=/var/cache,sharing=private \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=private \
     --mount=type=tmpfs,target=/var/log \
+    . /etc/os-release && \
     apt-get update && \
-    apt-get install -y --no-install-recommends drbd-reactor nfs-ganesha nfs-ganesha-vfs systemd psmisc procps e2fsprogs xfsprogs && \
+    apt-get install -y --no-install-recommends drbd-reactor systemd psmisc procps e2fsprogs xfsprogs && \
+    apt-get install -y --no-install-recommends -t "$VERSION_CODENAME-backports" nfs-ganesha nfs-ganesha-vfs && \
     sed -e 's/usage-count yes;/usage-count no;/' -i /etc/drbd.d/global_common.conf
 
 COPY --from=builder --link /nfs-helper /usr/bin/nfs-helper
