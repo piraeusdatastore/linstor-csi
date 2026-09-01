@@ -993,10 +993,10 @@ func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Valida
 func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
 	volumes, err := d.linstorClient.ListAll(ctx)
 	if err != nil {
-		return &csi.ListVolumesResponse{}, status.Errorf(codes.Aborted, "ListVolumes failed: %v", err)
+		return &csi.ListVolumesResponse{}, status.Errorf(codes.Internal, "ListVolumes failed: %v", err)
 	}
 
-	start, err := parseAsInt(req.GetStartingToken())
+	start, err := parseStartingToken(req.GetStartingToken())
 	if err != nil {
 		return nil, status.Errorf(codes.Aborted, "ListVolumes failed for: %v", err)
 	}
@@ -1050,7 +1050,7 @@ func (d *Driver) ControllerListVolumeHealth(ctx context.Context, req *csi.Contro
 		return vol.HealthIssue == nil
 	})
 
-	start, err := parseAsInt(req.GetStartingToken())
+	start, err := parseStartingToken(req.GetStartingToken())
 	if err != nil {
 		return nil, status.Errorf(codes.Aborted, "ControllerListVolumeHealth failed: %v", err)
 	}
@@ -1306,7 +1306,8 @@ func (d *Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequ
 // ListSnapshots https://github.com/container-storage-interface/spec/blob/v1.13.0/spec.md#listsnapshots
 func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
 	limit := int(req.GetMaxEntries())
-	start, err := parseAsInt(req.GetStartingToken())
+
+	start, err := parseStartingToken(req.GetStartingToken())
 	if err != nil {
 		return nil, status.Errorf(codes.Aborted, "Invalid starting token: %v", err)
 	}
@@ -1951,7 +1952,7 @@ func missingAttr(methodCall, volumeID, attr string) error {
 		"%s failed for %s: it requires a %s and none was provided", methodCall, volumeID, attr)
 }
 
-func parseAsInt(s string) (int, error) {
+func parseStartingToken(s string) (int, error) {
 	if s == "" {
 		return 0, nil
 	}
@@ -1960,6 +1961,11 @@ func parseAsInt(s string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse starting token: %v", err)
 	}
+
+	if i < 0 {
+		return 0, fmt.Errorf("starting token cannot be negative")
+	}
+
 	return int(i), nil
 }
 
