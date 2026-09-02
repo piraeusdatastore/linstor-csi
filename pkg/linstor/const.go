@@ -43,10 +43,6 @@ const (
 	// ConsistencyGroupLabel is the PVC label whose value groups a namespace's volumes into one LINSTOR resource.
 	ConsistencyGroupLabel = DriverName + "/consistency-group"
 
-	// CreatedForTemporaryDisklessAttach marks a resource as temporary, i.e. it should be removed after it is no longer
-	// needed.
-	CreatedForTemporaryDisklessAttach = "temporary-diskless-attach"
-
 	// ParameterNamespace is the preferred namespace when setting parameters in
 	ParameterNamespace = DriverName
 

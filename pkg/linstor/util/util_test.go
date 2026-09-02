@@ -29,54 +29,6 @@ import (
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
 )
 
-func TestContainsAll(t *testing.T) {
-	tableTests := []struct {
-		data     []string
-		members  []string
-		expected bool
-	}{
-		{
-			data:     []string{"rck23"},
-			members:  []string{"rck23"},
-			expected: true,
-		},
-		{
-			data:     []string{"rck23"},
-			members:  []string{"rck23", "test", "bleh"},
-			expected: false,
-		},
-		{
-			data:     []string{"rck23", "test", "bleh"},
-			members:  []string{"rck24", "quizz", "meh"},
-			expected: false,
-		},
-		{
-			data:     []string{"rck23"},
-			members:  []string{},
-			expected: false,
-		},
-		{
-			data:     []string{"rck23", "test", "bleh"},
-			members:  []string{"bleh"},
-			expected: true,
-		},
-		{
-			data:     []string{"rck23", "test", "bleh"},
-			members:  []string{"rck23", "test", "bleh"},
-			expected: true,
-		},
-	}
-
-	for _, tt := range tableTests {
-		actual := containsAll(tt.data, tt.members...)
-
-		if actual != tt.expected {
-			t.Fatalf("Expected that containsAll('%+v', '%v') results in\n\t%v\nbut got\n\t%v\n",
-				tt.data, tt.members, tt.expected, actual)
-		}
-	}
-}
-
 func TestContainsAny(t *testing.T) {
 	tableTests := []struct {
 		data     []string
@@ -262,56 +214,6 @@ func TestDeployedDiskfully(t *testing.T) {
 
 		if tt.expected != actual {
 			t.Fatalf("Expected that DeployedDiskfully('%+v') results in\n\t%v\nbut got\n\t%v", tt.res, tt.expected, actual)
-		}
-	}
-}
-
-func TestDeployedDisklessly(t *testing.T) {
-	tableTests := []struct {
-		res      lapi.Resource
-		expected bool
-	}{
-		{
-			res:      lapi.Resource{},
-			expected: false,
-		},
-		{
-			res: lapi.Resource{
-				Name:     "foo0",
-				NodeName: "bar",
-			},
-			expected: false, // No volumes.
-		},
-		{
-			res: lapi.Resource{
-				Name:     "foo1",
-				NodeName: "bar",
-			},
-			expected: false,
-		},
-		{
-			res: lapi.Resource{
-				Name:     "foo2",
-				NodeName: "bar",
-				Flags:    []string{apiconst.FlagDiskless},
-			},
-			expected: true,
-		},
-		{
-			res: lapi.Resource{
-				Name:     "foo3",
-				NodeName: "bar",
-				Flags:    []string{apiconst.FlagDiskless, apiconst.FlagDelete},
-			},
-			expected: false,
-		},
-	}
-
-	for _, tt := range tableTests {
-		actual := DeployedDisklessly(tt.res)
-
-		if tt.expected != actual {
-			t.Fatalf("Expected that DeployedDisklessly('%+v') results in\n\t%v\nbut got\n\t%v", tt.res, tt.expected, actual)
 		}
 	}
 }

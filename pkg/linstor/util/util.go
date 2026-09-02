@@ -51,13 +51,6 @@ func deployed(res lapi.Resource) bool {
 	return res.Name != "" && res.NodeName != ""
 }
 
-// DeployedDisklessly returns true if the resource has volumes that are attached
-// over the network and the resource state is healthy.
-func DeployedDisklessly(res lapi.Resource) bool {
-	return deployed(res) && healthy(res) &&
-		containsAll(res.Flags, apiconst.FlagDiskless)
-}
-
 func healthy(res lapi.Resource) bool {
 	return doesNotcontainAny(res.Flags, apiconst.FlagDelete, apiconst.FlagFailedDeployment, apiconst.FlagFailedDisconnect)
 }
@@ -79,24 +72,6 @@ func containsAny(list []string, candidates ...string) bool {
 
 func doesNotcontainAny(list []string, candidates ...string) bool {
 	return !containsAny(list, candidates...)
-}
-
-func containsAll(list []string, candidates ...string) bool {
-	if len(candidates) == 0 {
-		return false
-	}
-
-nextCandidate:
-	for _, c := range candidates {
-		for _, e := range list {
-			if e == c {
-				continue nextCandidate
-			}
-		}
-		// Made it through all data with no match.
-		return false
-	}
-	return true
 }
 
 func GetDrbdLayer(layer *lapi.ResourceLayer) *lapi.DrbdResource {

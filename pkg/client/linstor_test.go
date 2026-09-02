@@ -102,51 +102,6 @@ func TestValidResourceName(t *testing.T) {
 	}
 }
 
-func TestLinstorifyResourceName(t *testing.T) {
-	unitTests := []struct {
-		in, out string
-		errExp  bool
-	}{
-		{
-			in:     "rck23",
-			out:    "rck23",
-			errExp: false,
-		}, {
-			in:     "hello🐱kitty",
-			out:    "hello_kitty",
-			errExp: false,
-		}, {
-			in:     "1be00fd3-d435-436f-be20-561418c62762",
-			out:    "LS_1be00fd3-d435-436f-be20-561418c62762",
-			errExp: false,
-		}, {
-			in:     "b1e00fd3-d435-436f-be20-561418c62762",
-			out:    "b1e00fd3-d435-436f-be20-561418c62762",
-			errExp: false,
-		}, {
-			in:     "abcdefghijklmnopqrstuvwyzABCDEFGHIJKLMNOPQRSTUVWXYZ_______", // 49
-			out:    "should fail",
-			errExp: true,
-		},
-	}
-
-	for _, test := range unitTests {
-		resName, err := linstorifyResourceName(test.in)
-		switch {
-		case test.errExp && err == nil:
-			t.Fatalf("Expected that rest '%s' returns an error\n", test.in)
-		case !test.errExp && err != nil:
-			t.Fatalf("Expected that rest '%s' does not return an error\n", test.in)
-		case test.errExp && err != nil:
-			continue
-		}
-
-		if resName != test.out {
-			t.Fatalf("Expected that input '%s' transforms to '%s', but got '%s'\n", test.in, test.out, resName)
-		}
-	}
-}
-
 const ExampleResourceID = "rsc1"
 
 func TestLinstor_Attach(t *testing.T) {
