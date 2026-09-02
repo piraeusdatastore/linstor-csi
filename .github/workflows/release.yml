@@ -1,17 +1,55 @@
-name: create release binary
+name: release
 on:
+  push:
+    tags:
+      - v*
   release:
-    types: [created]
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build binaries for
+        required: true
+        type: string
+
 jobs:
-  artifacts:
+  # Pushing a tag creates the draft release with the deploy manifest and the
+  # matching CHANGELOG.md section as body. The draft is reviewed and published
+  # by hand.
+  draft-release:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build release resources
+        run: make manifest.yaml changes.md VERSION=${{ github.ref_name }}
+      - uses: softprops/action-gh-release@v3
+        with:
+          body_path: changes.md
+          draft: true
+          files: manifest.yaml
+
+  # Draft releases never trigger the "created" activity type, so the binaries
+  # are built once the draft is published. workflow_dispatch attaches binaries
+  # to an already published release.
+  binaries:
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     strategy:
       matrix:
         goarch:
           - amd64
           - arm64
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.TAG }}
       - name: compile and release
         uses: wangyoucao577/go-release-action@v1
         with:
@@ -20,9 +58,10 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           goarch: ${{ matrix.goarch }}
           goos: linux
+          release_tag: ${{ env.TAG }}
           ldflags: >
             -extldflags -static
-            -X "github.com/piraeusdatastore/linstor-csi/pkg/driver.Version=${{ github.ref }}"
+            -X "github.com/piraeusdatastore/linstor-csi/pkg/driver.Version=${{ env.TAG }}"
             -w
             -s
           md5sum: "FALSE"

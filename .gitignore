@@ -1,3 +1,5 @@
 /linstor-csi
 /csi-sanity
 /test/cg-sanity.test
+/manifest.yaml
+/changes.md

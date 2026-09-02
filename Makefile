@@ -42,6 +42,16 @@ linstor-csi:
 csi-sanity:
 	go build -o csi-sanity github.com/kubernetes-csi/csi-test/v5/cmd/csi-sanity
 
+# Release artifacts, attached to the draft GitHub release by
+# .github/workflows/release.yml.
+.PHONY: manifest.yaml
+manifest.yaml:
+	kustomize build examples/k8s/deploy > $@
+
+.PHONY: changes.md
+changes.md:
+	tools/extract-changelog.sh $(VERSION) > $@
+
 # CLUSTER_UP / CLUSTER_DOWN are the shared cluster fixture for the sanity suites: a loopback LVM-thin pool
 # plus a real LINSTOR controller+satellite (piraeus-server containers) with a node and storage pool. They are
 # kept as variables (not recursive make targets) so the suites can run them inline under a shell EXIT trap
