@@ -2876,31 +2876,6 @@ func validResourceName(resName string) error {
 	return nil
 }
 
-// linstorifyResourceName tries to generate a valid LINSTOR name if the input currently is not.
-// If the input is already valid, it just returns this name.
-// This tries to preserve the original meaning as close as possible, but does not try extra hard.
-// Do *not* expect this function to be injective.
-// Do *not* expect this function to be stable. This means you need to save the output, the output of the function might change without notice.
-func linstorifyResourceName(name string) (string, error) {
-	if err := validResourceName(name); err == nil {
-		return name, nil
-	}
-
-	re := regexp.MustCompile(`[^A-Za-z0-9\-_]`)
-	newName := re.ReplaceAllLiteralString(name, "_")
-	if err := validResourceName(newName); err == nil {
-		return newName, err
-	}
-
-	// fulfill at least the minimal requirement
-	newName = "LS_" + newName
-	if err := validResourceName(newName); err == nil {
-		return newName, nil
-	}
-
-	return "", fmt.Errorf("could not linstorify name (%s)", name)
-}
-
 func nil404(e error) error {
 	if errors.Is(e, lapi.NotFoundError) {
 		return nil

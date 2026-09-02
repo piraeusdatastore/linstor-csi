@@ -282,21 +282,6 @@ func pickStoragePoolTopo(ctx context.Context, selectedNode string, nClient NodeL
 	return pickStoragePoolFromNodes(ctx, nClient, nodes)
 }
 
-// pick from All Storage Nodes
-func pickStoragePool(ctx context.Context, nClient NodeLinstorClient, clientset kubernetes.Interface) (sp *BalanceDecision, err error) {
-	nodes, err := getStorageNodes(ctx, clientset)
-	if err != nil {
-		return nil, err
-	}
-
-	nodeList := []string{}
-	for _, node := range nodes.Items {
-		nodeList = append(nodeList, node.Name)
-	}
-
-	return pickStoragePoolFromNodes(ctx, nClient, nodeList)
-}
-
 type BalanceScheduler struct {
 	log *logrus.Entry
 	*lc.HighLevelClient

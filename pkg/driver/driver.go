@@ -127,14 +127,6 @@ func NodeID(nodeID string) func(*Driver) error {
 	}
 }
 
-// Name configures the driver name.
-func Name(name string) func(*Driver) error {
-	return func(d *Driver) error {
-		d.name = name
-		return nil
-	}
-}
-
 func TopologyPrefix(prefix string) func(*Driver) error {
 	return func(d *Driver) error {
 		d.topologyPrefix = prefix
@@ -147,14 +139,6 @@ func TopologyPrefix(prefix string) func(*Driver) error {
 func LogOut(out io.Writer) func(*Driver) error {
 	return func(d *Driver) error {
 		d.log.Logger.SetOutput(out)
-		return nil
-	}
-}
-
-// LogFmt sets the format of the log outpout via the provided logrus.Formatter.
-func LogFmt(fmt logrus.Formatter) func(*Driver) error {
-	return func(d *Driver) error {
-		d.log.Logger.SetFormatter(fmt)
 		return nil
 	}
 }
