@@ -29,10 +29,12 @@ import (
 
 	lapiconsts "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
+	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/client/mocks"
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
@@ -315,6 +317,50 @@ func TestLinstor_OnlySharedStoragePools(t *testing.T) {
 
 			assert.Equal(t, testcase.expectedShared, shared)
 			m.AssertExpectations(t)
+		})
+	}
+}
+
+func TestLinstor_VolumeInfoIsStorageOnly(t *testing.T) {
+	t.Parallel()
+
+	testcases := []struct {
+		name          string
+		layers        []lapi.ResourceDefinitionLayer
+		isStorageOnly bool
+	}{
+		{
+			name:          "storage only",
+			layers:        []lapi.ResourceDefinitionLayer{{Type: devicelayerkind.Storage}},
+			isStorageOnly: true,
+		},
+		{
+			name:   "drbd over storage",
+			layers: []lapi.ResourceDefinitionLayer{{Type: devicelayerkind.Drbd}, {Type: devicelayerkind.Storage}},
+		},
+		{
+			// Intentionally not exempt: LUKS/cache on top is not safe on two nodes at once.
+			name:   "luks over storage",
+			layers: []lapi.ResourceDefinitionLayer{{Type: devicelayerkind.Luks}, {Type: devicelayerkind.Storage}},
+		},
+		{
+			name: "unknown layer stack",
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			t.Parallel()
+
+			vnr := int32(0)
+			cl := Linstor{}
+
+			info := cl.volumeInfoFromResourceDefinition(volume.ID{ResourceName: ExampleResourceID}, lapi.ResourceDefinitionWithVolumeDefinition{
+				ResourceDefinition: lapi.ResourceDefinition{Name: ExampleResourceID, LayerData: testcase.layers},
+				VolumeDefinitions:  []lapi.VolumeDefinition{{VolumeNumber: &vnr, SizeKib: 1024}},
+			})
+			require.NotNil(t, info)
+			assert.Equal(t, testcase.isStorageOnly, info.IsStorageOnly)
 		})
 	}
 }

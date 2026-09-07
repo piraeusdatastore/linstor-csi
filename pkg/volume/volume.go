@@ -41,6 +41,8 @@ type Info struct {
 	FsType        string
 	Properties    map[string]string
 	UseQuorum     bool
+	// IsStorageOnly marks volumes whose layer stack is just the storage layer, i.e. no DRBD replication.
+	IsStorageOnly bool
 }
 
 func (i *Info) Size() int64 {

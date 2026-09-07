@@ -41,6 +41,7 @@ import (
 	lapiconsts "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/LINBIT/golinstor/clonestatus"
+	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
@@ -310,6 +311,8 @@ func (s *Linstor) volumeInfoFromResourceDefinition(id volume.ID, resDef lapi.Res
 		return nil
 	}
 
+	isStorageOnly := len(resDef.LayerData) == 1 && resDef.LayerData[0].Type == devicelayerkind.Storage
+
 	return &volume.Info{
 		ID:            id,
 		DeviceBytes:   deviceBytes,
@@ -317,6 +320,7 @@ func (s *Linstor) volumeInfoFromResourceDefinition(id volume.ID, resDef lapi.Res
 		FsType:        fsType,
 		Properties:    props,
 		UseQuorum:     resDef.Props["DrbdOptions/Resource/quorum"] != "off",
+		IsStorageOnly: isStorageOnly,
 	}
 }
 
