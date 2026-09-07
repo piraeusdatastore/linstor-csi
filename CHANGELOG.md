@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- RWX block volumes with a bare storage layer (shared storage) skip the KubeVirt
+  VM ownership validation; coordinating concurrent access is left to the users.
+
 ## [1.13.0] - 2026-09-02
 
 ### Added

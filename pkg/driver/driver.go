@@ -197,7 +197,8 @@ func ConfigureRWX(cl kubernetes.Interface, namespace, reactorConfigMap string) f
 
 // EnableRWXBlockValidation enables the KubeVirt VM ownership validation for RWX block volumes.
 // When enabled, the driver checks that multiple pods using the same RWX block volume belong to
-// the same VM, guarding against misuse of allow-two-primaries.
+// the same VM, guarding against misuse of allow-two-primaries. Storage-only volumes (shared storage
+// without DRBD) are exempt.
 func EnableRWXBlockValidation(validator *utils.RWXBlockValidator) func(*Driver) error {
 	return func(d *Driver) error {
 		d.rwxBlockValidator = validator
@@ -849,8 +850,9 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	// ReadWriteMany block volume
 	rwxBlock := req.VolumeCapability.AccessMode.GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER && req.VolumeCapability.GetBlock() != nil
 
-	// Validate RWX block attachment to prevent misuse of allow-two-primaries
-	if rwxBlock && d.rwxBlockValidator != nil {
+	// Only DRBD's allow-two-primaries needs guarding, and a bare LV on shared storage has none: users coordinate
+	// access themselves. LUKS or cache layers on top are unsafe on two nodes at once, so such stacks stay validated.
+	if rwxBlock && !existingVolume.IsStorageOnly && d.rwxBlockValidator != nil {
 		if _, err := d.rwxBlockValidator.ValidateAttachment(ctx, req.GetVolumeId()); err != nil {
 			return nil, status.Errorf(codes.FailedPrecondition,
 				"ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err)
