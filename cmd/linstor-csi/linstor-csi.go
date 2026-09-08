@@ -61,7 +61,7 @@ func main() {
 		enableRWX                 = flag.Bool("enable-rwx", false, "Enable RWX support via NFS (requires running in Kubernetes).")
 		namespace                 = flag.String("nfs-service-namespace", "", "The namespace the NFS service is running in.")
 		reactorConfigMapName      = flag.String("nfs-reactor-config-map-name", "linstor-csi-nfs-reactor-config", "Name of the config map used to store promoter configuration")
-		disableRWXBlockValidation = flag.Bool("disable-rwx-block-validation", false, "Disable KubeVirt VM ownership validation for RWX block volumes. Storage-only volumes on shared storage are never validated; coordinating concurrent access is left to the users.")
+		disableRWXBlockValidation = flag.Bool("disable-rwx-block-validation", false, "Disable KubeVirt VM ownership validation for RWX block volumes. Volumes on shared storage without DRBD are never validated; coordinating concurrent access is left to the users.")
 		enableConsistencyGroups   = flag.Bool("enable-consistency-groups", false, "Place PVCs sharing a linstor.csi.linbit.com/consistency-group label as separate volumes of one LINSTOR resource (requires running in Kubernetes).")
 		enableSnapshotClasses     = flag.Bool("enable-volume-snapshot-classes", true, "Enable VolumeSnapshotClass handling: reconcile VolumeSnapshotClasses and read snapshot-class parameters (requires running in Kubernetes).")
 	)

@@ -321,27 +321,33 @@ func TestLinstor_OnlySharedStoragePools(t *testing.T) {
 	}
 }
 
-func TestLinstor_VolumeInfoIsStorageOnly(t *testing.T) {
+func TestLinstor_VolumeInfoSharedStorageSafe(t *testing.T) {
 	t.Parallel()
 
 	testcases := []struct {
-		name          string
-		layers        []lapi.ResourceDefinitionLayer
-		isStorageOnly bool
+		name   string
+		layers []lapi.ResourceDefinitionLayer
+		safe   bool
 	}{
 		{
-			name:          "storage only",
-			layers:        []lapi.ResourceDefinitionLayer{{Type: devicelayerkind.Storage}},
-			isStorageOnly: true,
+			name:   "storage only",
+			layers: []lapi.ResourceDefinitionLayer{{Type: devicelayerkind.Storage}},
+			safe:   true,
+		},
+		{
+			// dm-crypt is a stateless per-sector transform, as safe as the bare LV.
+			name:   "luks over storage",
+			layers: []lapi.ResourceDefinitionLayer{{Type: devicelayerkind.Luks}, {Type: devicelayerkind.Storage}},
+			safe:   true,
 		},
 		{
 			name:   "drbd over storage",
 			layers: []lapi.ResourceDefinitionLayer{{Type: devicelayerkind.Drbd}, {Type: devicelayerkind.Storage}},
 		},
 		{
-			// Intentionally not exempt: LUKS/cache on top is not safe on two nodes at once.
-			name:   "luks over storage",
-			layers: []lapi.ResourceDefinitionLayer{{Type: devicelayerkind.Luks}, {Type: devicelayerkind.Storage}},
+			// A cache keeps dirty or stale blocks on the local cache device.
+			name:   "cache over storage",
+			layers: []lapi.ResourceDefinitionLayer{{Type: devicelayerkind.Cache}, {Type: devicelayerkind.Storage}},
 		},
 		{
 			name: "unknown layer stack",
@@ -360,7 +366,7 @@ func TestLinstor_VolumeInfoIsStorageOnly(t *testing.T) {
 				VolumeDefinitions:  []lapi.VolumeDefinition{{VolumeNumber: &vnr, SizeKib: 1024}},
 			})
 			require.NotNil(t, info)
-			assert.Equal(t, testcase.isStorageOnly, info.IsStorageOnly)
+			assert.Equal(t, testcase.safe, info.SharedStorageSafe)
 		})
 	}
 }

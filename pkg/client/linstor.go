@@ -311,16 +311,19 @@ func (s *Linstor) volumeInfoFromResourceDefinition(id volume.ID, resDef lapi.Res
 		return nil
 	}
 
-	isStorageOnly := len(resDef.LayerData) == 1 && resDef.LayerData[0].Type == devicelayerkind.Storage
+	layers := make([]devicelayerkind.DeviceLayerKind, 0, len(resDef.LayerData))
+	for i := range resDef.LayerData {
+		layers = append(layers, resDef.LayerData[i].Type)
+	}
 
 	return &volume.Info{
-		ID:            id,
-		DeviceBytes:   deviceBytes,
-		ResourceGroup: resDef.ResourceGroupName,
-		FsType:        fsType,
-		Properties:    props,
-		UseQuorum:     resDef.Props["DrbdOptions/Resource/quorum"] != "off",
-		IsStorageOnly: isStorageOnly,
+		ID:                id,
+		DeviceBytes:       deviceBytes,
+		ResourceGroup:     resDef.ResourceGroupName,
+		FsType:            fsType,
+		Properties:        props,
+		UseQuorum:         resDef.Props["DrbdOptions/Resource/quorum"] != "off",
+		SharedStorageSafe: volume.IsSharedStorageSafe(layers),
 	}
 }
 
