@@ -440,6 +440,20 @@ func ParseXReplicasOnDifferent(prefix, s string) (map[string]int, error) {
 	return expanded, nil
 }
 
+// SharedStorageSafeLayerStacks keep no node-local state, so a volume on shared storage may be active on several
+// nodes at once. Caches hold dirty or stale blocks on the local cache device; DRBD replicates instead.
+var SharedStorageSafeLayerStacks = [][]devicelayerkind.DeviceLayerKind{
+	{devicelayerkind.Storage},
+	{devicelayerkind.Luks, devicelayerkind.Storage},
+}
+
+// IsSharedStorageSafe reports whether layers is one of SharedStorageSafeLayerStacks.
+func IsSharedStorageSafe(layers []devicelayerkind.DeviceLayerKind) bool {
+	return slices.ContainsFunc(SharedStorageSafeLayerStacks, func(safe []devicelayerkind.DeviceLayerKind) bool {
+		return slices.Equal(safe, layers)
+	})
+}
+
 // ParseLayerList returns a slice of LayerType from a string of space-separated layers.
 func ParseLayerList(s string) ([]devicelayerkind.DeviceLayerKind, error) {
 	list := strings.Split(s, " ")

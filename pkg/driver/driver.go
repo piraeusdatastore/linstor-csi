@@ -197,8 +197,8 @@ func ConfigureRWX(cl kubernetes.Interface, namespace, reactorConfigMap string) f
 
 // EnableRWXBlockValidation enables the KubeVirt VM ownership validation for RWX block volumes.
 // When enabled, the driver checks that multiple pods using the same RWX block volume belong to
-// the same VM, guarding against misuse of allow-two-primaries. Storage-only volumes (shared storage
-// without DRBD) are exempt.
+// the same VM, guarding against misuse of allow-two-primaries. Volumes on shared storage without DRBD
+// are exempt.
 func EnableRWXBlockValidation(validator *utils.RWXBlockValidator) func(*Driver) error {
 	return func(d *Driver) error {
 		d.rwxBlockValidator = validator
@@ -526,9 +526,13 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			rwxBlock = true
 		}
 
-		// RWX block volumes also work without DRBD when all storage pools are backed by
-		// shared storage: LINSTOR activates the resource on the nodes that need it.
+		// Without DRBD, LINSTOR activates the resource on every node that needs it, so RWX block needs shared
+		// storage and a layer stack without node-local state (a cache would serve stale blocks).
 		if rwxBlock {
+			if !volume.IsSharedStorageSafe(params.LayerList) {
+				return nil, status.Errorf(codes.InvalidArgument, "ReadWriteMany block volumes without DRBD require one of the layer lists %v on shared storage", volume.SharedStorageSafeLayerStacks)
+			}
+
 			shared, err := d.linstorClient.OnlySharedStoragePools(ctx, params.StoragePools)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", req.GetName(), err)
@@ -850,9 +854,9 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	// ReadWriteMany block volume
 	rwxBlock := req.VolumeCapability.AccessMode.GetMode() == csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER && req.VolumeCapability.GetBlock() != nil
 
-	// Only DRBD's allow-two-primaries needs guarding, and a bare LV on shared storage has none: users coordinate
-	// access themselves. LUKS or cache layers on top are unsafe on two nodes at once, so such stacks stay validated.
-	if rwxBlock && !existingVolume.IsStorageOnly && d.rwxBlockValidator != nil {
+	// Only DRBD's allow-two-primaries needs guarding; a shared-storage-safe stack has none, and users coordinate
+	// access themselves. Everything else, including cache stacks provisioned before this check, stays validated.
+	if rwxBlock && !existingVolume.SharedStorageSafe && d.rwxBlockValidator != nil {
 		if _, err := d.rwxBlockValidator.ValidateAttachment(ctx, req.GetVolumeId()); err != nil {
 			return nil, status.Errorf(codes.FailedPrecondition,
 				"ControllerPublishVolume failed for %s: %v", req.GetVolumeId(), err)

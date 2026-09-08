@@ -8,8 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- RWX block volumes with a bare storage layer (shared storage) skip the KubeVirt
-  VM ownership validation; coordinating concurrent access is left to the users.
+- RWX block volumes on shared storage without DRBD skip the KubeVirt VM
+  ownership validation; coordinating concurrent access is left to the users.
+
+### Fixed
+
+- RWX block volumes without DRBD are only provisioned with the "storage" or
+  "luks storage" layer list; cache layers keep node-local data.
 
 ## [1.13.0] - 2026-09-02
 
