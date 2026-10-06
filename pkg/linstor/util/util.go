@@ -20,6 +20,7 @@ package util
 
 import (
 	"iter"
+	"strings"
 
 	apiconst "github.com/LINBIT/golinstor"
 	lapi "github.com/LINBIT/golinstor/client"
@@ -117,4 +118,19 @@ func ConsistencyGroupVolumeNumberFor(volumeName string, vds ...lapi.VolumeDefini
 			}
 		}
 	}
+}
+
+// SpaceName returns the name of the space a storage pool allocates from. LINSTOR names the space of
+// non-shared pools "<node>;<pool>", shared spaces never contain ";".
+func SpaceName(sp *lapi.StoragePool) string {
+	if sp.FreeSpaceMgrName == "" {
+		return sp.NodeName + ";" + sp.StoragePoolName
+	}
+
+	return sp.FreeSpaceMgrName
+}
+
+// IsSharedSpace reports whether the storage pool's space is shared with other nodes.
+func IsSharedSpace(sp *lapi.StoragePool) bool {
+	return !strings.Contains(SpaceName(sp), ";")
 }

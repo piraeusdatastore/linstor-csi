@@ -923,69 +923,95 @@ func (s *Linstor) CapacityBytes(ctx context.Context, storagePools []string, over
 
 	requestedNodes = filteredNodes
 
-	var totalKiB int64
-	for _, sp := range pools {
+	usable := func(sp *lapi.StoragePool) bool {
 		log := log.WithField("pool-to-check", sp.StoragePoolName).WithField("node", sp.NodeName)
 
-		if !slices.Contains(requestedNodes, sp.NodeName) {
+		switch {
+		case !slices.Contains(requestedNodes, sp.NodeName):
 			log.Trace("not an allowed node")
-			continue
-		}
-
-		if len(requestedStoragePools) > 0 && !slices.Contains(requestedStoragePools, sp.StoragePoolName) {
+		case len(requestedStoragePools) > 0 && !slices.Contains(requestedStoragePools, sp.StoragePoolName):
 			log.Trace("not an allowed storage pool")
-			continue
-		}
-
-		if sp.ProviderKind == lapi.DISKLESS {
+		case sp.ProviderKind == lapi.DISKLESS:
 			log.Trace("not adding diskless pool")
+		case len(storagePools) > 0 && !slices.Contains(storagePools, sp.StoragePoolName):
+			log.Trace("not a requested storage pool")
+		default:
+			return true
+		}
+
+		return false
+	}
+
+	// A shared space is visible on several nodes but only has its free space once.
+	spaces := make(map[string][]*lapi.StoragePool)
+
+	for i := range pools {
+		space := util.SpaceName(&pools[i])
+		spaces[space] = append(spaces[space], &pools[i])
+	}
+
+	totalKiB := int64(0)
+
+	for _, space := range slices.Sorted(maps.Keys(spaces)) {
+		spacePools := spaces[space]
+		log := log.WithField("space", space)
+
+		idx := slices.IndexFunc(spacePools, usable)
+		if idx < 0 {
 			continue
 		}
 
-		if len(storagePools) > 0 && !slices.Contains(storagePools, sp.StoragePoolName) {
-			log.Trace("not a requested storage pool")
-			continue
-		}
+		// Rows of other nodes may lack capacity data, e.g. when their satellite is offline.
+		rep := spacePools[idx]
 
 		overProvision := overProvision
-
-		// LINSTOR itself now also has over-provision knobs built in: use those if they are available
-		// and more restrictive then what is configured now. Check the specific more specific property
-		// first, then the more generic fallback property.
-		if val, ok := sp.Props[lapiconsts.KeyStorPoolMaxTotalCapacityOversubscriptionRatio]; ok {
-			f, err := strconv.ParseFloat(val, 64)
-			if err == nil && (overProvision == nil || *overProvision > f) {
-				overProvision = &f
-			}
-		} else if val, ok := sp.Props[lapiconsts.KeyStorPoolMaxOversubscriptionRatio]; ok {
-			f, err := strconv.ParseFloat(val, 64)
-			if err == nil && (overProvision == nil || *overProvision > f) {
-				overProvision = &f
-			}
+		for _, sp := range spacePools {
+			overProvision = restrictOverProvision(sp, overProvision)
 		}
 
 		if overProvision != nil {
-			virtualCapacity := float64(sp.TotalCapacity) * *overProvision
+			virtualCapacity := float64(rep.TotalCapacity) * *overProvision
 
-			reservedCapacity, err := s.client.ReservedCapacity(ctx, sp.NodeName, sp.StoragePoolName)
+			reservedCapacity, err := s.client.ReservedCapacity(ctx, spacePools...)
 			if err != nil {
 				return 0, fmt.Errorf("failed to fetch reserved capacity: %w", err)
 			}
 
 			if reservedCapacity > int64(virtualCapacity) {
-				log.Trace("ignoring pool with exhausted capacity")
+				log.Trace("ignoring space with exhausted capacity")
 				continue
 			}
 
-			log.WithField("add-capacity", int64(virtualCapacity)-reservedCapacity).Trace("adding storage pool capacity")
+			log.WithField("add-capacity", int64(virtualCapacity)-reservedCapacity).Trace("adding space capacity")
 			totalKiB += int64(virtualCapacity) - reservedCapacity
 		} else {
-			log.WithField("add-capacity", sp.FreeCapacity).Trace("adding storage pool capacity")
-			totalKiB += sp.FreeCapacity
+			log.WithField("add-capacity", rep.FreeCapacity).Trace("adding space capacity")
+			totalKiB += rep.FreeCapacity
 		}
 	}
 
 	return totalKiB * KiB, nil
+}
+
+// restrictOverProvision applies LINSTOR's own over-provision knobs of the pool if they are more restrictive than
+// the current ratio. The more specific property takes precedence over the generic fallback.
+// TODO: LINSTOR also applies the generic ratio to the free capacity (MaxFreeCapacityOversubscriptionRatio).
+func restrictOverProvision(sp *lapi.StoragePool, overProvision *float64) *float64 {
+	val, ok := sp.Props[lapiconsts.KeyStorPoolMaxTotalCapacityOversubscriptionRatio]
+	if !ok {
+		val, ok = sp.Props[lapiconsts.KeyStorPoolMaxOversubscriptionRatio]
+	}
+
+	if !ok {
+		return overProvision
+	}
+
+	f, err := strconv.ParseFloat(val, 64)
+	if err != nil || (overProvision != nil && *overProvision <= f) {
+		return overProvision
+	}
+
+	return &f
 }
 
 // OnlySharedStoragePools reports whether the given storage pools are all backed by a shared
@@ -1015,9 +1041,7 @@ func (s *Linstor) OnlySharedStoragePools(ctx context.Context, pools []string) (b
 
 		notFound.Delete(sps[i].StoragePoolName)
 
-		// LINSTOR names the free space manager of non-shared pools "<node>;<pool>"; actual
-		// shared spaces never contain the reserved ";".
-		if sps[i].FreeSpaceMgrName == "" || strings.Contains(sps[i].FreeSpaceMgrName, ";") {
+		if !util.IsSharedSpace(&sps[i]) {
 			return false, nil
 		}
 	}

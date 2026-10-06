@@ -255,6 +255,86 @@ func TestLinstor_CapacityBytes(t *testing.T) {
 	}
 }
 
+func TestLinstor_CapacityBytesSharedSpace(t *testing.T) {
+	t.Parallel()
+
+	m := mocks.NodeProvider{}
+
+	yes := true
+	m.EXPECT().GetStoragePoolView(mock.Anything, []*lapi.ListOpts{{Cached: &yes}}).Return([]lapi.StoragePool{
+		{StoragePoolName: "plain-shared-pool", NodeName: "node-1", ProviderKind: lapi.LVM, FreeSpaceMgrName: "plain-space", FreeCapacity: 5, TotalCapacity: 10},
+		{StoragePoolName: "plain-shared-pool", NodeName: "node-2", ProviderKind: lapi.LVM, FreeSpaceMgrName: "plain-space", FreeCapacity: 5, TotalCapacity: 10},
+		{StoragePoolName: "shared-pool", NodeName: "node-1", ProviderKind: lapi.LVM, FreeSpaceMgrName: "shared-space", FreeCapacity: 5, TotalCapacity: 10},
+		{StoragePoolName: "shared-pool", NodeName: "node-2", ProviderKind: lapi.LVM, FreeSpaceMgrName: "shared-space", FreeCapacity: 5, TotalCapacity: 10, Props: map[string]string{lapiconsts.KeyStorPoolMaxOversubscriptionRatio: "1.5"}},
+		{StoragePoolName: "local-pool", NodeName: "node-1", ProviderKind: lapi.LVM, FreeSpaceMgrName: "node-1;local-pool", FreeCapacity: 7, TotalCapacity: 8},
+		{StoragePoolName: "local-pool", NodeName: "node-2", ProviderKind: lapi.LVM, FreeSpaceMgrName: "node-2;local-pool", FreeCapacity: 7, TotalCapacity: 8},
+	}, nil)
+	m.EXPECT().GetAll(mock.Anything, mock.Anything).Return([]lapi.Node{{Name: "node-1"}, {Name: "node-2"}}, nil)
+	m.EXPECT().GetAll(mock.Anything).Return([]lapi.Node{{Name: "node-1"}, {Name: "node-2"}}, nil)
+
+	volumeIn := func(pool string, sizeKiB int64) []lapi.Volume {
+		return []lapi.Volume{{StoragePoolName: pool, LayerDataList: []lapi.VolumeLayer{{Data: &lapi.StorageVolume{UsableSizeKib: sizeKiB}}}}}
+	}
+
+	view := []lapi.ResourceWithVolumes{
+		{Resource: lapi.Resource{Name: "shared-rsc", NodeName: "node-1"}, Volumes: volumeIn("shared-pool", 4)},
+		{Resource: lapi.Resource{Name: "shared-rsc", NodeName: "node-2"}, Volumes: volumeIn("shared-pool", 4)},
+		{Resource: lapi.Resource{Name: "local-rsc", NodeName: "node-1"}, Volumes: volumeIn("local-pool", 3)},
+		{Resource: lapi.Resource{Name: "local-rsc", NodeName: "node-2"}, Volumes: volumeIn("local-pool", 3)},
+	}
+
+	r := mocks.ResourceProvider{}
+	r.EXPECT().GetResourceView(mock.Anything, []*lapi.ListOpts{{Node: []string{"node-1", "node-2"}, StoragePool: []string{"shared-pool"}}}).Return(view, nil)
+	r.EXPECT().GetResourceView(mock.Anything, []*lapi.ListOpts{{Node: []string{"node-1"}, StoragePool: []string{"local-pool"}}}).Return(view, nil)
+	r.EXPECT().GetResourceView(mock.Anything, []*lapi.ListOpts{{Node: []string{"node-2"}, StoragePool: []string{"local-pool"}}}).Return(view, nil)
+
+	cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Nodes: &m, Resources: &r}, PropertyNamespace: lapiconsts.NamespcAuxiliary}, log: logrus.WithField("test", t.Name())}
+
+	overProvision := func(f float64) *float64 { return &f }
+
+	testcases := []struct {
+		name             string
+		storagePools     []string
+		overProvision    *float64
+		topology         map[string]string
+		expectedCapacity int64
+	}{
+		{
+			name:             "shared space counted once",
+			storagePools:     []string{"plain-shared-pool"},
+			expectedCapacity: 5 * 1024,
+		},
+		{
+			name:             "shared space ratio set on another node",
+			storagePools:     []string{"shared-pool"},
+			topology:         map[string]string{topology.LinstorNodeKey: "node-1"},
+			expectedCapacity: (10*1.5 - 4) * 1024,
+		},
+		{
+			name:             "shared space with more restrictive driver ratio",
+			storagePools:     []string{"shared-pool"},
+			overProvision:    overProvision(1.2),
+			expectedCapacity: (10*1.2 - 4) * 1024,
+		},
+		{
+			name:             "local replicas reserve capacity on each node",
+			storagePools:     []string{"local-pool"},
+			overProvision:    overProvision(1),
+			expectedCapacity: 2 * (8 - 3) * 1024,
+		},
+	}
+
+	for i := range testcases {
+		testcase := &testcases[i]
+
+		t.Run(testcase.name, func(t *testing.T) {
+			cap, err := cl.CapacityBytes(context.Background(), testcase.storagePools, testcase.overProvision, testcase.topology)
+			assert.NoError(t, err)
+			assert.Equal(t, testcase.expectedCapacity, cap)
+		})
+	}
+}
+
 func TestLinstor_OnlySharedStoragePools(t *testing.T) {
 	t.Parallel()
 
