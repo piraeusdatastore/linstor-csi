@@ -26,6 +26,7 @@ import (
 
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor/util"
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
@@ -189,28 +190,47 @@ func (c *HighLevelClient) NodesForTopology(ctx context.Context, segments map[str
 	return result, nil
 }
 
-func (c *HighLevelClient) ReservedCapacity(ctx context.Context, node, pool string) (int64, error) {
-	ress, err := c.Resources.GetResourceView(ctx, &lapi.ListOpts{
-		Node:        []string{node},
-		StoragePool: []string{pool},
-	})
+// ReservedCapacity returns the capacity reserved by volumes in the given storage pools. A volume placed on several
+// nodes of the same shared space is only counted once.
+func (c *HighLevelClient) ReservedCapacity(ctx context.Context, pools ...*lapi.StoragePool) (int64, error) {
+	if len(pools) == 0 {
+		return 0, nil
+	}
+
+	type nodePool struct{ node, pool string }
+
+	type spaceVolume struct {
+		space    string
+		resource string
+		volume   int32
+	}
+
+	spaceOf := make(map[nodePool]string, len(pools))
+	nodes := sets.New[string]()
+	poolNames := sets.New[string]()
+
+	for _, sp := range pools {
+		spaceOf[nodePool{sp.NodeName, sp.StoragePoolName}] = util.SpaceName(sp)
+		nodes.Insert(sp.NodeName)
+		poolNames.Insert(sp.StoragePoolName)
+	}
+
+	ress, err := c.Resources.GetResourceView(ctx, &lapi.ListOpts{Node: sets.List(nodes), StoragePool: sets.List(poolNames)})
 	if err != nil {
 		return 0, err
 	}
 
-	var reserved int64
+	reservedPerVolume := make(map[spaceVolume]int64)
 
 	for i := range ress {
 		res := &ress[i]
 
-		// can never be too careful with LINSTOR filtering
-		if res.NodeName != node {
-			continue
-		}
-
 		for j := range res.Volumes {
 			vol := &res.Volumes[j]
-			if vol.StoragePoolName != pool {
+
+			// can never be too careful with LINSTOR filtering
+			space, ok := spaceOf[nodePool{res.NodeName, vol.StoragePoolName}]
+			if !ok {
 				continue
 			}
 
@@ -218,10 +238,16 @@ func (c *HighLevelClient) ReservedCapacity(ctx context.Context, node, pool strin
 			if len(vol.LayerDataList) > 0 {
 				storageVol, ok := vol.LayerDataList[len(vol.LayerDataList)-1].Data.(*lapi.StorageVolume)
 				if ok {
-					reserved += storageVol.UsableSizeKib
+					key := spaceVolume{space, res.Name, vol.VolumeNumber}
+					reservedPerVolume[key] = max(reservedPerVolume[key], storageVol.UsableSizeKib)
 				}
 			}
 		}
+	}
+
+	var reserved int64
+	for _, size := range reservedPerVolume {
+		reserved += size
 	}
 
 	return reserved, nil
