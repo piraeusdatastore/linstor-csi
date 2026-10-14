@@ -13,6 +13,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
+          version-file: .golangci-lint-version
           only-new-issues: true
           args: --timeout=15m
   pre-commit:
