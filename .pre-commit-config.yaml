@@ -16,7 +16,6 @@ repos:
       - id: go-fmt
       - id: go-imports
       - id: go-mod-tidy
-      - id: golangci-lint
   - repo: local
     hooks:
       - id: go-generate
@@ -25,3 +24,9 @@ repos:
         language: system
         files: (\.go|\.mockery\.yaml|go\.mod)$
         pass_filenames: false
+      - id: golangci-lint
+        name: Run golangci-lint
+        types: [go]
+        language: system
+        pass_filenames: false
+        entry: make lint LINT_ARGS=--new-from-rev=HEAD

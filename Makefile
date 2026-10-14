@@ -38,6 +38,10 @@ bake:
 linstor-csi:
 	go build ./cmd/linstor-csi
 
+.PHONY: lint
+lint: golangci-lint ## Run golangci-lint against code. Pass extra flags via LINT_ARGS.
+	$(GOLANGCI_LINT) run $(LINT_ARGS)
+
 .PHONY: csi-sanity
 csi-sanity:
 	go build -o csi-sanity github.com/kubernetes-csi/csi-test/v5/cmd/csi-sanity
@@ -115,3 +119,23 @@ sanity-cg:
 	$(CLUSTER_UP) || exit $$?; \
 	$(SUDO) CG_TEST_CONTROLLER=http://localhost:3370 ./test/cg-sanity.test -test.v -test.count=1; \
 	exit $$?
+
+## Location to install dependencies to
+LOCALBIN ?= $(shell pwd)/bin
+$(LOCALBIN):
+	mkdir -p $(LOCALBIN)
+
+GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
+# Shared with the golangci-lint GitHub action, so local and CI runs use the same version.
+# Pick a release built with the Go version from go.mod, or its gofumpt disagrees with go fmt.
+GOLANGCI_LINT_VERSION ?= $(strip $(file <.golangci-lint-version))
+ifeq ($(GOLANGCI_LINT_VERSION),)
+# The installer treats an empty tag as "latest", which would silently defeat the pin.
+$(error GOLANGCI_LINT_VERSION is empty; check .golangci-lint-version)
+endif
+
+.PHONY: golangci-lint
+golangci-lint: $(LOCALBIN) ## Download golangci-lint locally if necessary. If wrong version is installed, it will be overwritten.
+	@if ! test -x $(GOLANGCI_LINT) || ! $(GOLANGCI_LINT) version --short | grep -qx '$(GOLANGCI_LINT_VERSION:v%=%)'; then \
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(GOLANGCI_LINT_VERSION)/install.sh | sh -s -- -b $(LOCALBIN) $(GOLANGCI_LINT_VERSION); \
+	fi
