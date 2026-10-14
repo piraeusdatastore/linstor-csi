@@ -33,13 +33,16 @@ func _SnapshotTypeNoOp() {
 var _SnapshotTypeValues = []SnapshotType{SnapshotTypeInCluster, SnapshotTypeS3, SnapshotTypeLinstor, SnapshotTypeUnknown}
 
 var _SnapshotTypeNameToValueMap = map[string]SnapshotType{
-	_SnapshotTypeName[0:9]:        SnapshotTypeInCluster,
+	_SnapshotTypeName[0:9]:   SnapshotTypeInCluster,
+	_SnapshotTypeName[9:11]:  SnapshotTypeS3,
+	_SnapshotTypeName[11:18]: SnapshotTypeLinstor,
+	_SnapshotTypeName[18:25]: SnapshotTypeUnknown,
+}
+
+var _SnapshotTypeLowerNameToValueMap = map[string]SnapshotType{
 	_SnapshotTypeLowerName[0:9]:   SnapshotTypeInCluster,
-	_SnapshotTypeName[9:11]:       SnapshotTypeS3,
 	_SnapshotTypeLowerName[9:11]:  SnapshotTypeS3,
-	_SnapshotTypeName[11:18]:      SnapshotTypeLinstor,
 	_SnapshotTypeLowerName[11:18]: SnapshotTypeLinstor,
-	_SnapshotTypeName[18:25]:      SnapshotTypeUnknown,
 	_SnapshotTypeLowerName[18:25]: SnapshotTypeUnknown,
 }
 
@@ -57,7 +60,7 @@ func SnapshotTypeString(s string) (SnapshotType, error) {
 		return val, nil
 	}
 
-	if val, ok := _SnapshotTypeNameToValueMap[strings.ToLower(s)]; ok {
+	if val, ok := _SnapshotTypeLowerNameToValueMap[strings.ToLower(s)]; ok {
 		return val, nil
 	}
 	return 0, fmt.Errorf("%s does not belong to SnapshotType values", s)

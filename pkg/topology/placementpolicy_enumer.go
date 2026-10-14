@@ -35,17 +35,20 @@ func _PlacementPolicyNoOp() {
 var _PlacementPolicyValues = []PlacementPolicy{Unknown, Manual, AutoPlace, FollowTopology, Balanced, AutoPlaceTopology}
 
 var _PlacementPolicyNameToValueMap = map[string]PlacementPolicy{
-	_PlacementPolicyName[0:7]:        Unknown,
+	_PlacementPolicyName[0:7]:   Unknown,
+	_PlacementPolicyName[7:13]:  Manual,
+	_PlacementPolicyName[13:22]: AutoPlace,
+	_PlacementPolicyName[22:36]: FollowTopology,
+	_PlacementPolicyName[36:44]: Balanced,
+	_PlacementPolicyName[44:61]: AutoPlaceTopology,
+}
+
+var _PlacementPolicyLowerNameToValueMap = map[string]PlacementPolicy{
 	_PlacementPolicyLowerName[0:7]:   Unknown,
-	_PlacementPolicyName[7:13]:       Manual,
 	_PlacementPolicyLowerName[7:13]:  Manual,
-	_PlacementPolicyName[13:22]:      AutoPlace,
 	_PlacementPolicyLowerName[13:22]: AutoPlace,
-	_PlacementPolicyName[22:36]:      FollowTopology,
 	_PlacementPolicyLowerName[22:36]: FollowTopology,
-	_PlacementPolicyName[36:44]:      Balanced,
 	_PlacementPolicyLowerName[36:44]: Balanced,
-	_PlacementPolicyName[44:61]:      AutoPlaceTopology,
 	_PlacementPolicyLowerName[44:61]: AutoPlaceTopology,
 }
 
@@ -65,7 +68,7 @@ func PlacementPolicyString(s string) (PlacementPolicy, error) {
 		return val, nil
 	}
 
-	if val, ok := _PlacementPolicyNameToValueMap[strings.ToLower(s)]; ok {
+	if val, ok := _PlacementPolicyLowerNameToValueMap[strings.ToLower(s)]; ok {
 		return val, nil
 	}
 	return 0, fmt.Errorf("%s does not belong to PlacementPolicy values", s)
