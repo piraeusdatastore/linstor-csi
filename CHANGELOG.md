@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Reported capacity counts shared storage pools once instead of once per node.
+- Concurrent NFS export creation and deletion retries Kubernetes Service and
+  reactor ConfigMap conflicts instead of failing the CSI operation.
 
 ## [1.13.1] - 2026-09-09
 
