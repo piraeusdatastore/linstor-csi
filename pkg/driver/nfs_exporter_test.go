@@ -36,10 +36,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
@@ -52,11 +54,11 @@ const (
 	testExport    = "pvc-target"
 )
 
-func TestNfsExporterExportRetriesConflicts(t *testing.T) {
+func TestNfsExporterExportRetriesServiceConflicts(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	client := fake.NewSimpleClientset(
+	client := fake.NewClientset(
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{Name: testService, Namespace: testNamespace},
 			Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{{
@@ -67,6 +69,7 @@ func TestNfsExporterExportRetriesConflicts(t *testing.T) {
 		},
 		&corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{Name: testConfigMap, Namespace: testNamespace},
+			Data:       map[string]string{"pvc-concurrent.toml": "concurrent config"},
 		},
 	)
 
@@ -92,21 +95,15 @@ func TestNfsExporterExportRetriesConflicts(t *testing.T) {
 		)
 	})
 
-	configMapUpdates := 0
+	configMapPatches := 0
 
-	client.PrependReactor("update", "configmaps", func(action k8stesting.Action) (bool, runtime.Object, error) {
-		configMapUpdates++
-		if configMapUpdates != 1 {
-			return false, nil, nil
-		}
+	client.PrependReactor("patch", "configmaps", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		configMapPatches++
+		patchAction, ok := action.(k8stesting.PatchAction)
+		require.True(t, ok)
+		assert.Equal(t, types.MergePatchType, patchAction.GetPatchType())
 
-		setConfigMapEntry(t, client, "pvc-concurrent.toml", "concurrent config")
-
-		return true, nil, apierrors.NewConflict(
-			schema.GroupResource{Resource: "configmaps"},
-			testConfigMap,
-			errors.New("concurrent config map update"),
-		)
+		return false, nil, nil
 	})
 
 	exporter := testNfsExporter(client)
@@ -120,7 +117,7 @@ func TestNfsExporterExportRetriesConflicts(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "nfs://linstor-csi-nfs.piraeus-datastore.svc:1002/pvc-target", exportURL.String())
 	assert.Equal(t, 2, serviceUpdates)
-	assert.Equal(t, 2, configMapUpdates)
+	assert.Equal(t, 1, configMapPatches)
 
 	service, err := client.CoreV1().Services(testNamespace).Get(ctx, testService, metav1.GetOptions{})
 	require.NoError(t, err)
@@ -136,7 +133,7 @@ func TestNfsExporterExportRetriesConflicts(t *testing.T) {
 	assert.Contains(t, configMap.Data, testExport+".toml")
 }
 
-func TestNfsExporterUnexportRetriesConflicts(t *testing.T) {
+func TestNfsExporterUnexportRetriesServiceConflicts(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -149,7 +146,7 @@ func TestNfsExporterUnexportRetriesConflicts(t *testing.T) {
 	}}})
 	require.NoError(t, err)
 
-	client := fake.NewSimpleClientset(
+	client := fake.NewClientset(
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{Name: testService, Namespace: testNamespace},
 			Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{
@@ -161,8 +158,9 @@ func TestNfsExporterUnexportRetriesConflicts(t *testing.T) {
 		&corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{Name: testConfigMap, Namespace: testNamespace},
 			Data: map[string]string{
-				testExport + ".toml": string(raw),
-				"pvc-existing.toml":  "existing config",
+				testExport + ".toml":  string(raw),
+				"pvc-existing.toml":   "existing config",
+				"pvc-concurrent.toml": "concurrent config",
 			},
 		},
 	)
@@ -189,27 +187,21 @@ func TestNfsExporterUnexportRetriesConflicts(t *testing.T) {
 		)
 	})
 
-	configMapUpdates := 0
+	configMapPatches := 0
 
-	client.PrependReactor("update", "configmaps", func(action k8stesting.Action) (bool, runtime.Object, error) {
-		configMapUpdates++
-		if configMapUpdates != 1 {
-			return false, nil, nil
-		}
+	client.PrependReactor("patch", "configmaps", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		configMapPatches++
+		patchAction, ok := action.(k8stesting.PatchAction)
+		require.True(t, ok)
+		assert.Equal(t, types.MergePatchType, patchAction.GetPatchType())
 
-		setConfigMapEntry(t, client, "pvc-concurrent.toml", "concurrent config")
-
-		return true, nil, apierrors.NewConflict(
-			schema.GroupResource{Resource: "configmaps"},
-			testConfigMap,
-			errors.New("concurrent config map update"),
-		)
+		return false, nil, nil
 	})
 
 	err = testNfsExporter(client).Unexport(ctx, volume.ID{ResourceName: testExport})
 	require.NoError(t, err)
 	assert.Equal(t, 2, serviceUpdates)
-	assert.Equal(t, 2, configMapUpdates)
+	assert.Equal(t, 1, configMapPatches)
 
 	service, err := client.CoreV1().Services(testNamespace).Get(ctx, testService, metav1.GetOptions{})
 	require.NoError(t, err)
@@ -226,11 +218,200 @@ func TestNfsExporterUnexportRetriesConflicts(t *testing.T) {
 	assert.Equal(t, "concurrent config", configMap.Data["pvc-concurrent.toml"])
 }
 
+func TestNfsExporterReactorConfigUsesMergePatches(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		initialData   map[string]string
+		operation     func(context.Context, *NfsExporter) error
+		expectedPatch string
+		expectedData  map[string]string
+	}{
+		{
+			name:        "set export",
+			initialData: map[string]string{"pvc-existing.toml": "existing config"},
+			operation: func(ctx context.Context, exporter *NfsExporter) error {
+				return exporter.setReactorConfig(ctx, testExport, "target config")
+			},
+			expectedPatch: `{"data":{"pvc-target.toml":"target config"}}`,
+			expectedData: map[string]string{
+				"pvc-existing.toml": "existing config",
+				"pvc-target.toml":   "target config",
+			},
+		},
+		{
+			name: "remove export",
+			initialData: map[string]string{
+				"pvc-existing.toml": "existing config",
+				"pvc-target.toml":   "target config",
+			},
+			operation: func(ctx context.Context, exporter *NfsExporter) error {
+				return exporter.removeReactorConfig(ctx, testExport)
+			},
+			expectedPatch: `{"data":{"pvc-target.toml":null}}`,
+			expectedData:  map[string]string{"pvc-existing.toml": "existing config"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			client := fake.NewClientset(&corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: testConfigMap, Namespace: testNamespace},
+				Data:       tt.initialData,
+			})
+
+			err := tt.operation(t.Context(), testNfsExporter(client))
+			require.NoError(t, err)
+
+			actions := client.Actions()
+			require.Len(t, actions, 1)
+			patchAction, ok := actions[0].(k8stesting.PatchAction)
+			require.True(t, ok)
+			assert.Equal(t, types.MergePatchType, patchAction.GetPatchType())
+			assert.JSONEq(t, tt.expectedPatch, string(patchAction.GetPatch()))
+
+			configMap, err := client.CoreV1().ConfigMaps(testNamespace).Get(t.Context(), testConfigMap, metav1.GetOptions{})
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedData, configMap.Data)
+		})
+	}
+}
+
+func TestNfsExporterReactorConfigPatchErrors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("set reports config map and export", func(t *testing.T) {
+		t.Parallel()
+
+		client := fake.NewClientset()
+		err := testNfsExporter(client).setReactorConfig(t.Context(), testExport, "target config")
+
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "failed to update config map '"+testConfigMap+"' for export '"+testExport+"'")
+		assert.True(t, apierrors.IsNotFound(err))
+	})
+
+	t.Run("remove ignores missing config map", func(t *testing.T) {
+		t.Parallel()
+
+		client := fake.NewClientset()
+		err := testNfsExporter(client).removeReactorConfig(t.Context(), testExport)
+
+		require.NoError(t, err)
+	})
+
+	t.Run("remove reports config map and export", func(t *testing.T) {
+		t.Parallel()
+
+		client := fake.NewClientset(&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: testConfigMap, Namespace: testNamespace},
+		})
+		client.PrependReactor("patch", "configmaps", func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, errors.New("patch failed")
+		})
+
+		err := testNfsExporter(client).removeReactorConfig(t.Context(), testExport)
+
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "failed to update config map '"+testConfigMap+"' for export '"+testExport+"'")
+	})
+}
+
+func TestNfsExporterServiceGetErrorKeepsContext(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	_, err := testNfsExporter(client).ensureServicePort(t.Context(), testService, testExport)
+
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "failed to find service '"+testService+"'")
+	assert.True(t, apierrors.IsNotFound(err))
+}
+
+func TestServiceUpdateBackoffHandlesHighFanoutContention(t *testing.T) {
+	const (
+		writers            = 16
+		contentionDuration = 150 * time.Millisecond
+	)
+
+	type result struct {
+		attempts int
+		err      error
+	}
+
+	run := func(retryFn func(func() error) error) []result {
+		var ready sync.WaitGroup
+
+		start := make(chan struct{})
+		results := make(chan result, writers)
+		contentionEnds := time.Time{}
+
+		ready.Add(writers)
+
+		for range writers {
+			go func() {
+				ready.Done()
+				<-start
+
+				attempts := 0
+
+				err := retryFn(func() error {
+					attempts++
+
+					if time.Now().Before(contentionEnds) {
+						return apierrors.NewConflict(
+							schema.GroupResource{Resource: "services"},
+							testService,
+							errors.New("service is busy with concurrent writers"),
+						)
+					}
+
+					return nil
+				})
+
+				results <- result{attempts: attempts, err: err}
+			}()
+		}
+
+		ready.Wait()
+
+		contentionEnds = time.Now().Add(contentionDuration)
+
+		close(start)
+
+		completed := make([]result, 0, writers)
+		for range writers {
+			completed = append(completed, <-results)
+		}
+
+		return completed
+	}
+
+	// The flat policy spends all five attempts in about 40 ms, while high fanout keeps the shared Service busy.
+	flatResults := run(func(fn func() error) error {
+		return retry.RetryOnConflict(retry.DefaultRetry, fn)
+	})
+	for _, result := range flatResults {
+		assert.Error(t, result.err)
+		assert.Equal(t, retry.DefaultRetry.Steps, result.attempts)
+	}
+
+	// Exponential backoff keeps an attempt in reserve until after the contention window has cleared.
+	backoffResults := run(retryServiceUpdate)
+	for _, result := range backoffResults {
+		require.NoError(t, result.err)
+		assert.Greater(t, result.attempts, 1)
+	}
+}
+
 func TestNfsExporterConcurrentExportsPreserveAllUpdates(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	baseClient := fake.NewSimpleClientset(
+	baseClient := fake.NewClientset(
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{Name: testService, Namespace: testNamespace, ResourceVersion: "1"},
 			Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{{
@@ -247,7 +428,6 @@ func TestNfsExporterConcurrentExportsPreserveAllUpdates(t *testing.T) {
 	exports := []string{"pvc-a", "pvc-b", "pvc-c"}
 	client, conflicts := newConflictClient(
 		baseClient,
-		newGetBarrier(0, len(exports)),
 		newGetBarrier(0, len(exports)),
 	)
 
@@ -321,7 +501,6 @@ func TestNfsExporterConcurrentExportsPreserveAllUpdates(t *testing.T) {
 	}
 
 	assert.GreaterOrEqual(t, conflicts.service, len(exports)-1)
-	assert.GreaterOrEqual(t, conflicts.configMap, len(exports)-1)
 }
 
 func TestNfsExporterConcurrentUnexportsPreserveUnrelatedState(t *testing.T) {
@@ -351,7 +530,7 @@ func TestNfsExporterConcurrentUnexportsPreserveUnrelatedState(t *testing.T) {
 		data[name+".toml"] = string(raw)
 	}
 
-	baseClient := fake.NewSimpleClientset(
+	baseClient := fake.NewClientset(
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{Name: testService, Namespace: testNamespace, ResourceVersion: "1"},
 			Spec:       corev1.ServiceSpec{Ports: ports},
@@ -362,12 +541,9 @@ func TestNfsExporterConcurrentUnexportsPreserveUnrelatedState(t *testing.T) {
 		},
 	)
 
-	// Unexport first reads the ConfigMap to discover the Service name. Synchronize the following reads that
-	// perform the actual ConfigMap removals.
 	client, conflicts := newConflictClient(
 		baseClient,
 		newGetBarrier(0, len(exports)),
-		newGetBarrier(len(exports), len(exports)),
 	)
 
 	results := make(chan error, len(exports))
@@ -395,7 +571,6 @@ func TestNfsExporterConcurrentUnexportsPreserveUnrelatedState(t *testing.T) {
 	assert.Equal(t, map[string]string{"pvc-unrelated.toml": "unrelated config"}, configMap.Data)
 
 	assert.GreaterOrEqual(t, conflicts.service, len(exports)-1)
-	assert.GreaterOrEqual(t, conflicts.configMap, len(exports)-1)
 }
 
 func testNfsExporter(client kubernetes.Interface) *NfsExporter {
@@ -419,22 +594,6 @@ func addServicePort(t *testing.T, client *fake.Clientset, port corev1.ServicePor
 	require.NoError(t, client.Tracker().Update(resource, service, testNamespace))
 }
 
-func setConfigMapEntry(t *testing.T, client *fake.Clientset, key, value string) {
-	t.Helper()
-
-	resource := corev1.SchemeGroupVersion.WithResource("configmaps")
-	obj, err := client.Tracker().Get(resource, testNamespace, testConfigMap)
-	require.NoError(t, err)
-
-	configMap := obj.(*corev1.ConfigMap).DeepCopy()
-	if configMap.Data == nil {
-		configMap.Data = make(map[string]string)
-	}
-
-	configMap.Data[key] = value
-	require.NoError(t, client.Tracker().Update(resource, configMap, testNamespace))
-}
-
 func servicePorts(service *corev1.Service) map[string]int32 {
 	ports := make(map[string]int32, len(service.Spec.Ports))
 	for _, port := range service.Spec.Ports {
@@ -445,8 +604,7 @@ func servicePorts(service *corev1.Service) map[string]int32 {
 }
 
 type resourceVersionConflicts struct {
-	service   int
-	configMap int
+	service int
 }
 
 type conflictClient struct {
@@ -456,14 +614,13 @@ type conflictClient struct {
 
 func newConflictClient(
 	client kubernetes.Interface,
-	serviceBarrier, configMapBarrier *getBarrier,
+	serviceBarrier *getBarrier,
 ) (*conflictClient, *resourceVersionConflicts) {
 	conflicts := &resourceVersionConflicts{}
 	core := &conflictCore{
-		CoreV1Interface:  client.CoreV1(),
-		serviceBarrier:   serviceBarrier,
-		configMapBarrier: configMapBarrier,
-		conflicts:        conflicts,
+		CoreV1Interface: client.CoreV1(),
+		serviceBarrier:  serviceBarrier,
+		conflicts:       conflicts,
 	}
 
 	return &conflictClient{Interface: client, core: core}, conflicts
@@ -475,11 +632,9 @@ func (c *conflictClient) CoreV1() typedcorev1.CoreV1Interface {
 
 type conflictCore struct {
 	typedcorev1.CoreV1Interface
-	serviceBarrier    *getBarrier
-	configMapBarrier  *getBarrier
-	serviceUpdateMu   sync.Mutex
-	configMapUpdateMu sync.Mutex
-	conflicts         *resourceVersionConflicts
+	serviceBarrier  *getBarrier
+	serviceUpdateMu sync.Mutex
+	conflicts       *resourceVersionConflicts
 }
 
 func (c *conflictCore) Services(namespace string) typedcorev1.ServiceInterface {
@@ -488,15 +643,6 @@ func (c *conflictCore) Services(namespace string) typedcorev1.ServiceInterface {
 		barrier:          c.serviceBarrier,
 		updateMu:         &c.serviceUpdateMu,
 		conflicts:        c.conflicts,
-	}
-}
-
-func (c *conflictCore) ConfigMaps(namespace string) typedcorev1.ConfigMapInterface {
-	return &conflictConfigMaps{
-		ConfigMapInterface: c.CoreV1Interface.ConfigMaps(namespace),
-		barrier:            c.configMapBarrier,
-		updateMu:           &c.configMapUpdateMu,
-		conflicts:          c.conflicts,
 	}
 }
 
@@ -551,59 +697,6 @@ func (s *conflictServices) Update(
 	service.ResourceVersion = nextResourceVersion(current.ResourceVersion)
 
 	return s.ServiceInterface.Update(ctx, service, options)
-}
-
-type conflictConfigMaps struct {
-	typedcorev1.ConfigMapInterface
-	barrier   *getBarrier
-	updateMu  *sync.Mutex
-	conflicts *resourceVersionConflicts
-}
-
-func (c *conflictConfigMaps) Get(
-	ctx context.Context,
-	name string,
-	options metav1.GetOptions,
-) (*corev1.ConfigMap, error) {
-	configMap, err := c.ConfigMapInterface.Get(ctx, name, options)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := c.barrier.wait(); err != nil {
-		return nil, err
-	}
-
-	return configMap, nil
-}
-
-func (c *conflictConfigMaps) Update(
-	ctx context.Context,
-	configMap *corev1.ConfigMap,
-	options metav1.UpdateOptions,
-) (*corev1.ConfigMap, error) {
-	c.updateMu.Lock()
-	defer c.updateMu.Unlock()
-
-	current, err := c.ConfigMapInterface.Get(ctx, configMap.Name, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	if configMap.ResourceVersion != current.ResourceVersion {
-		c.conflicts.configMap++
-
-		return nil, apierrors.NewConflict(
-			schema.GroupResource{Resource: "configmaps"},
-			configMap.Name,
-			errors.New("resource version changed"),
-		)
-	}
-
-	configMap = configMap.DeepCopy()
-	configMap.ResourceVersion = nextResourceVersion(current.ResourceVersion)
-
-	return c.ConfigMapInterface.Update(ctx, configMap, options)
 }
 
 func nextResourceVersion(current string) string {
