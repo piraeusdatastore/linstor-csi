@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"net/url"
@@ -13,7 +14,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
@@ -56,36 +59,38 @@ func (n *NfsExporter) Enabled() bool {
 	return n != nil
 }
 
-func (n *NfsExporter) Export(ctx context.Context, info *volume.Info, params *volume.Parameters) (*url.URL, error) {
-	if !n.Enabled() {
-		return nil, fmt.Errorf("NFS Exporter disabled by configuration")
-	}
+func retryServiceUpdate(fn func() error) error {
+	return retry.RetryOnConflict(retry.DefaultBackoff, fn)
+}
 
-	log := n.log.WithField("export", info.ID)
+func (n *NfsExporter) ensureServicePort(ctx context.Context, service, export string) (uint16, error) {
+	var (
+		port            uint16
+		failedOperation string
+	)
 
-	log.WithField("service", params.NfsServiceName).Debug("Ensuring port on Service exists")
+	err := retryServiceUpdate(func() error {
+		svc, err := n.cl.CoreV1().Services(n.namespace).Get(ctx, service, metav1.GetOptions{})
+		if err != nil {
+			failedOperation = "find"
 
-	svc, err := n.cl.CoreV1().Services(n.namespace).Get(ctx, params.NfsServiceName, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to find service '%s': %w", params.NfsServiceName, err)
-	}
+			return err
+		}
 
-	var port uint16
+		if i := slices.IndexFunc(svc.Spec.Ports, func(p corev1.ServicePort) bool {
+			return p.Name == export
+		}); i != -1 {
+			port = uint16(svc.Spec.Ports[i].Port)
 
-	if i := slices.IndexFunc(svc.Spec.Ports, func(p corev1.ServicePort) bool {
-		return p.Name == info.ResourceName
-	}); i != -1 {
-		log.Debug("service port exists")
+			return nil
+		}
 
-		port = uint16(svc.Spec.Ports[i].Port)
-	} else {
-		log.Debug("service port does not exist, creating")
-		// Ports is guaranteed to contain at least one entry
-		// The first port is a dummy entry
+		// Ports is guaranteed to contain at least one entry. The first port is a dummy entry.
 		previous := svc.Spec.Ports[0].Port - 1
 		insertAt := 0
 
-		// We keep our ports contiguous
+		// Keep ports contiguous. Recomputing this after every conflict ensures a concurrent export cannot claim the
+		// same port or be overwritten by this update.
 		for _, p := range svc.Spec.Ports {
 			if p.Port != previous+1 {
 				break
@@ -95,23 +100,139 @@ func (n *NfsExporter) Export(ctx context.Context, info *volume.Info, params *vol
 			insertAt++
 		}
 
-		if previous+1 > (1 << 16) {
-			return nil, fmt.Errorf("service '%s', has no more ports to allocate", svc.Name)
+		if previous+1 >= 1<<16 {
+			failedOperation = ""
+
+			return fmt.Errorf("service '%s', has no more ports to allocate", svc.Name)
 		}
 
 		svc.Spec.Ports = slices.Insert(svc.Spec.Ports, insertAt, corev1.ServicePort{
-			Name:        info.ResourceName,
+			Name:        export,
 			Port:        previous + 1,
 			AppProtocol: ptr.To("nfs"),
 			Protocol:    corev1.ProtocolTCP,
 		})
 
-		_, err := n.cl.CoreV1().Services(n.namespace).Update(ctx, svc, metav1.UpdateOptions{FieldManager: linstor.DriverName})
+		failedOperation = "update"
+		_, err = n.cl.CoreV1().Services(n.namespace).Update(ctx, svc, metav1.UpdateOptions{FieldManager: linstor.DriverName})
 		if err != nil {
-			return nil, fmt.Errorf("failed to update service '%s': %w", params.NfsServiceName, err)
+			return err
 		}
 
 		port = uint16(previous + 1)
+
+		return nil
+	})
+	if err != nil {
+		switch failedOperation {
+		case "find":
+			return 0, fmt.Errorf("failed to find service '%s': %w", service, err)
+		case "update":
+			return 0, fmt.Errorf("failed to update service '%s': %w", service, err)
+		default:
+			return 0, err
+		}
+	}
+
+	return port, nil
+}
+
+func (n *NfsExporter) removeServicePort(ctx context.Context, service, export string) error {
+	var failedOperation string
+
+	err := retryServiceUpdate(func() error {
+		svc, err := n.cl.CoreV1().Services(n.namespace).Get(ctx, service, metav1.GetOptions{})
+		if err != nil {
+			if k8serrors.IsNotFound(err) {
+				return nil
+			}
+
+			failedOperation = "get"
+
+			return err
+		}
+
+		if !slices.ContainsFunc(svc.Spec.Ports, func(port corev1.ServicePort) bool {
+			return port.Name == export
+		}) {
+			return nil
+		}
+
+		svc.Spec.Ports = slices.DeleteFunc(svc.Spec.Ports, func(port corev1.ServicePort) bool {
+			return port.Name == export
+		})
+
+		failedOperation = "update"
+		_, err = n.cl.CoreV1().Services(n.namespace).Update(ctx, svc, metav1.UpdateOptions{FieldManager: linstor.DriverName})
+
+		return err
+	})
+	if err != nil {
+		if failedOperation == "get" {
+			return fmt.Errorf("failed to get service '%s': %w", service, err)
+		}
+
+		return fmt.Errorf("failed to update service '%s': %w", service, err)
+	}
+
+	return nil
+}
+
+func (n *NfsExporter) patchReactorConfig(ctx context.Context, export string, content *string) error {
+	patch, err := json.Marshal(struct {
+		Data map[string]*string `json:"data"`
+	}{
+		Data: map[string]*string{export + ".toml": content},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal config map patch for export '%s': %w", export, err)
+	}
+
+	_, err = n.cl.CoreV1().ConfigMaps(n.namespace).Patch(
+		ctx,
+		n.reactorConfigMap,
+		types.MergePatchType,
+		patch,
+		metav1.PatchOptions{FieldManager: linstor.DriverName},
+	)
+
+	return err
+}
+
+func (n *NfsExporter) setReactorConfig(ctx context.Context, export, content string) error {
+	err := n.patchReactorConfig(ctx, export, &content)
+	if err != nil {
+		return fmt.Errorf("failed to update config map '%s' for export '%s': %w", n.reactorConfigMap, export, err)
+	}
+
+	return nil
+}
+
+func (n *NfsExporter) removeReactorConfig(ctx context.Context, export string) error {
+	err := n.patchReactorConfig(ctx, export, nil)
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return nil
+		}
+
+		return fmt.Errorf("failed to update config map '%s' for export '%s': %w", n.reactorConfigMap, export, err)
+	}
+
+	return nil
+}
+
+func (n *NfsExporter) Export(ctx context.Context, info *volume.Info, params *volume.Parameters) (*url.URL, error) {
+	if !n.Enabled() {
+		return nil, fmt.Errorf("NFS Exporter disabled by configuration")
+	}
+
+	log := n.log.WithField("export", info.ID)
+
+	log.WithField("service", params.NfsServiceName).Debug("Ensuring port on Service exists")
+
+	port, err := n.ensureServicePort(ctx, params.NfsServiceName, info.ResourceName)
+	if err != nil {
+		return nil, err
 	}
 
 	log.Debug("Creating DRBD Reactor configuration")
@@ -149,25 +270,8 @@ func (n *NfsExporter) Export(ctx context.Context, info *volume.Info, params *vol
 		return nil, fmt.Errorf("failed to marshal DRBD Reactor config for '%s': %w", info.ID, err)
 	}
 
-	configMap, err := n.cl.CoreV1().ConfigMaps(n.namespace).Get(ctx, n.reactorConfigMap, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get config map for export '%s': %w", info.ID, err)
-	}
-
-	if configMap.Data == nil {
-		configMap.Data = make(map[string]string)
-	}
-
-	if configMap.Data[info.ResourceName+".toml"] != string(raw) {
-		log.WithField("config", info.ResourceName+".toml").Debug("updating config map data")
-		configMap.Data[info.ResourceName+".toml"] = string(raw)
-
-		_, err = n.cl.CoreV1().ConfigMaps(n.namespace).Update(ctx, configMap, metav1.UpdateOptions{FieldManager: linstor.DriverName})
-		if err != nil {
-			return nil, fmt.Errorf("failed to update config map for export '%s': %w", info.ID, err)
-		}
-	} else {
-		log.WithField("config", info.ResourceName+".toml").Debug("config exists")
+	if err := n.setReactorConfig(ctx, info.ResourceName, string(raw)); err != nil {
+		return nil, err
 	}
 
 	return &url.URL{
@@ -220,41 +324,11 @@ func (n *NfsExporter) Unexport(ctx context.Context, export volume.ID) error {
 
 	log.WithField("metadata", config.Metadata).Debug("parsed metadata")
 
-	svc, err := n.cl.CoreV1().Services(n.namespace).Get(ctx, config.Metadata.ServiceName, metav1.GetOptions{})
-
-	if err != nil && !k8serrors.IsNotFound(err) {
-		return fmt.Errorf("failed to get service '%s': %w", config.Metadata.ServiceName, err)
-	}
-
-	if err == nil {
-		log.Debug("remove export port from service")
-
-		log.WithField("svc", svc).WithField("port", export).Info("removing export port")
-		svc.Spec.Ports = slices.DeleteFunc(svc.Spec.Ports, func(port corev1.ServicePort) bool {
-			return port.Name == export.ResourceName
-		})
-		log.WithField("svc", svc).Info("removed export port")
-
-		log.Debug("updating service to remove export port")
-
-		_, err := n.cl.CoreV1().Services(svc.Namespace).Update(ctx, svc, metav1.UpdateOptions{
-			FieldManager: linstor.DriverName,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to update service '%s': %w", config.Metadata.ServiceName, err)
-		}
+	if err := n.removeServicePort(ctx, config.Metadata.ServiceName, export.ResourceName); err != nil {
+		return err
 	}
 
 	log.Debug("removing reactor config from config map")
 
-	delete(configMap.Data, export.ResourceName+".toml")
-
-	_, err = n.cl.CoreV1().ConfigMaps(configMap.Namespace).Update(ctx, configMap, metav1.UpdateOptions{
-		FieldManager: linstor.DriverName,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update config map: %w", err)
-	}
-
-	return nil
+	return n.removeReactorConfig(ctx, export.ResourceName)
 }
