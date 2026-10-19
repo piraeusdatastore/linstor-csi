@@ -7,8 +7,8 @@ require (
 	github.com/LINBIT/golinstor v0.65.2
 	github.com/container-storage-interface/spec v1.13.0
 	github.com/coreos/go-systemd/v22 v22.7.0
-	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.6.0
-	github.com/kubernetes-csi/external-snapshotter/v8 v8.6.0
+	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.7.0
+	github.com/kubernetes-csi/external-snapshotter/v8 v8.7.0
 	github.com/pborman/uuid v1.2.1
 	github.com/piraeusdatastore/nri-volume-qos v0.1.3
 	github.com/sirupsen/logrus v1.10.2
@@ -87,8 +87,8 @@ require (
 	github.com/rs/zerolog v1.35.1 // indirect
 	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
-	github.com/stretchr/objx v0.5.3 // indirect
-	github.com/vektra/mockery/v3 v3.8.0 // indirect
+	github.com/stretchr/objx v0.8.0 // indirect
+	github.com/vektra/mockery/v3 v3.8.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
@@ -96,19 +96,19 @@ require (
 	go.uber.org/mock v0.6.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/exp v0.0.0-20260212183809-81e46e3db34a // indirect
+	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/term v0.47.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
-	golang.org/x/tools v0.51.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260729162451-8efbd57d26e0 // indirect
+	golang.org/x/tools v0.52.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20260721132016-d427ff9ee9ad // indirect
+	k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098 // indirect
 	moul.io/http2curl/v2 v2.3.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
