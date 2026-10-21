@@ -203,14 +203,14 @@ func (s *Scheduler) PlaceOneAccessibleToSegment(ctx context.Context, volId strin
 
 	log.Trace("exact segments match failed, try with remote access policy")
 
-	accessibleSegments := remoteAccessPolicy.AccessibleSegments(segments)
+	accessibleSelectors := remoteAccessPolicy.AccessibleSelectors(segments)
 
-	log.WithField("accessibleSegments", accessibleSegments).Trace("got accessible segments")
+	log.WithField("accessibleSelectors", accessibleSelectors).Trace("got accessible selectors")
 
-	for _, seg := range accessibleSegments {
-		log := log.WithField("segments", seg)
+	for _, sel := range accessibleSelectors {
+		log := log.WithField("selector", sel)
 
-		nodes, err := s.NodesForTopology(ctx, seg)
+		nodes, err := s.NodesForTopology(ctx, sel.Segment, sel.Missing...)
 		if err != nil {
 			log.WithError(err).Warn("failed to get preferred node list from segments")
 			continue

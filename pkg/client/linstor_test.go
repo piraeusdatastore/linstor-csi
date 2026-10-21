@@ -335,6 +335,35 @@ func TestLinstor_CapacityBytesSharedSpace(t *testing.T) {
 	}
 }
 
+func TestLinstor_CapacityBytesMissingKey(t *testing.T) {
+	t.Parallel()
+
+	nodeA := lapi.Node{Name: "node-a", Props: map[string]string{"Aux/lun": "yes"}}
+	nodeB := lapi.Node{Name: "node-b", Props: map[string]string{"Aux/lun": "yes"}}
+	nodeC := lapi.Node{Name: "node-c"}
+
+	m := mocks.NodeProvider{}
+
+	yes := true
+	m.EXPECT().GetStoragePoolView(mock.Anything, []*lapi.ListOpts{{Cached: &yes}}).Return([]lapi.StoragePool{
+		{StoragePoolName: "pool-fc", NodeName: "node-a", ProviderKind: lapi.LVM, FreeSpaceMgrName: "fc-space", FreeCapacity: 5},
+		{StoragePoolName: "pool-fc", NodeName: "node-b", ProviderKind: lapi.LVM, FreeSpaceMgrName: "fc-space", FreeCapacity: 5},
+	}, nil)
+	m.EXPECT().GetAll(mock.Anything, []*lapi.ListOpts{{}}).Return([]lapi.Node{nodeA, nodeB, nodeC}, nil)
+	m.EXPECT().GetAll(mock.Anything, []*lapi.ListOpts{{Prop: []string{"Aux/lun=yes"}}}).Return([]lapi.Node{nodeA, nodeB}, nil)
+	m.EXPECT().GetAll(mock.Anything).Return([]lapi.Node{nodeA, nodeB, nodeC}, nil)
+
+	cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Nodes: &m}, PropertyNamespace: lapiconsts.NamespcAuxiliary}, log: logrus.WithField("test", t.Name())}
+
+	cap, err := cl.CapacityBytes(context.Background(), []string{"pool-fc"}, nil, map[string]string{"lun": "yes"})
+	assert.NoError(t, err)
+	assert.Equal(t, int64(5*1024), cap)
+
+	cap, err = cl.CapacityBytes(context.Background(), []string{"pool-fc"}, nil, map[string]string{}, "lun")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), cap)
+}
+
 func TestLinstor_OnlySharedStoragePools(t *testing.T) {
 	t.Parallel()
 
@@ -456,6 +485,12 @@ func TestLinstor_SortByPreferred(t *testing.T) {
 
 	m := &mocks.NodeProvider{}
 	m.EXPECT().GetAll(mock.Anything, []*lapi.ListOpts{{Prop: []string{"Aux/zone=1"}}}).Return([]lapi.Node{{Name: "node-b"}, {Name: "node-c"}}, nil)
+	m.EXPECT().GetAll(mock.Anything, []*lapi.ListOpts{{}}).Return([]lapi.Node{
+		{Name: "node-a"},
+		{Name: "node-b", Props: map[string]string{"Aux/zone": "1"}},
+		{Name: "node-c", Props: map[string]string{"Aux/zone": "1"}},
+		{Name: "node-d"},
+	}, nil)
 
 	cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Nodes: m}, PropertyNamespace: lapiconsts.NamespcAuxiliary}, log: logrus.WithField("test", t.Name())}
 
@@ -502,6 +537,15 @@ func TestLinstor_SortByPreferred(t *testing.T) {
 			preferredTopology: []*csi.Topology{{Segments: map[string]string{topology.LinstorNodeKey: "node-c", "zone": "1"}}},
 			assertion: func(t *testing.T, actual []string) {
 				assert.Equal(t, []string{"node-c", "node-b", "node-a"}, actual)
+			},
+		},
+		{
+			name:              "preference-without-remote-policy-key",
+			nodes:             []string{"node-b", "node-c", "node-d", "node-a"},
+			policy:            []volume.RemoteAccessPolicyRule{{FromSame: []string{"zone"}}},
+			preferredTopology: []*csi.Topology{{Segments: map[string]string{topology.LinstorNodeKey: "node-a"}}},
+			assertion: func(t *testing.T, actual []string) {
+				assert.Equal(t, []string{"node-a", "node-d", "node-b", "node-c"}, actual)
 			},
 		},
 	}

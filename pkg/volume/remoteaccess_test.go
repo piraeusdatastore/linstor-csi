@@ -216,3 +216,102 @@ func TestPrunePattern(t *testing.T) {
 		})
 	}
 }
+
+func TestAccessibleSelectors(t *testing.T) {
+	t.Parallel()
+
+	exampleSegments := map[string]string{
+		"linbit.com/hostname":           "host-1",
+		"topology.kubernetes.io/region": "region-1",
+		"topology.kubernetes.io/zone":   "region-1-zone-1",
+	}
+
+	cases := []struct {
+		name              string
+		policy            volume.RemoteAccessPolicy
+		expectedSelectors []volume.TopologySelector
+	}{
+		{
+			name:              "access-everywhere",
+			policy:            volume.RemoteAccessPolicyAnywhere,
+			expectedSelectors: []volume.TopologySelector{{Segment: map[string]string{}}},
+		},
+		{
+			name:              "access-unknown-label",
+			policy:            volume.RemoteAccessPolicy{{FromSame: []string{"some-new-label"}}},
+			expectedSelectors: []volume.TopologySelector{{Segment: map[string]string{}, Missing: []string{"some-new-label"}}},
+		},
+		{
+			name:   "access-partially-known-labels",
+			policy: volume.RemoteAccessPolicy{{FromSame: []string{"topology.kubernetes.io/region", "some-new-label"}}},
+			expectedSelectors: []volume.TopologySelector{
+				{Segment: map[string]string{"topology.kubernetes.io/region": "region-1"}, Missing: []string{"some-new-label"}},
+			},
+		},
+		{
+			name:   "access-multi-rule-pruned",
+			policy: volume.RemoteAccessPolicy{{FromSame: []string{"topology.kubernetes.io/region", "topology.kubernetes.io/zone"}}, {FromSame: []string{"topology.kubernetes.io/region"}}},
+			expectedSelectors: []volume.TopologySelector{
+				{Segment: map[string]string{"topology.kubernetes.io/region": "region-1"}},
+			},
+		},
+	}
+
+	for i := range cases {
+		tcase := &cases[i]
+
+		t.Run(tcase.name, func(t *testing.T) {
+			t.Parallel()
+
+			actual := tcase.policy.AccessibleSelectors(exampleSegments)
+			assert.Equal(t, tcase.expectedSelectors, actual)
+		})
+	}
+}
+
+func TestPruneSelectors(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		inp      []volume.TopologySelector
+		expected []volume.TopologySelector
+	}{
+		{
+			name:     "duplicates",
+			inp:      []volume.TopologySelector{{Missing: []string{"a"}}, {Missing: []string{"a"}}},
+			expected: []volume.TopologySelector{{Missing: []string{"a"}}},
+		},
+		{
+			name:     "value and missing key are disjoint",
+			inp:      []volume.TopologySelector{{Segment: map[string]string{"a": "1"}}, {Missing: []string{"a"}}},
+			expected: []volume.TopologySelector{{Segment: map[string]string{"a": "1"}}, {Missing: []string{"a"}}},
+		},
+		{
+			name:     "fewer missing keys covers more",
+			inp:      []volume.TopologySelector{{Missing: []string{"a", "b"}}, {Missing: []string{"a"}}},
+			expected: []volume.TopologySelector{{Missing: []string{"a"}}},
+		},
+		{
+			name:     "fewer values covers more",
+			inp:      []volume.TopologySelector{{Segment: map[string]string{"b": "1"}, Missing: []string{"a"}}, {Missing: []string{"a"}}},
+			expected: []volume.TopologySelector{{Missing: []string{"a"}}},
+		},
+		{
+			name:     "missing key not covered by plain segment",
+			inp:      []volume.TopologySelector{{Segment: map[string]string{"b": "1"}}, {Segment: map[string]string{"b": "2"}, Missing: []string{"a"}}},
+			expected: []volume.TopologySelector{{Segment: map[string]string{"b": "1"}}, {Segment: map[string]string{"b": "2"}, Missing: []string{"a"}}},
+		},
+	}
+
+	for i := range cases {
+		tcase := &cases[i]
+
+		t.Run(tcase.name, func(t *testing.T) {
+			t.Parallel()
+
+			actual := volume.PruneSelectors(tcase.inp...)
+			assert.Equal(t, tcase.expected, actual)
+		})
+	}
+}

@@ -869,8 +869,9 @@ func (s *Linstor) Detach(ctx context.Context, id volume.ID, node string) error {
 }
 
 // CapacityBytes returns the amount of free space in the storage pool specified by the params and topology.
-func (s *Linstor) CapacityBytes(ctx context.Context, storagePools []string, overProvision *float64, segments map[string]string) (int64, error) {
-	log := s.log.WithField("storage-pools", storagePools).WithField("segments", segments)
+// Nodes that have any of the missingKeys topology keys are not counted.
+func (s *Linstor) CapacityBytes(ctx context.Context, storagePools []string, overProvision *float64, segments map[string]string, missingKeys ...string) (int64, error) {
+	log := s.log.WithField("storage-pools", storagePools).WithField("segments", segments).WithField("missing", missingKeys)
 
 	var requestedStoragePools []string
 
@@ -882,7 +883,7 @@ func (s *Linstor) CapacityBytes(ctx context.Context, storagePools []string, over
 
 	log.Trace("request nodes for segments")
 
-	requestedNodes, err := s.client.NodesForTopology(ctx, segments)
+	requestedNodes, err := s.client.NodesForTopology(ctx, segments, missingKeys...)
 	if err != nil {
 		return 0, fmt.Errorf("unable to get capacity: %w", err)
 	}
@@ -3079,8 +3080,8 @@ func (s *Linstor) SortByPreferred(ctx context.Context, nodes []string, remotePol
 
 		order++
 
-		for _, seg := range remotePolicy.AccessibleSegments(pref.GetSegments()) {
-			nodes, err = s.client.NodesForTopology(ctx, seg)
+		for _, sel := range remotePolicy.AccessibleSelectors(pref.GetSegments()) {
+			nodes, err = s.client.NodesForTopology(ctx, sel.Segment, sel.Missing...)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch nodes for topology: %w", err)
 			}
