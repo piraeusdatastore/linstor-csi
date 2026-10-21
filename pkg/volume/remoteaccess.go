@@ -2,6 +2,7 @@ package volume
 
 import (
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 
@@ -37,6 +38,35 @@ func (r RemoteAccessPolicy) AccessibleSegments(segments map[string]string) []map
 	}
 
 	return PrunePattern(result...)
+}
+
+// TopologySelector selects nodes matching all values in Segment and having none of the Missing keys.
+type TopologySelector struct {
+	Segment map[string]string
+	Missing []string
+}
+
+// AccessibleSelectors is like AccessibleSegments, but groups a segment lacking a key with other nodes lacking it.
+func (r RemoteAccessPolicy) AccessibleSelectors(segments map[string]string) []TopologySelector {
+	var result []TopologySelector
+
+	for _, rule := range r {
+		sel := TopologySelector{Segment: make(map[string]string)}
+
+		for _, propName := range rule.FromSame {
+			val, ok := segments[propName]
+			if !ok {
+				sel.Missing = append(sel.Missing, propName)
+				continue
+			}
+
+			sel.Segment[propName] = val
+		}
+
+		result = append(result, sel)
+	}
+
+	return PruneSelectors(result...)
 }
 
 func (r *RemoteAccessPolicy) UnmarshalText(text []byte) error {
@@ -111,23 +141,43 @@ func subsetOf(a, b map[string]string) bool {
 //	[{a:1, b:1}, {a:1, b:2}] => [{a:1, b:1}, {a:1, b:2}]
 //	[{a:1}, {a:1, b:1}, {a:1, b:2}] => [{a:1}]
 func PrunePattern(sources ...map[string]string) []map[string]string {
-	var result []map[string]string
+	selectors := make([]TopologySelector, len(sources))
+	for i := range sources {
+		selectors[i] = TopologySelector{Segment: sources[i]}
+	}
 
-	// This sort ensures that broad segments, i.e. those with less "rules", are inserted into the result first.
-	// The reason you want that is you can avoid situations were a policy you are currently inspecting
+	var result []map[string]string
+	for _, sel := range PruneSelectors(selectors...) {
+		result = append(result, sel.Segment)
+	}
+
+	return result
+}
+
+// PruneSelectors is PrunePattern for TopologySelector: a selector is covered by one with a subset of its constraints,
+// i.e. a subset of its Segment values and a subset of its Missing keys.
+func PruneSelectors(sources ...TopologySelector) []TopologySelector {
+	var result []TopologySelector
+
+	constraints := func(s TopologySelector) int { return len(s.Segment) + len(s.Missing) }
+
+	// This sort ensures that broad selectors, i.e. those with less "rules", are inserted into the result first.
+	// The reason you want that is you can avoid situations were a selector you are currently inspecting
 	// would replace multiple existing ones. Basically, you don't want a situation where:
 	//   toCheck ⊂ existing1 and toCheck ⊂ existing2
 	// which would mean we would remove multiple existing elements and replace them with toCheck. By sorting we can
 	// ensure that toCheck ⊂ existing1 => toCheck == existing1, so we can just skip insertion. This makes the actual
 	// prune loop much easier.
-	sort.Slice(sources, func(i, j int) bool {
-		return len(sources[i]) < len(sources[j])
+	sort.SliceStable(sources, func(i, j int) bool {
+		return constraints(sources[i]) < constraints(sources[j])
 	})
 
 outer:
 	for _, source := range sources {
-		for i := range result {
-			if subsetOf(result[i], source) {
+		for _, existing := range result {
+			if subsetOf(existing.Segment, source.Segment) && !slices.ContainsFunc(existing.Missing, func(k string) bool {
+				return !slices.Contains(source.Missing, k)
+			}) {
 				// we already have the less strict variant in the results, no need to add a stricter variant
 				continue outer
 			}

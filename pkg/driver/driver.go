@@ -1134,16 +1134,16 @@ func (d *Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (
 	}).Debug("got capacity request")
 
 	// Get the labels for nodes we are allowed to "share" per remote access policy.
-	accessibleSegments := params.AllowRemoteVolumeAccess.AccessibleSegments(req.GetAccessibleTopology().GetSegments())
+	accessibleSelectors := params.AllowRemoteVolumeAccess.AccessibleSelectors(req.GetAccessibleTopology().GetSegments())
 
-	d.log.WithField("accessible", accessibleSegments).Trace("got accessible segments for parameters")
+	d.log.WithField("accessible", accessibleSelectors).Trace("got accessible selectors for parameters")
 
 	maxCap := int64(0)
 
-	for _, segment := range accessibleSegments {
-		d.log.WithField("segment", segment).Debug("Checking capacity of segment")
+	for _, sel := range accessibleSelectors {
+		d.log.WithField("selector", sel).Debug("Checking capacity of selector")
 
-		bytes, err := d.linstorClient.CapacityBytes(ctx, params.StoragePools, params.OverProvision, segment)
+		bytes, err := d.linstorClient.CapacityBytes(ctx, params.StoragePools, params.OverProvision, sel.Segment, sel.Missing...)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "%v", err)
 		}

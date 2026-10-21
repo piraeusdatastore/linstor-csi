@@ -129,22 +129,22 @@ func (c *HighLevelClient) GenericAccessibleTopologies(ctx context.Context, volId
 
 // GetAllTopologyNodes returns the list of nodes that satisfy the given topology requirements
 func (c *HighLevelClient) GetAllTopologyNodes(ctx context.Context, remoteAccessPolicy volume.RemoteAccessPolicy, requisites []*csi.Topology) ([]string, error) {
-	var accessibleSegments []map[string]string
+	var accessibleSelectors []volume.TopologySelector
 	for _, req := range requisites {
-		accessibleSegments = append(accessibleSegments, remoteAccessPolicy.AccessibleSegments(req.GetSegments())...)
+		accessibleSelectors = append(accessibleSelectors, remoteAccessPolicy.AccessibleSelectors(req.GetSegments())...)
 	}
 
-	accessibleSegments = volume.PrunePattern(accessibleSegments...)
+	accessibleSelectors = volume.PruneSelectors(accessibleSelectors...)
 
-	if len(accessibleSegments) == 0 {
-		// No requisites means no restrictions, so just use the segment that will return all nodes
-		accessibleSegments = []map[string]string{{}}
+	if len(accessibleSelectors) == 0 {
+		// No requisites means no restrictions, so just use the selector that will return all nodes
+		accessibleSelectors = []volume.TopologySelector{{}}
 	}
 
 	var allNodes []string
 
-	for _, segment := range accessibleSegments {
-		nodes, err := c.NodesForTopology(ctx, segment)
+	for _, sel := range accessibleSelectors {
+		nodes, err := c.NodesForTopology(ctx, sel.Segment, sel.Missing...)
 		if err != nil {
 			return nil, err
 		}
@@ -162,17 +162,23 @@ func (c *HighLevelClient) GetAllTopologyNodes(ctx context.Context, remoteAccessP
 // In the most common case, this just extracts the node name using the standard topology.LinstorNodeKey.
 // In some cases CSI only gives us an "aggregate" topology, i.e. no node name, just some common property,
 // in which case we query the LINSTOR API for all matching nodes.
-func (c *HighLevelClient) NodesForTopology(ctx context.Context, segments map[string]string) ([]string, error) {
+// Nodes that have any of the missingKeys are excluded.
+func (c *HighLevelClient) NodesForTopology(ctx context.Context, segments map[string]string, missingKeys ...string) ([]string, error) {
 	// First, check if the segment already contains explicit node information. This is the common case,
 	// no reason to make extra http requests for this.
 	node, ok := segments[topology.LinstorNodeKey]
-	if ok {
+	if ok && len(missingKeys) == 0 {
 		return []string{node}, nil
 	}
 
 	opts := &lapi.ListOpts{}
 
 	for k, v := range segments {
+		if k == topology.LinstorNodeKey {
+			opts.Node = []string{v}
+			continue
+		}
+
 		opts.Prop = append(opts.Prop, fmt.Sprintf("%s/%s=%s", c.PropertyNamespace, k, v))
 	}
 
@@ -181,10 +187,17 @@ func (c *HighLevelClient) NodesForTopology(ctx context.Context, segments map[str
 		return nil, fmt.Errorf("failed to get nodes from segements %v: %w", segments, err)
 	}
 
-	result := make([]string, len(nodes))
+	var result []string
 
 	for i := range nodes {
-		result[i] = nodes[i].Name
+		if slices.ContainsFunc(missingKeys, func(k string) bool {
+			_, ok := nodes[i].Props[c.PropertyNamespace+"/"+k]
+			return ok
+		}) {
+			continue
+		}
+
+		result = append(result, nodes[i].Name)
 	}
 
 	return result, nil
