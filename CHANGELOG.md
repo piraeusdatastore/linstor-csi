@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failover by several minutes.
 - A hung NFS server start is stopped and retried after about 15 seconds
   instead of 105.
+- Volumes restored or cloned as block volumes from a file system volume no longer
+  keep its file system type and mkfs options.
 
 ## [1.13.2] - 2026-10-27
 
