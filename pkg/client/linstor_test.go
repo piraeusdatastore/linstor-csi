@@ -994,3 +994,58 @@ func TestReconcileResourceDefinitionRGConflict(t *testing.T) {
 		})
 	}
 }
+
+func TestLinstor_clearInheritedFileSystemProps(t *testing.T) {
+	const fsType = "FileSystem/Type"
+
+	const fsMkfs = "FileSystem/MkfsParams"
+
+	t.Run("block volume drops inherited file system props", func(t *testing.T) {
+		m := mocks.ResourceDefinitionProvider{}
+
+		m.EXPECT().GetVolumeDefinition(mock.Anything, ExampleResourceID, 1).Return(lapi.VolumeDefinition{
+			Props: map[string]string{fsType: "ext4", fsMkfs: "-O foo", "Aux/other": "keep"},
+		}, nil)
+		m.EXPECT().ModifyVolumeDefinition(mock.Anything, ExampleResourceID, 1, lapi.VolumeDefinitionModify{
+			GenericPropsModify: lapi.GenericPropsModify{DeleteProps: []string{fsType, fsMkfs}},
+		}).Return(nil)
+
+		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{ResourceDefinitions: &m}}, log: logrus.WithField("test", t.Name())}
+
+		err := cl.clearInheritedFileSystemProps(context.Background(), &volume.Info{
+			ID:          volume.ID{ResourceName: ExampleResourceID, VolumeNumber: 1},
+			DeviceBytes: map[int]int64{1: 1 << 30},
+		})
+		assert.NoError(t, err)
+		m.AssertExpectations(t)
+	})
+
+	t.Run("block volume without inherited props is left alone", func(t *testing.T) {
+		m := mocks.ResourceDefinitionProvider{}
+
+		m.EXPECT().GetVolumeDefinition(mock.Anything, ExampleResourceID, 0).Return(lapi.VolumeDefinition{}, nil)
+
+		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{ResourceDefinitions: &m}}, log: logrus.WithField("test", t.Name())}
+
+		err := cl.clearInheritedFileSystemProps(context.Background(), &volume.Info{
+			ID:          volume.ID{ResourceName: ExampleResourceID},
+			DeviceBytes: map[int]int64{0: 1 << 30},
+		})
+		assert.NoError(t, err)
+		m.AssertExpectations(t)
+	})
+
+	t.Run("file system volume keeps its props", func(t *testing.T) {
+		m := mocks.ResourceDefinitionProvider{}
+
+		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{ResourceDefinitions: &m}}, log: logrus.WithField("test", t.Name())}
+
+		err := cl.clearInheritedFileSystemProps(context.Background(), &volume.Info{
+			ID:          volume.ID{ResourceName: ExampleResourceID},
+			FsType:      "xfs",
+			DeviceBytes: map[int]int64{0: 1 << 30},
+		})
+		assert.NoError(t, err)
+		m.AssertExpectations(t)
+	})
+}

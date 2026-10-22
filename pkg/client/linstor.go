@@ -490,6 +490,12 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 		return err
 	}
 
+	err = s.clearInheritedFileSystemProps(ctx, vol)
+	if err != nil {
+		logger.Debugf("clear inherited file system properties failed: %v", err)
+		return err
+	}
+
 	logger.Debug("reconcile volume placement")
 
 	err = s.reconcileResourcePlacement(ctx, vol, params, topologies)
@@ -504,6 +510,49 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 	if err != nil {
 		logger.Debugf("reconcile extra properties failed: %v", err)
 		return err
+	}
+
+	return nil
+}
+
+// clearInheritedFileSystemProps removes the file system properties that a restored or cloned block volume
+// inherited from its source. LINSTOR copies the volume definition properties of the source, so a snapshot of a
+// file system volume that is restored as a block volume would otherwise keep reporting the source's file system.
+// Only the volume numbers of vol are touched, other volumes of a shared resource keep their properties.
+func (s *Linstor) clearInheritedFileSystemProps(ctx context.Context, vol *volume.Info) error {
+	if vol.FsType != "" {
+		return nil
+	}
+
+	fsProps := []string{
+		lapiconsts.NamespcFilesystem + "/" + lapiconsts.KeyFsType,
+		lapiconsts.NamespcFilesystem + "/" + lapiconsts.KeyFsMkfsparameters,
+	}
+
+	for vn := range vol.DeviceBytes {
+		vDef, err := s.client.ResourceDefinitions.GetVolumeDefinition(ctx, vol.ResourceName, vn)
+		if err != nil {
+			return fmt.Errorf("could not fetch volume definition: %w", err)
+		}
+
+		var inherited []string
+
+		for _, prop := range fsProps {
+			if _, ok := vDef.Props[prop]; ok {
+				inherited = append(inherited, prop)
+			}
+		}
+
+		if len(inherited) == 0 {
+			continue
+		}
+
+		err = s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, vol.ResourceName, vn, lapi.VolumeDefinitionModify{
+			GenericPropsModify: lapi.GenericPropsModify{DeleteProps: inherited},
+		})
+		if err != nil {
+			return fmt.Errorf("could not remove inherited file system properties: %w", err)
+		}
 	}
 
 	return nil
@@ -1603,6 +1652,11 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *v
 	logger.Debug("reconcile volume definition from request (may expand volume)")
 
 	err = s.reconcileVolumeDefinition(ctx, vol, params.FSOpts)
+	if err != nil {
+		return err
+	}
+
+	err = s.clearInheritedFileSystemProps(ctx, vol)
 	if err != nil {
 		return err
 	}
