@@ -552,6 +552,25 @@ func (s *Linstor) reconcileInheritedProperties(ctx context.Context, vol *volume.
 	})
 }
 
+// staleFileSystemProps returns the file system properties in props that a volume of the given fsType must not have:
+// all of them for a block volume (empty fsType), none for a file system volume, whose properties are set as requested.
+func staleFileSystemProps(fsType string, props map[string]string) []string {
+	if fsType != "" {
+		return nil
+	}
+
+	var stale []string
+
+	for _, key := range []string{lapiconsts.KeyFsType, lapiconsts.KeyFsMkfsparameters} {
+		prop := lapiconsts.NamespcFilesystem + "/" + key
+		if _, ok := props[prop]; ok {
+			stale = append(stale, prop)
+		}
+	}
+
+	return stale
+}
+
 // fileSystemProps returns the volume-definition properties for a volume's filesystem type and mkfs options;
 // empty fsType means a block volume (no filesystem).
 func fileSystemProps(fsType, mkfsOpts string) map[string]string {
@@ -2043,12 +2062,20 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 			return err
 		}
 
+		var modify lapi.VolumeDefinitionModify
+
 		// We don't support shrinking. This is mostly covered by the provisioner, but with backups there may be
 		// edge cases where the "no shrinking" rule cannot be enforced. So we only allow volume growth here.
 		if vDef.SizeKib < expectedSizeKiB {
-			err := s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, info.ResourceName, vn, lapi.VolumeDefinitionModify{
-				SizeKib: expectedSizeKiB,
-			})
+			modify.SizeKib = expectedSizeKiB
+		}
+
+		// A volume definition created by restoring a snapshot or cloning another volume carries the properties of
+		// the source, so a block volume made from a file system volume would keep its file system properties.
+		modify.DeleteProps = staleFileSystemProps(info.FsType, vDef.Props)
+
+		if modify.SizeKib != 0 || len(modify.DeleteProps) != 0 {
+			err := s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, info.ResourceName, vn, modify)
 			if err != nil {
 				return err
 			}
