@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reactor ConfigMap conflicts instead of failing the CSI operation.
 - Nodes without an `allowRemoteVolumeAccess` key only use storage on nodes
   that also lack that key, for both reported capacity and volume placement.
+- Snapshots of file system volumes that are restored or cloned as block volumes no
+  longer keep the file system type and mkfs options of the source volume.
 
 ## [1.13.1] - 2026-09-09
 
