@@ -44,6 +44,7 @@ import (
 	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/pborman/uuid"
+	"github.com/piraeusdatastore/nri-volume-qos/pkg/meta"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -500,13 +501,46 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 
 	logger.Debug("reconcile extra properties")
 
-	err = s.client.ResourceDefinitions.Modify(ctx, vol.ResourceName, lapi.GenericPropsModify{OverrideProps: vol.Properties})
+	err = s.reconcileInheritedProperties(ctx, vol)
 	if err != nil {
 		logger.Debugf("reconcile extra properties failed: %v", err)
 		return err
 	}
 
 	return nil
+}
+
+// qosLimitKeys are the auxiliary property keys (relative to the Aux/ namespace) in which IO QoS limits are stored.
+var qosLimitKeys = []string{meta.KeyRBPS, meta.KeyWBPS, meta.KeyRIOPS, meta.KeyWIOPS}
+
+// reconcileInheritedProperties applies the requested properties to a resource definition that was created by
+// restoring a snapshot or cloning another volume. LINSTOR copies all properties of the source, so IO QoS limits
+// that the new volume does not request would otherwise be inherited from the source volume.
+func (s *Linstor) reconcileInheritedProperties(ctx context.Context, vol *volume.Info) error {
+	rd, err := s.client.ResourceDefinitions.Get(ctx, vol.ResourceName)
+	if err != nil {
+		return fmt.Errorf("could not fetch resource definition: %w", err)
+	}
+
+	var staleProps []string
+
+	for _, key := range qosLimitKeys {
+		prop := lapiconsts.NamespcAuxiliary + "/" + key
+		if _, ok := rd.Props[prop]; !ok {
+			continue
+		}
+
+		if _, ok := vol.Properties[prop]; ok {
+			continue
+		}
+
+		staleProps = append(staleProps, prop)
+	}
+
+	return s.client.ResourceDefinitions.Modify(ctx, vol.ResourceName, lapi.GenericPropsModify{
+		OverrideProps: vol.Properties,
+		DeleteProps:   staleProps,
+	})
 }
 
 // fileSystemProps returns the volume-definition properties for a volume's filesystem type and mkfs options;
@@ -1616,7 +1650,7 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *v
 
 	logger.Debug("reconcile extra properties")
 
-	err = s.client.ResourceDefinitions.Modify(ctx, vol.ResourceName, lapi.GenericPropsModify{OverrideProps: vol.Properties})
+	err = s.reconcileInheritedProperties(ctx, vol)
 	if err != nil {
 		logger.Debugf("reconcile extra properties failed: %v", err)
 		return err

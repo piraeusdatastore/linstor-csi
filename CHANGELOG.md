@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reactor ConfigMap conflicts instead of failing the CSI operation.
 - Nodes without an `allowRemoteVolumeAccess` key only use storage on nodes
   that also lack that key, for both reported capacity and volume placement.
+- Volumes restored from a snapshot or cloned from another volume no longer inherit
+  the IO QoS limits of the source volume unless their storage class sets them.
 
 ## [1.13.1] - 2026-09-09
 

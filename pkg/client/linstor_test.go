@@ -994,3 +994,67 @@ func TestReconcileResourceDefinitionRGConflict(t *testing.T) {
 		})
 	}
 }
+
+func TestLinstor_reconcileInheritedProperties(t *testing.T) {
+	const auxRBPS = "Aux/qos.linbit.com/rbps"
+
+	const auxWBPS = "Aux/qos.linbit.com/wbps"
+
+	const auxRIOPS = "Aux/qos.linbit.com/riops"
+
+	const auxWIOPS = "Aux/qos.linbit.com/wiops"
+
+	testcases := []struct {
+		name          string
+		inherited     map[string]string
+		requested     map[string]string
+		expectedModif lapi.GenericPropsModify
+	}{
+		{
+			name: "no limits requested drops all inherited limits",
+			inherited: map[string]string{
+				auxRBPS: "1000", auxWBPS: "2000", auxRIOPS: "30", auxWIOPS: "40", "Aux/other": "keep",
+			},
+			requested: map[string]string{"DrbdOptions/auto-promote": "no"},
+			expectedModif: lapi.GenericPropsModify{
+				OverrideProps: map[string]string{"DrbdOptions/auto-promote": "no"},
+				DeleteProps:   []string{auxRBPS, auxWBPS, auxRIOPS, auxWIOPS},
+			},
+		},
+		{
+			name:      "requested limits are overridden, others are dropped",
+			inherited: map[string]string{auxRBPS: "1000", auxWBPS: "2000"},
+			requested: map[string]string{auxRBPS: "500"},
+			expectedModif: lapi.GenericPropsModify{
+				OverrideProps: map[string]string{auxRBPS: "500"},
+				DeleteProps:   []string{auxWBPS},
+			},
+		},
+		{
+			name:      "nothing inherited, nothing deleted",
+			inherited: map[string]string{"Aux/other": "keep"},
+			requested: map[string]string{auxWIOPS: "10"},
+			expectedModif: lapi.GenericPropsModify{
+				OverrideProps: map[string]string{auxWIOPS: "10"},
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := mocks.ResourceDefinitionProvider{}
+
+			m.EXPECT().Get(mock.Anything, ExampleResourceID).Return(lapi.ResourceDefinition{Name: ExampleResourceID, Props: tc.inherited}, nil)
+			m.EXPECT().Modify(mock.Anything, ExampleResourceID, tc.expectedModif).Return(nil)
+
+			cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{ResourceDefinitions: &m}}, log: logrus.WithField("test", t.Name())}
+
+			err := cl.reconcileInheritedProperties(context.Background(), &volume.Info{
+				ID:         volume.ID{ResourceName: ExampleResourceID},
+				Properties: tc.requested,
+			})
+			assert.NoError(t, err)
+			m.AssertExpectations(t)
+		})
+	}
+}
