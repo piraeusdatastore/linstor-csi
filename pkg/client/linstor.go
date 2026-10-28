@@ -44,6 +44,7 @@ import (
 	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/pborman/uuid"
+	"github.com/piraeusdatastore/nri-volume-qos/pkg/meta"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -448,11 +449,22 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 		if errors.Is(err, lapi.NotFoundError) {
 			logger.Debugf("create new cloned volume")
 
+			// Don't set the provisioning marker with the clone: it is deleted here and only set by the
+			// reconcile below, once the clone is complete. CreateVolume treats a volume with it as done.
+			cloneProps := maps.Clone(vol.Properties)
+			delete(cloneProps, linstor.PropertyProvisioningCompletedBy)
+
 			_, err := s.client.ResourceDefinitions.Clone(ctx, src.ResourceName, lapi.ResourceDefinitionCloneRequest{
-				Name:               vol.ResourceName,
-				LayerList:          params.LayerList,
-				ResourceGroup:      rGroup.Name,
-				GenericPropsModify: lapi.GenericPropsModify{DeleteProps: []string{linstor.PropertyProvisioningCompletedBy}},
+				Name:          vol.ResourceName,
+				LayerList:     params.LayerList,
+				ResourceGroup: rGroup.Name,
+				// Since LINSTOR 1.32.0 the server applies these to the cloned resource definition right after copying
+				// the source properties, so inherited QoS limits never take effect. The reconcile below still runs for
+				// retries, which skip this request, and for older servers, which ignore the props.
+				GenericPropsModify: lapi.GenericPropsModify{
+					OverrideProps: cloneProps,
+					DeleteProps:   append([]string{linstor.PropertyProvisioningCompletedBy}, staleQoSProps(vol.Properties)...),
+				},
 			})
 			if err != nil {
 				logger.Debugf("clone failed: %v", err)
@@ -500,13 +512,44 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 
 	logger.Debug("reconcile extra properties")
 
-	err = s.client.ResourceDefinitions.Modify(ctx, vol.ResourceName, lapi.GenericPropsModify{OverrideProps: vol.Properties})
+	err = s.reconcileInheritedProperties(ctx, vol)
 	if err != nil {
 		logger.Debugf("reconcile extra properties failed: %v", err)
 		return err
 	}
 
 	return nil
+}
+
+// qosLimitKeys are the auxiliary property keys (relative to the Aux/ namespace) in which IO QoS limits are stored.
+var qosLimitKeys = []string{meta.KeyRBPS, meta.KeyWBPS, meta.KeyRIOPS, meta.KeyWIOPS}
+
+// staleQoSProps returns the IO QoS limit properties that are not part of the requested properties. LINSTOR ignores
+// deletes of properties that are not set, so they can be deleted without checking what the resource definition holds.
+//
+// The keys are deleted one by one on purpose: deleting the whole Aux/qos.linbit.com namespace would also remove the
+// requested limits, because the server applies overrides before deletes in the same call.
+func staleQoSProps(requested map[string]string) []string {
+	var stale []string
+
+	for _, key := range qosLimitKeys {
+		prop := lapiconsts.NamespcAuxiliary + "/" + key
+		if _, ok := requested[prop]; !ok {
+			stale = append(stale, prop)
+		}
+	}
+
+	return stale
+}
+
+// reconcileInheritedProperties applies the requested properties to a resource definition that was created by
+// restoring a snapshot or cloning another volume. LINSTOR copies all properties of the source, so IO QoS limits
+// that the new volume does not request would otherwise be inherited from the source volume.
+func (s *Linstor) reconcileInheritedProperties(ctx context.Context, vol *volume.Info) error {
+	return s.client.ResourceDefinitions.Modify(ctx, vol.ResourceName, lapi.GenericPropsModify{
+		OverrideProps: vol.Properties,
+		DeleteProps:   staleQoSProps(vol.Properties),
+	})
 }
 
 // fileSystemProps returns the volume-definition properties for a volume's filesystem type and mkfs options;
@@ -1616,7 +1659,7 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *v
 
 	logger.Debug("reconcile extra properties")
 
-	err = s.client.ResourceDefinitions.Modify(ctx, vol.ResourceName, lapi.GenericPropsModify{OverrideProps: vol.Properties})
+	err = s.reconcileInheritedProperties(ctx, vol)
 	if err != nil {
 		logger.Debugf("reconcile extra properties failed: %v", err)
 		return err
