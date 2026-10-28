@@ -994,3 +994,59 @@ func TestReconcileResourceDefinitionRGConflict(t *testing.T) {
 		})
 	}
 }
+
+func TestReconcileInheritedProperties(t *testing.T) {
+	const (
+		auxRBPS  = "Aux/qos.linbit.com/rbps"
+		auxWBPS  = "Aux/qos.linbit.com/wbps"
+		auxRIOPS = "Aux/qos.linbit.com/riops"
+		auxWIOPS = "Aux/qos.linbit.com/wiops"
+	)
+
+	testcases := []struct {
+		name          string
+		requested     map[string]string
+		expectedModif lapi.GenericPropsModify
+	}{
+		{
+			name:      "no limits requested drops all limits",
+			requested: map[string]string{"DrbdOptions/auto-promote": "no"},
+			expectedModif: lapi.GenericPropsModify{
+				OverrideProps: map[string]string{"DrbdOptions/auto-promote": "no"},
+				DeleteProps:   []string{auxRBPS, auxWBPS, auxRIOPS, auxWIOPS},
+			},
+		},
+		{
+			name:      "requested limits are overridden, others are dropped",
+			requested: map[string]string{auxRBPS: "500"},
+			expectedModif: lapi.GenericPropsModify{
+				OverrideProps: map[string]string{auxRBPS: "500"},
+				DeleteProps:   []string{auxWBPS, auxRIOPS, auxWIOPS},
+			},
+		},
+		{
+			name:      "all limits requested, nothing deleted",
+			requested: map[string]string{auxRBPS: "1", auxWBPS: "2", auxRIOPS: "3", auxWIOPS: "4"},
+			expectedModif: lapi.GenericPropsModify{
+				OverrideProps: map[string]string{auxRBPS: "1", auxWBPS: "2", auxRIOPS: "3", auxWIOPS: "4"},
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := mocks.ResourceDefinitionProvider{}
+
+			m.EXPECT().Modify(mock.Anything, ExampleResourceID, tc.expectedModif).Return(nil)
+
+			cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{ResourceDefinitions: &m}}, log: logrus.WithField("test", t.Name())}
+
+			err := cl.reconcileInheritedProperties(context.Background(), &volume.Info{
+				ID:         volume.ID{ResourceName: ExampleResourceID},
+				Properties: tc.requested,
+			})
+			assert.NoError(t, err)
+			m.AssertExpectations(t)
+		})
+	}
+}
