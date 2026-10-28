@@ -4,11 +4,13 @@ Documentation=http://github.com/nfs-ganesha/nfs-ganesha/wiki
 Conflicts=nfs.target
 
 [Service]
-Type=forking
+# Daemonizing can fork while the crash monitor thread holds a liburcu lock.
+# This causes the forked server to hang during startup.
+Type=simple
 RuntimeDirectory=ganesha/%I
 StateDirectory=nfs/ganesha/%I
 ExecStartPre=/usr/bin/nfs-helper generate-ganesha-config %I ${RUNTIME_DIRECTORY}/ganesha.conf
-ExecStart=/usr/bin/ganesha.nfsd -I %f -f ${RUNTIME_DIRECTORY}/ganesha.conf -N NIV_EVENT -p ${RUNTIME_DIRECTORY}/ganesha.pid
+ExecStart=/usr/bin/ganesha.nfsd -F -I %f -f ${RUNTIME_DIRECTORY}/ganesha.conf -N NIV_EVENT -p ${RUNTIME_DIRECTORY}/ganesha.pid
 ExecStartPost=/usr/bin/nfs-helper check-socket %I
 TimeoutStartSec=15s
 

@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Volumes restored from a snapshot or cloned from another volume no longer inherit
   the IO QoS limits of the source volume unless their storage class sets them.
+- The NFS server no longer hangs at random during start. The hang delayed RWX
+  failover by several minutes.
 
 ## [1.13.2] - 2026-10-27
 
