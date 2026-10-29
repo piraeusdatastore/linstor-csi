@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the IO QoS limits of the source volume unless their storage class sets them.
 - The NFS server no longer hangs at random during start. The hang delayed RWX
   failover by several minutes.
+- A hung NFS server start is stopped and retried after about 15 seconds
+  instead of 105.
 
 ## [1.13.2] - 2026-10-27
 
