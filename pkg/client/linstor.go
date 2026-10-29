@@ -463,7 +463,11 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 				// retries, which skip this request, and for older servers, which ignore the props.
 				GenericPropsModify: lapi.GenericPropsModify{
 					OverrideProps: cloneProps,
-					DeleteProps:   append([]string{linstor.PropertyProvisioningCompletedBy}, staleQoSProps(vol.Properties)...),
+					DeleteProps: slices.Concat(
+						[]string{linstor.PropertyProvisioningCompletedBy},
+						staleQoSProps(vol.Properties),
+						blockVolumeFileSystemProps(vol.FsType),
+					),
 				},
 			})
 			if err != nil {
@@ -544,12 +548,46 @@ func staleQoSProps(requested map[string]string) []string {
 
 // reconcileInheritedProperties applies the requested properties to a resource definition that was created by
 // restoring a snapshot or cloning another volume. LINSTOR copies all properties of the source, so IO QoS limits
-// that the new volume does not request would otherwise be inherited from the source volume.
+// that the new volume does not request, and for a block volume the file system properties, would otherwise be
+// inherited from the source volume.
 func (s *Linstor) reconcileInheritedProperties(ctx context.Context, vol *volume.Info) error {
 	return s.client.ResourceDefinitions.Modify(ctx, vol.ResourceName, lapi.GenericPropsModify{
 		OverrideProps: vol.Properties,
-		DeleteProps:   staleQoSProps(vol.Properties),
+		DeleteProps:   append(staleQoSProps(vol.Properties), blockVolumeFileSystemProps(vol.FsType)...),
 	})
+}
+
+var (
+	fsTypeProp       = lapiconsts.NamespcFilesystem + "/" + lapiconsts.KeyFsType
+	fsMkfsParamsProp = lapiconsts.NamespcFilesystem + "/" + lapiconsts.KeyFsMkfsparameters
+	// fileSystemPropKeys are the properties that hold a volume's file system. Volumes provisioned before v1.11.3
+	// have them on the resource definition, later ones on the volume definition.
+	fileSystemPropKeys = []string{fsTypeProp, fsMkfsParamsProp}
+)
+
+// blockVolumeFileSystemProps returns the file system properties to delete from a resource definition created for
+// a volume of the given fsType: all of them for a block volume (empty fsType), none for a file system volume. Like
+// staleQoSProps, it does not check which are set, since the server ignores deletes of properties that are not set.
+func blockVolumeFileSystemProps(fsType string) []string {
+	if fsType != "" {
+		return nil
+	}
+
+	return slices.Clone(fileSystemPropKeys)
+}
+
+// staleFileSystemProps returns the file system properties in props that a volume of the given fsType must not have:
+// all of them for a block volume (empty fsType), none for a file system volume, whose properties are set as requested.
+func staleFileSystemProps(fsType string, props map[string]string) []string {
+	var stale []string
+
+	for _, prop := range blockVolumeFileSystemProps(fsType) {
+		if _, ok := props[prop]; ok {
+			stale = append(stale, prop)
+		}
+	}
+
+	return stale
 }
 
 // fileSystemProps returns the volume-definition properties for a volume's filesystem type and mkfs options;
@@ -560,8 +598,8 @@ func fileSystemProps(fsType, mkfsOpts string) map[string]string {
 	}
 
 	return map[string]string{
-		lapiconsts.NamespcFilesystem + "/" + lapiconsts.KeyFsType:           fsType,
-		lapiconsts.NamespcFilesystem + "/" + lapiconsts.KeyFsMkfsparameters: mkfsOpts,
+		fsTypeProp:       fsType,
+		fsMkfsParamsProp: mkfsOpts,
 	}
 }
 
@@ -2043,12 +2081,20 @@ func (s *Linstor) reconcileVolumeDefinition(ctx context.Context, info *volume.In
 			return err
 		}
 
+		var modify lapi.VolumeDefinitionModify
+
 		// We don't support shrinking. This is mostly covered by the provisioner, but with backups there may be
 		// edge cases where the "no shrinking" rule cannot be enforced. So we only allow volume growth here.
 		if vDef.SizeKib < expectedSizeKiB {
-			err := s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, info.ResourceName, vn, lapi.VolumeDefinitionModify{
-				SizeKib: expectedSizeKiB,
-			})
+			modify.SizeKib = expectedSizeKiB
+		}
+
+		// A volume definition created by restoring a snapshot or cloning another volume carries the properties of
+		// the source, so a block volume made from a file system volume would keep its file system properties.
+		modify.DeleteProps = staleFileSystemProps(info.FsType, vDef.Props)
+
+		if modify.SizeKib != 0 || len(modify.DeleteProps) != 0 {
+			err := s.client.ResourceDefinitions.ModifyVolumeDefinition(ctx, info.ResourceName, vn, modify)
 			if err != nil {
 				return err
 			}

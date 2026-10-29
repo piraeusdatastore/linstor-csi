@@ -1001,15 +1001,19 @@ func TestReconcileInheritedProperties(t *testing.T) {
 		auxWBPS  = "Aux/qos.linbit.com/wbps"
 		auxRIOPS = "Aux/qos.linbit.com/riops"
 		auxWIOPS = "Aux/qos.linbit.com/wiops"
+		fsType   = "FileSystem/Type"
+		fsMkfs   = "FileSystem/MkfsParams"
 	)
 
 	testcases := []struct {
 		name          string
+		fsType        string
 		requested     map[string]string
 		expectedModif lapi.GenericPropsModify
 	}{
 		{
 			name:      "no limits requested drops all limits",
+			fsType:    "ext4",
 			requested: map[string]string{"DrbdOptions/auto-promote": "no"},
 			expectedModif: lapi.GenericPropsModify{
 				OverrideProps: map[string]string{"DrbdOptions/auto-promote": "no"},
@@ -1018,6 +1022,7 @@ func TestReconcileInheritedProperties(t *testing.T) {
 		},
 		{
 			name:      "requested limits are overridden, others are dropped",
+			fsType:    "ext4",
 			requested: map[string]string{auxRBPS: "500"},
 			expectedModif: lapi.GenericPropsModify{
 				OverrideProps: map[string]string{auxRBPS: "500"},
@@ -1026,9 +1031,27 @@ func TestReconcileInheritedProperties(t *testing.T) {
 		},
 		{
 			name:      "all limits requested, nothing deleted",
+			fsType:    "ext4",
 			requested: map[string]string{auxRBPS: "1", auxWBPS: "2", auxRIOPS: "3", auxWIOPS: "4"},
 			expectedModif: lapi.GenericPropsModify{
 				OverrideProps: map[string]string{auxRBPS: "1", auxWBPS: "2", auxRIOPS: "3", auxWIOPS: "4"},
+			},
+		},
+		{
+			// Volumes provisioned before v1.11.3 keep their file system props on the resource definition.
+			name:      "block volume also drops the file system props of the resource definition",
+			requested: map[string]string{auxRBPS: "1", auxWBPS: "2", auxRIOPS: "3", auxWIOPS: "4"},
+			expectedModif: lapi.GenericPropsModify{
+				OverrideProps: map[string]string{auxRBPS: "1", auxWBPS: "2", auxRIOPS: "3", auxWIOPS: "4"},
+				DeleteProps:   []string{fsType, fsMkfs},
+			},
+		},
+		{
+			name:      "block volume drops both limits and file system props",
+			requested: map[string]string{auxRBPS: "500"},
+			expectedModif: lapi.GenericPropsModify{
+				OverrideProps: map[string]string{auxRBPS: "500"},
+				DeleteProps:   []string{auxWBPS, auxRIOPS, auxWIOPS, fsType, fsMkfs},
 			},
 		},
 	}
@@ -1043,8 +1066,65 @@ func TestReconcileInheritedProperties(t *testing.T) {
 
 			err := cl.reconcileInheritedProperties(context.Background(), &volume.Info{
 				ID:         volume.ID{ResourceName: ExampleResourceID},
+				FsType:     tc.fsType,
 				Properties: tc.requested,
 			})
+			assert.NoError(t, err)
+			m.AssertExpectations(t)
+		})
+	}
+}
+
+func TestReconcileVolumeDefinitionFileSystemProps(t *testing.T) {
+	const (
+		fsType = "FileSystem/Type"
+		fsMkfs = "FileSystem/MkfsParams"
+	)
+
+	testcases := []struct {
+		name          string
+		fsType        string
+		existing      map[string]string
+		expectedModif *lapi.VolumeDefinitionModify
+	}{
+		{
+			name:     "block volume drops inherited file system props",
+			existing: map[string]string{fsType: "ext4", fsMkfs: "-O foo", "Aux/other": "keep"},
+			expectedModif: &lapi.VolumeDefinitionModify{
+				GenericPropsModify: lapi.GenericPropsModify{DeleteProps: []string{fsType, fsMkfs}},
+			},
+		},
+		{
+			name:     "block volume without file system props is left alone",
+			existing: map[string]string{"Aux/other": "keep"},
+		},
+		{
+			name:     "file system volume keeps its props",
+			fsType:   "xfs",
+			existing: map[string]string{fsType: "xfs"},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := mocks.ResourceDefinitionProvider{}
+
+			m.EXPECT().GetVolumeDefinition(mock.Anything, ExampleResourceID, 0).Return(lapi.VolumeDefinition{
+				SizeKib: 1 << 20,
+				Props:   tc.existing,
+			}, nil)
+
+			if tc.expectedModif != nil {
+				m.EXPECT().ModifyVolumeDefinition(mock.Anything, ExampleResourceID, 0, *tc.expectedModif).Return(nil)
+			}
+
+			cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{ResourceDefinitions: &m}}, log: logrus.WithField("test", t.Name())}
+
+			err := cl.reconcileVolumeDefinition(context.Background(), &volume.Info{
+				ID:          volume.ID{ResourceName: ExampleResourceID},
+				FsType:      tc.fsType,
+				DeviceBytes: map[int]int64{0: 1 << 30},
+			}, "")
 			assert.NoError(t, err)
 			m.AssertExpectations(t)
 		})
