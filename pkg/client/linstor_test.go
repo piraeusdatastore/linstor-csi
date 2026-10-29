@@ -1001,15 +1001,19 @@ func TestReconcileInheritedProperties(t *testing.T) {
 		auxWBPS  = "Aux/qos.linbit.com/wbps"
 		auxRIOPS = "Aux/qos.linbit.com/riops"
 		auxWIOPS = "Aux/qos.linbit.com/wiops"
+		fsType   = "FileSystem/Type"
+		fsMkfs   = "FileSystem/MkfsParams"
 	)
 
 	testcases := []struct {
 		name          string
+		fsType        string
 		requested     map[string]string
 		expectedModif lapi.GenericPropsModify
 	}{
 		{
 			name:      "no limits requested drops all limits",
+			fsType:    "ext4",
 			requested: map[string]string{"DrbdOptions/auto-promote": "no"},
 			expectedModif: lapi.GenericPropsModify{
 				OverrideProps: map[string]string{"DrbdOptions/auto-promote": "no"},
@@ -1018,6 +1022,7 @@ func TestReconcileInheritedProperties(t *testing.T) {
 		},
 		{
 			name:      "requested limits are overridden, others are dropped",
+			fsType:    "ext4",
 			requested: map[string]string{auxRBPS: "500"},
 			expectedModif: lapi.GenericPropsModify{
 				OverrideProps: map[string]string{auxRBPS: "500"},
@@ -1026,9 +1031,27 @@ func TestReconcileInheritedProperties(t *testing.T) {
 		},
 		{
 			name:      "all limits requested, nothing deleted",
+			fsType:    "ext4",
 			requested: map[string]string{auxRBPS: "1", auxWBPS: "2", auxRIOPS: "3", auxWIOPS: "4"},
 			expectedModif: lapi.GenericPropsModify{
 				OverrideProps: map[string]string{auxRBPS: "1", auxWBPS: "2", auxRIOPS: "3", auxWIOPS: "4"},
+			},
+		},
+		{
+			// Volumes provisioned before v1.11.3 keep their file system props on the resource definition.
+			name:      "block volume also drops the file system props of the resource definition",
+			requested: map[string]string{auxRBPS: "1", auxWBPS: "2", auxRIOPS: "3", auxWIOPS: "4"},
+			expectedModif: lapi.GenericPropsModify{
+				OverrideProps: map[string]string{auxRBPS: "1", auxWBPS: "2", auxRIOPS: "3", auxWIOPS: "4"},
+				DeleteProps:   []string{fsType, fsMkfs},
+			},
+		},
+		{
+			name:      "block volume drops both limits and file system props",
+			requested: map[string]string{auxRBPS: "500"},
+			expectedModif: lapi.GenericPropsModify{
+				OverrideProps: map[string]string{auxRBPS: "500"},
+				DeleteProps:   []string{auxWBPS, auxRIOPS, auxWIOPS, fsType, fsMkfs},
 			},
 		},
 	}
@@ -1043,6 +1066,7 @@ func TestReconcileInheritedProperties(t *testing.T) {
 
 			err := cl.reconcileInheritedProperties(context.Background(), &volume.Info{
 				ID:         volume.ID{ResourceName: ExampleResourceID},
+				FsType:     tc.fsType,
 				Properties: tc.requested,
 			})
 			assert.NoError(t, err)
