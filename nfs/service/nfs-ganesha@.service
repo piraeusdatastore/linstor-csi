@@ -13,6 +13,9 @@ ExecStartPre=/usr/bin/nfs-helper generate-ganesha-config %I ${RUNTIME_DIRECTORY}
 ExecStart=/usr/bin/ganesha.nfsd -F -I %f -f ${RUNTIME_DIRECTORY}/ganesha.conf -N NIV_EVENT -p ${RUNTIME_DIRECTORY}/ganesha.pid
 ExecStartPost=/usr/bin/nfs-helper check-socket %I
 TimeoutStartSec=15s
+# ganesha.nfsd blocks SIGTERM until late in its startup. Send SIGKILL right
+# away if a start hangs, but keep the default timeout for regular stops.
+TimeoutStartFailureMode=kill
 
 RestrictNamespaces=yes
 LockPersonality=yes
