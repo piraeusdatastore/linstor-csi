@@ -74,6 +74,7 @@ type Linstor struct {
 	mounter        mount.Interface
 	resizer        *mount.ResizeFs
 	labelBySP      bool
+	pollInterval   time.Duration
 }
 
 // NewLinstor returns a high-level linstor client for CSI applications to interact with
@@ -89,6 +90,7 @@ func NewLinstor(options ...func(*Linstor) error) (*Linstor, error) {
 		log:            logrus.NewEntry(logrus.New()),
 		client:         c,
 		labelBySP:      true,
+		pollInterval:   5 * time.Second,
 	}
 
 	l.client.PropertyNamespace = lapiconsts.NamespcAuxiliary
@@ -487,9 +489,11 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 	}
 
 	for status.Status != clonestatus.Complete {
-		logger.Debug("clone in progress, wait 5 seconds")
+		logger.Debug("clone in progress, waiting")
 
-		time.Sleep(5 * time.Second)
+		if err := s.waitPollInterval(ctx); err != nil {
+			return fmt.Errorf("waiting for clone of '%s': %w", vol.ResourceName, err)
+		}
 
 		status, err = s.client.ResourceDefinitions.CloneStatus(ctx, src.ResourceName, vol.ResourceName)
 		if err != nil {
@@ -1681,6 +1685,13 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *v
 		return err
 	}
 
+	logger.Debug("wait for snapshot restore to finish")
+
+	err = s.waitSnapshotResourcesRestored(ctx, rDef.Name)
+	if err != nil {
+		return err
+	}
+
 	logger.Debug("reconcile volume definition from request (may expand volume)")
 
 	err = s.reconcileVolumeDefinition(ctx, vol, params.FSOpts)
@@ -1937,6 +1948,42 @@ func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *volu
 	}
 
 	return nil
+}
+
+// waitSnapshotResourcesRestored waits until no resource of targetRD is still being restored from a snapshot.
+// A retried CreateVolume finds the resource already present while the satellite may still be copying data.
+func (s *Linstor) waitSnapshotResourcesRestored(ctx context.Context, targetRD string) error {
+	logger := s.log.WithField("target", targetRD)
+
+	for {
+		resources, err := s.client.Resources.GetAll(ctx, targetRD)
+		if err != nil {
+			return fmt.Errorf("could not fetch resources: %w", err)
+		}
+
+		restoring := slices.ContainsFunc(resources, func(r lapi.Resource) bool {
+			return slices.Contains(r.Flags, lapiconsts.FlagRestoreFromSnapshot)
+		})
+		if !restoring {
+			return nil
+		}
+
+		logger.Debug("snapshot restore in progress, waiting")
+
+		if err := s.waitPollInterval(ctx); err != nil {
+			return fmt.Errorf("waiting for snapshot restore of '%s': %w", targetRD, err)
+		}
+	}
+}
+
+// waitPollInterval waits for the poll interval, returning early with the context error once the request ends.
+func (s *Linstor) waitPollInterval(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(s.pollInterval):
+		return nil
+	}
 }
 
 func (s *Linstor) fallbackNameUUIDNew() string {

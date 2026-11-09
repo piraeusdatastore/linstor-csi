@@ -1,7 +1,7 @@
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
 github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
-github.com/LINBIT/golinstor v0.65.3 h1:uC+Ns9pMihWVlx6J4DsnA5DqdVPges96eWi74jKyvpw=
-github.com/LINBIT/golinstor v0.65.3/go.mod h1:LrjAIoiOeyrfkQpWNHuAvwMSGPD9ISDZMUekSQ4i/V0=
+github.com/LINBIT/golinstor v0.65.4 h1:RkeUsPa8kWh1jBxQU1EBhGI1DPg3iQChIsKjzLN39rs=
+github.com/LINBIT/golinstor v0.65.4/go.mod h1:LrjAIoiOeyrfkQpWNHuAvwMSGPD9ISDZMUekSQ4i/V0=
 github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAwZ/2OOE=
 github.com/Masterminds/semver/v3 v3.5.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/brunoga/deep v1.3.1 h1:bSrL6FhAZa6JlVv4vsi7Hg8SLwroDb1kgDERRVipBCo=
