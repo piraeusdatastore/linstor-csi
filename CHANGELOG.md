@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keep its file system type and mkfs options.
 - Volumes restored from a snapshot on thick LVM or FILE storage pools are no longer
   reported ready while LINSTOR is still copying the snapshot data.
+- A volume whose creation timed out is no longer deleted. The retry resumes
+  provisioning instead of starting over.
 
 ## [1.13.2] - 2026-10-27
 
