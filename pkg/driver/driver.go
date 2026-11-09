@@ -699,13 +699,13 @@ func (d *Driver) createConsistencyGroupVolume(ctx context.Context, req *csi.Crea
 			return nil, err
 		}
 	} else if err := d.linstorClient.CreateConsistencyGroupVolume(ctx, info, csiName, requiredBytes, params, req.GetAccessibilityRequirements()); err != nil {
-		// A resource-group conflict is a caller error; anything else is internal.
+		// A resource-group conflict is a caller error.
 		var rgConflict *client.ResourceGroupConflictError
 		if errors.As(err, &rgConflict) {
 			return nil, status.Errorf(codes.InvalidArgument, "CreateVolume failed for %s: all consistency-group members must use the same StorageClass: %v", csiName, err)
 		}
 
-		return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", csiName, err)
+		return nil, createVolumeError(ctx, csiName, err)
 	}
 
 	topos, err := d.linstorClient.AccessibleTopologies(ctx, info.ID, params)
@@ -774,13 +774,13 @@ func (d *Driver) restoreConsistencyGroupVolume(ctx context.Context, req *csi.Cre
 	}
 
 	if err := d.linstorClient.RestoreConsistencyGroupVolume(ctx, snaps[0], info, req.GetName(), params, snapParams, req.GetAccessibilityRequirements()); err != nil {
-		// A resource-group conflict is a caller error; anything else is internal.
+		// A resource-group conflict is a caller error.
 		var rgConflict *client.ResourceGroupConflictError
 		if errors.As(err, &rgConflict) {
 			return status.Errorf(codes.InvalidArgument, "CreateVolume failed for %s: all consistency-group members must use the same StorageClass: %v", req.GetName(), err)
 		}
 
-		return status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", req.GetName(), err)
+		return createVolumeError(ctx, req.GetName(), err)
 	}
 
 	return nil
@@ -1788,8 +1788,7 @@ func (d *Driver) createNewVolume(ctx context.Context, info *volume.Info, params 
 
 			if err := d.linstorClient.VolFromSnap(ctx, snaps[0], info, params, snapParams, req.GetAccessibilityRequirements()); err != nil {
 				d.failpathDelete(ctx, info.ID)
-				return nil, status.Errorf(codes.Internal,
-					"CreateVolume failed for %s: %v", req.GetName(), err)
+				return nil, createVolumeError(ctx, req.GetName(), err)
 			}
 			// We're cloning from a whole volume.
 		case req.GetVolumeContentSource().GetVolume() != nil:
@@ -1814,7 +1813,7 @@ func (d *Driver) createNewVolume(ctx context.Context, info *volume.Info, params 
 			err = d.linstorClient.Clone(ctx, info, sourceVol, params, req.GetAccessibilityRequirements())
 			if err != nil {
 				d.failpathDelete(ctx, info.ID)
-				return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", info.ID, err)
+				return nil, createVolumeError(ctx, info.ID, err)
 			}
 		default:
 			return nil, status.Errorf(codes.InvalidArgument,
@@ -1825,8 +1824,7 @@ func (d *Driver) createNewVolume(ctx context.Context, info *volume.Info, params 
 		err := d.linstorClient.Create(ctx, info, params, req.GetAccessibilityRequirements())
 		if err != nil {
 			d.failpathDelete(ctx, info.ID)
-			return nil, status.Errorf(codes.Internal,
-				"CreateVolume failed for %s: %v", info.ID, err)
+			return nil, createVolumeError(ctx, info.ID, err)
 		}
 	}
 
@@ -1959,14 +1957,31 @@ func parseStartingToken(s string) (int, error) {
 	return int(i), nil
 }
 
+// createVolumeError reports a timed out or cancelled request with the matching code, so the provisioner treats
+// the volume as still in progress instead of failed.
+func createVolumeError(ctx context.Context, name any, err error) error {
+	code := codes.Internal
+	if ctx.Err() != nil {
+		code = status.FromContextError(ctx.Err()).Code()
+	}
+
+	return status.Errorf(code, "CreateVolume failed for %s: %v", name, err)
+}
+
 // failpathDelete deletes volumes and logs if that fails. Mostly useful
 // in error paths where we need to report the original error and not the
 // possible error from trying to clean up from that original error.
 func (d *Driver) failpathDelete(ctx context.Context, volId volume.ID) {
+	logger := d.log.WithField("volume", volId)
+
+	// A timed out or cancelled request is not a failure: the retry resumes provisioning where it stopped.
+	if ctx.Err() != nil {
+		logger.WithError(ctx.Err()).Info("request ended before provisioning finished, keeping volume for retry")
+		return
+	}
+
 	if err := d.linstorClient.Delete(ctx, volId); err != nil {
-		d.log.WithFields(logrus.Fields{
-			"volume": volId,
-		}).WithError(err).Error("failed to clean up volume")
+		logger.WithError(err).Error("failed to clean up volume")
 	}
 }
 
