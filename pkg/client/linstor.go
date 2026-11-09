@@ -458,6 +458,9 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 				Name:          vol.ResourceName,
 				LayerList:     params.LayerList,
 				ResourceGroup: rGroup.Name,
+				// Since LINSTOR 1.35.0 the server grows the volumes as part of the clone, before any placement. Older
+				// servers ignore the sizes, and reconcileVolumeDefinition below grows the volumes instead.
+				VolumeSizes: cloneVolumeSizesKiB(vol, src),
 				// Since LINSTOR 1.32.0 the server applies these to the cloned resource definition right after copying
 				// the source properties, so inherited QoS limits never take effect. The reconcile below still runs for
 				// retries, which skip this request, and for older servers, which ignore the props.
@@ -523,6 +526,26 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 	}
 
 	return nil
+}
+
+// cloneVolumeSizesKiB returns the sizes to grow the cloned volume definitions to, indexed by volume number. Volumes
+// that do not need to grow get 0, which keeps the source size: LINSTOR rejects sizes smaller than the source.
+func cloneVolumeSizesKiB(vol, src *volume.Info) []int64 {
+	var sizes []int64
+
+	for vn, size := range vol.DeviceBytes {
+		if size <= src.DeviceBytes[vn] {
+			continue
+		}
+
+		if vn >= len(sizes) {
+			sizes = append(sizes, make([]int64, vn+1-len(sizes))...)
+		}
+
+		sizes[vn] = size / KiB
+	}
+
+	return sizes
 }
 
 // qosLimitKeys are the auxiliary property keys (relative to the Aux/ namespace) in which IO QoS limits are stored.
