@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- With LINSTOR 1.35.0 or newer, a clone larger than its source volume is grown
+  in the clone request itself, before its resources are placed.
+
 ### Fixed
 
 - Volumes restored from a snapshot or cloned from another volume no longer inherit
