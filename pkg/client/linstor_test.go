@@ -134,6 +134,40 @@ func TestLinstor_Attach(t *testing.T) {
 	})
 }
 
+func TestLinstor_waitSnapshotResourcesRestored(t *testing.T) {
+	t.Parallel()
+
+	restoring := []lapi.Resource{{Name: ExampleResourceID, NodeName: "node-1", Flags: []string{lapiconsts.FlagRestoreFromSnapshot}}}
+	restored := []lapi.Resource{{Name: ExampleResourceID, NodeName: "node-1"}}
+
+	t.Run("restore finishes", func(t *testing.T) {
+		t.Parallel()
+
+		m := mocks.ResourceProvider{}
+		m.EXPECT().GetAll(mock.Anything, ExampleResourceID).Return(restoring, nil).Once()
+		m.EXPECT().GetAll(mock.Anything, ExampleResourceID).Return(restored, nil).Once()
+		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name()), pollInterval: time.Millisecond}
+
+		err := cl.waitSnapshotResourcesRestored(context.Background(), ExampleResourceID)
+		assert.NoError(t, err)
+		m.AssertExpectations(t)
+	})
+
+	t.Run("context cancelled", func(t *testing.T) {
+		t.Parallel()
+
+		m := mocks.ResourceProvider{}
+		m.EXPECT().GetAll(mock.Anything, ExampleResourceID).Return(restoring, nil)
+		cl := Linstor{client: &lc.HighLevelClient{Client: &lapi.Client{Resources: &m}}, log: logrus.WithField("test", t.Name()), pollInterval: time.Hour}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		err := cl.waitSnapshotResourcesRestored(ctx, ExampleResourceID)
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+}
+
 func TestLinstor_CapacityBytes(t *testing.T) {
 	t.Parallel()
 
