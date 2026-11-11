@@ -72,6 +72,22 @@ func (c *HighLevelClient) EnsureMinimumApiVersion(ctx context.Context) error {
 
 // NewHighLevelClient returns a pointer to a golinstor client with convience.
 func NewHighLevelClient(options ...lapi.Option) (*HighLevelClient, error) {
+	// Remember the resource provider before any option wraps it in a cache, and wrap the result after all options
+	// ran, so that queries can opt out of the cache using WithUncachedResources.
+	var uncached lapi.ResourceProvider
+
+	options = slices.Concat(
+		[]lapi.Option{func(c *lapi.Client) error {
+			uncached = c.Resources
+			return nil
+		}},
+		options,
+		[]lapi.Option{func(c *lapi.Client) error {
+			c.Resources = &uncachedResourceProvider{ResourceProvider: c.Resources, uncached: uncached}
+			return nil
+		}},
+	)
+
 	c, err := lapi.NewClient(options...)
 	if err != nil {
 		return nil, err

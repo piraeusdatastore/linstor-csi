@@ -51,6 +51,7 @@ import (
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/client"
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
+	"github.com/piraeusdatastore/linstor-csi/pkg/linstor/highlevelclient"
 	"github.com/piraeusdatastore/linstor-csi/pkg/utils"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
@@ -1816,6 +1817,9 @@ func (d *Driver) createNewVolume(ctx context.Context, info *volume.Info, params 
 				d.failpathDelete(ctx, info.ID)
 				return nil, status.Errorf(codes.Internal, "CreateVolume failed for %s: %v", info.ID, err)
 			}
+
+			// The replicas of the clone were created by LINSTOR, so the cached resource list may not contain them yet.
+			ctx = highlevelclient.WithUncachedResources(ctx)
 		default:
 			return nil, status.Errorf(codes.InvalidArgument,
 				"Unknown content source for %s: %v", info.ID, req.GetVolumeContentSource())

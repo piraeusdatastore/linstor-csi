@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of 105.
 - Volumes restored or cloned as block volumes from a file system volume no longer
   keep its file system type and mkfs options.
+- Cloning a volume shortly after other volume operations no longer places an extra
+  diskful replica when the cached resource list predates the clone. The extra
+  replica caused a resync that made expanding the clone fail for minutes.
 
 ## [1.13.2] - 2026-10-27
 

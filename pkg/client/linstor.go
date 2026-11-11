@@ -498,6 +498,10 @@ func (s *Linstor) Clone(ctx context.Context, vol, src *volume.Info, params *volu
 		}
 	}
 
+	// LINSTOR creates the replicas of the clone on its own, after the clone request returned. The cached resource list
+	// may predate them, which would make the placement reconcile below add an unneeded replica.
+	ctx = lc.WithUncachedResources(ctx)
+
 	logger.Debug("reconcile volume definition for volume")
 
 	err = s.reconcileVolumeDefinition(ctx, vol, params.FSOpts)

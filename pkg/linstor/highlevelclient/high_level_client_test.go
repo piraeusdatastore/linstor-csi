@@ -20,9 +20,15 @@ package highlevelclient_test
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	lapiconsts "github.com/LINBIT/golinstor"
+	lapicache "github.com/LINBIT/golinstor/cache"
 	lapi "github.com/LINBIT/golinstor/client"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/assert"
@@ -33,6 +39,59 @@ import (
 	"github.com/piraeusdatastore/linstor-csi/pkg/topology"
 	"github.com/piraeusdatastore/linstor-csi/pkg/volume"
 )
+
+func TestHighLevelClient_UncachedResources(t *testing.T) {
+	t.Parallel()
+
+	var viewRequests, directRequests atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/view/resources":
+			// The cache fills from the resource view, which does not contain the replica yet.
+			viewRequests.Add(1)
+			_, _ = w.Write([]byte(`[]`))
+		case "/v1/resource-definitions/rsc/resources":
+			// LINSTOR returns the replica when asked directly.
+			directRequests.Add(1)
+			_, _ = w.Write([]byte(`[{"name": "rsc", "node_name": "node-1"}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	u, err := url.Parse(srv.URL)
+	assert.NoError(t, err)
+
+	c, err := lc.NewHighLevelClient(
+		lapi.BaseURL(u),
+		lapicache.WithCaches(&lapicache.ResourceCache{Timeout: time.Hour}),
+	)
+	assert.NoError(t, err)
+
+	ctx := context.Background()
+
+	for range 2 {
+		cached, err := c.Resources.GetAll(ctx, "rsc")
+		assert.NoError(t, err)
+		assert.Empty(t, cached)
+	}
+
+	assert.Equal(t, int32(1), viewRequests.Load())
+	assert.Equal(t, int32(0), directRequests.Load())
+
+	uncached, err := c.Resources.GetAll(lc.WithUncachedResources(ctx), "rsc")
+	assert.NoError(t, err)
+	assert.Equal(t, []lapi.Resource{{Name: "rsc", NodeName: "node-1"}}, uncached)
+	assert.Equal(t, int32(1), directRequests.Load())
+
+	// The bypass is limited to the derived context.
+	cached, err := c.Resources.GetAll(ctx, "rsc")
+	assert.NoError(t, err)
+	assert.Empty(t, cached)
+	assert.Equal(t, int32(1), viewRequests.Load())
+}
 
 func TestHighLevelClient_ReservedCapacity(t *testing.T) {
 	t.Parallel()
