@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of 105.
 - Volumes restored or cloned as block volumes from a file system volume no longer
   keep its file system type and mkfs options.
+- Request logging strips CSI secrets instead of writing them verbatim to the log,
+  so failed RPCs no longer leak object-store credentials into log output.
 
 ## [1.13.2] - 2026-10-27
 

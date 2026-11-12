@@ -37,6 +37,7 @@ import (
 	lc "github.com/LINBIT/golinstor"
 	"github.com/LINBIT/golinstor/devicelayerkind"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/kubernetes-csi/csi-lib-utils/protosanitizer"
 	snapv1 "github.com/kubernetes-csi/external-snapshotter/client/v8/apis/volumesnapshot/v1"
 	snapclientset "github.com/kubernetes-csi/external-snapshotter/client/v8/clientset/versioned"
 	"github.com/piraeusdatastore/nri-volume-qos/pkg/meta"
@@ -1384,7 +1385,7 @@ func (d *Driver) GetSnapshot(ctx context.Context, req *csi.GetSnapshotRequest) (
 // NodeExpandVolume https://github.com/container-storage-interface/spec/blob/v1.13.0/spec.md#nodeexpandvolume
 func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
 	d.log.WithFields(logrus.Fields{
-		"NodeExpandVolume": fmt.Sprintf("%+v", req),
+		"NodeExpandVolume": protosanitizer.StripSecrets(req).String(),
 	}).Debug("Node expand volume")
 
 	if req.GetVolumeId() == "" {
@@ -1434,7 +1435,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 	existingVolume.DeviceBytes[existingVolume.VolumeNumber] = requiredBytes
 
 	d.log.WithFields(logrus.Fields{
-		"ControllerExpandVolume": fmt.Sprintf("%+v", req),
+		"ControllerExpandVolume": protosanitizer.StripSecrets(req).String(),
 		"Size":                   requiredBytes,
 	}).Debug("controller expand volume")
 
@@ -1700,33 +1701,35 @@ func Listen(endpoint string) (net.Listener, error) {
 	return net.Listen(u.Scheme, addr)
 }
 
+// logInterceptor logs every unary RPC with its request and response. Requests
+// are sanitized with protosanitizer so that CSI secrets never reach the log
+// output.
+func logInterceptor(log *logrus.Entry) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		resp, err := handler(ctx, req)
+
+		logger := log.WithFields(logrus.Fields{
+			"method": info.FullMethod,
+			"req":    protosanitizer.StripSecrets(req).String(),
+			"resp":   protosanitizer.StripSecrets(resp).String(),
+		})
+
+		if err == nil {
+			logger.Debug("method called")
+		} else {
+			logger.WithError(err).Error("method failed")
+		}
+
+		return resp, err
+	}
+}
+
 // Serve handles CSI requests on listener, blocking until ctx is cancelled (the
 // server is then stopped gracefully) or a fatal error occurs.
 func (d *Driver) Serve(ctx context.Context, listener net.Listener) error {
 	d.log.Debug("Preparing to start server")
 
-	// type UnaryServerInterceptor func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err error)
-	errHandler := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		resp, err := handler(ctx, req)
-
-		if err == nil {
-			d.log.WithFields(logrus.Fields{
-				"method": info.FullMethod,
-				"req":    fmt.Sprintf("%+v", req),
-				"resp":   fmt.Sprintf("%+v", resp),
-			}).Debug("method called")
-		} else {
-			d.log.WithFields(logrus.Fields{
-				"method": info.FullMethod,
-				"req":    fmt.Sprintf("%+v", req),
-				"resp":   fmt.Sprintf("%+v", resp),
-			}).WithError(err).Error("method failed")
-		}
-
-		return resp, err
-	}
-
-	srv := grpc.NewServer(grpc.UnaryInterceptor(errHandler))
+	srv := grpc.NewServer(grpc.UnaryInterceptor(logInterceptor(d.log)))
 	csi.RegisterIdentityServer(srv, d)
 	csi.RegisterControllerServer(srv, d)
 	csi.RegisterNodeServer(srv, d)

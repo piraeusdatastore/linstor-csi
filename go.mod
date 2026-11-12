@@ -7,6 +7,7 @@ require (
 	github.com/LINBIT/golinstor v0.65.3
 	github.com/container-storage-interface/spec v1.13.0
 	github.com/coreos/go-systemd/v22 v22.7.0
+	github.com/kubernetes-csi/csi-lib-utils v0.25.0
 	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.7.0
 	github.com/kubernetes-csi/external-snapshotter/v8 v8.7.0
 	github.com/pborman/uuid v1.2.1
