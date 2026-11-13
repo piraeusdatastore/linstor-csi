@@ -376,7 +376,7 @@ func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeS
 	}
 
 	if req.GetVolumePath() == "" {
-		return nil, missingAttr("NodeGetVolumeStats", req.GetVolumeId(), "VolumeId")
+		return nil, missingAttr("NodeGetVolumeStats", req.GetVolumeId(), "VolumePath")
 	}
 
 	mounted, err := d.linstorClient.IsMountPoint(req.GetVolumePath())
@@ -477,7 +477,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		return nil, missingAttr("CreateVolume", req.GetName(), "Name")
 	}
 	if req.GetVolumeCapabilities() == nil || len(req.GetVolumeCapabilities()) == 0 {
-		return nil, missingAttr("ValidateVolumeCapabilities", req.GetName(), "VolumeCapabilities")
+		return nil, missingAttr("CreateVolume", req.GetName(), "VolumeCapabilities")
 	}
 
 	fsType, nfsExport, err := d.validateCapabilities(req.GetVolumeCapabilities())
@@ -916,7 +916,7 @@ func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 		return nil, missingAttr("ControllerUnpublishVolume", req.GetVolumeId(), "VolumeId")
 	}
 	if req.GetNodeId() == "" {
-		return nil, missingAttr("ControllerUnpublishVolume", req.GetNodeId(), "NodeId")
+		return nil, missingAttr("ControllerUnpublishVolume", req.GetVolumeId(), "NodeId")
 	}
 
 	volId, err := volume.ParseVolumeId(req.GetVolumeId())
@@ -935,7 +935,7 @@ func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 // ValidateVolumeCapabilities https://github.com/container-storage-interface/spec/blob/v1.13.0/spec.md#validatevolumecapabilities
 func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 	if req.GetVolumeId() == "" {
-		return nil, missingAttr("ValidateVolumeCapabilities", req.GetVolumeId(), "volumeId")
+		return nil, missingAttr("ValidateVolumeCapabilities", req.GetVolumeId(), "VolumeId")
 	}
 
 	if req.GetVolumeCapabilities() == nil {
