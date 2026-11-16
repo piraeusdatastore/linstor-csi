@@ -141,6 +141,9 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Build the Kubernetes clients once. They are nil when not running in Kubernetes
+	kubeTyped, kubeSnapshot, kubeErr := utils.KubernetesClient()
+
 	linstorClient, err := client.NewLinstor(
 		client.APIClient(c),
 		client.LogFmt(logFmt),
@@ -148,13 +151,11 @@ func main() {
 		client.LogOut(logOut),
 		client.PropertyNamespace(*propNs),
 		client.LabelBySP(*labelBySP),
+		client.KubernetesNodes(kubeTyped),
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// Build the Kubernetes clients once. They are nil when not running in Kubernetes
-	kubeTyped, kubeSnapshot, kubeErr := utils.KubernetesClient()
 
 	opts := []func(*driver.Driver) error{
 		driver.LogLevel(*logLevel),

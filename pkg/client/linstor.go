@@ -47,7 +47,10 @@ import (
 	"github.com/piraeusdatastore/nri-volume-qos/pkg/meta"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/mount-utils"
 	utilexec "k8s.io/utils/exec"
 	"k8s.io/utils/ptr"
@@ -75,6 +78,9 @@ type Linstor struct {
 	resizer        *mount.ResizeFs
 	labelBySP      bool
 	pollInterval   time.Duration
+	// nodeSchedulable reports whether new pods can be scheduled on a node.
+	// It is nil when not running in Kubernetes: every node then counts as schedulable.
+	nodeSchedulable func(ctx context.Context, node string) (bool, error)
 }
 
 // NewLinstor returns a high-level linstor client for CSI applications to interact with
@@ -157,6 +163,32 @@ func PropertyNamespace(ns string) func(*Linstor) error {
 func LabelBySP(b bool) func(*Linstor) error {
 	return func(l *Linstor) error {
 		l.labelBySP = b
+
+		return nil
+	}
+}
+
+// KubernetesNodes lets the client read Kubernetes Node objects, so that a snapshot is not restored on a
+// cordoned node when another node holds it. A nil client leaves every node schedulable.
+func KubernetesNodes(cl kubernetes.Interface) func(*Linstor) error {
+	return func(l *Linstor) error {
+		if cl == nil {
+			return nil
+		}
+
+		l.nodeSchedulable = func(ctx context.Context, node string) (bool, error) {
+			n, err := cl.CoreV1().Nodes().Get(ctx, node, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				// A LINSTOR node without a Kubernetes Node: nothing says it is cordoned.
+				return true, nil
+			}
+
+			if err != nil {
+				return true, err
+			}
+
+			return !n.Spec.Unschedulable, nil
+		}
 
 		return nil
 	}
@@ -1910,25 +1942,31 @@ func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *volu
 		return fmt.Errorf("snapshot '%s' not deployed on any node", snap.Name)
 	}
 
-	// Optimize the node we use to restore. It should be one of the preferred nodes, or just the first with a snapshot
-	// if no preferred nodes match.
-	var selectedNode string
+	// Collect the snapshot nodes LINSTOR can restore on, and whether Kubernetes can schedule pods there.
+	var available []string
+
+	schedulable := make(map[string]bool, len(snap.Nodes))
+
 	for _, snapNode := range snap.Nodes {
 		if err := s.NodeAvailable(ctx, snapNode); err != nil {
 			logger.WithField("selected node candidate", snapNode).WithError(err).Debug("node is not available")
 			continue
 		}
 
-		if slices.Contains(preferredNodes, snapNode) {
-			// We found a perfect candidate.
-			selectedNode = snapNode
-			break
-		} else if selectedNode == "" {
-			// Set a fallback if we have no candidate yet.
-			selectedNode = snapNode
+		available = append(available, snapNode)
+		schedulable[snapNode] = true
+
+		if s.nodeSchedulable != nil {
+			ok, err := s.nodeSchedulable(ctx, snapNode)
+			if err != nil {
+				logger.WithField("selected node candidate", snapNode).WithError(err).Warn("could not check if node is cordoned, assuming it is not")
+			}
+
+			schedulable[snapNode] = ok
 		}
 	}
 
+	selectedNode := selectRestoreNode(available, preferredNodes, func(node string) bool { return schedulable[node] })
 	if selectedNode == "" {
 		return fmt.Errorf("no node [%s] available for snapshot '%s'", strings.Join(snap.Nodes, ","), snap.Name)
 	}
@@ -1948,6 +1986,34 @@ func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *volu
 	}
 
 	return nil
+}
+
+// selectRestoreNode picks the node a snapshot is restored on, among the available nodes holding it.
+//
+// The restored volume is pinned to that node, so the consumer pod has to run there:
+//   - Nodes are tried in the order of preferredNodes. For a WaitForFirstConsumer volume, preferredNodes[0] is the
+//     node the scheduler selected: if it holds the snapshot, the pod starts there without another scheduling round.
+//   - Cordoned nodes are skipped as long as another node holds the snapshot: no new pod can be scheduled on them,
+//     so a volume restored there stays unusable until the node is uncordoned.
+//
+// Nodes missing from preferredNodes come last, in the order of available.
+func selectRestoreNode(available, preferredNodes []string, schedulable func(node string) bool) string {
+	candidates := slices.DeleteFunc(slices.Clone(available), func(node string) bool { return !schedulable(node) })
+	if len(candidates) == 0 {
+		candidates = available
+	}
+
+	for _, node := range preferredNodes {
+		if slices.Contains(candidates, node) {
+			return node
+		}
+	}
+
+	if len(candidates) > 0 {
+		return candidates[0]
+	}
+
+	return ""
 }
 
 // waitSnapshotResourcesRestored waits until no resource of targetRD is still being restored from a snapshot.

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Snapshots are restored on the node the scheduler selected when it holds the
+  snapshot, and no longer on a cordoned node while another node holds it. A volume
+  restored on a cordoned node could not be used until the node was uncordoned.
 - Volumes restored from a snapshot or cloned from another volume no longer inherit
   the IO QoS limits of the source volume unless their storage class sets them.
 - The NFS server no longer hangs at random during start. The hang delayed RWX
