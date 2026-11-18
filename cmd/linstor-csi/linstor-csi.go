@@ -151,7 +151,7 @@ func main() {
 		client.LogOut(logOut),
 		client.PropertyNamespace(*propNs),
 		client.LabelBySP(*labelBySP),
-		client.KubernetesNodes(kubeTyped),
+		client.KubernetesNodes(ctx, kubeTyped),
 	)
 	if err != nil {
 		log.Fatal(err)
