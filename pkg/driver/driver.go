@@ -996,18 +996,7 @@ func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (
 		return &csi.ListVolumesResponse{}, nil
 	}
 
-	// Handle pagination.
-	var (
-		end       int32
-		nextToken string
-	)
-	totalVols := int32(len(volumes))
-	if req.GetMaxEntries() == 0 || (totalVols <= req.GetMaxEntries()) {
-		end = totalVols
-	} else {
-		end = req.GetMaxEntries()
-		nextToken = strconv.Itoa(int(end))
-	}
+	end, nextToken := pageEnd(start, len(volumes), req.GetMaxEntries())
 
 	volumes = volumes[start:end]
 
@@ -1050,14 +1039,7 @@ func (d *Driver) ControllerListVolumeHealth(ctx context.Context, req *csi.Contro
 		return &csi.ControllerListVolumeHealthResponse{}, nil
 	}
 
-	end := len(volumes)
-
-	var nextToken string
-
-	if maxEntries := int(req.GetMaxEntries()); maxEntries > 0 && start+maxEntries < end {
-		end = start + maxEntries
-		nextToken = strconv.Itoa(end)
-	}
+	end, nextToken := pageEnd(start, len(volumes), req.GetMaxEntries())
 
 	entries := make([]*csi.VolumeHealth, 0, end-start)
 
@@ -1939,6 +1921,18 @@ func missingAttr(methodCall, volumeID, attr string) error {
 	}
 	return status.Errorf(codes.InvalidArgument,
 		"%s failed for %s: it requires a %s and none was provided", methodCall, volumeID, attr)
+}
+
+// pageEnd returns the end of the page that starts at start in a list of total entries, and the token for the
+// next page. The token is empty on the last page.
+func pageEnd(start, total int, maxEntries int32) (int, string) {
+	if maxEntries <= 0 || start+int(maxEntries) >= total {
+		return total, ""
+	}
+
+	end := start + int(maxEntries)
+
+	return end, strconv.Itoa(end)
 }
 
 func parseStartingToken(s string) (int, error) {
