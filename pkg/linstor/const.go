@@ -37,6 +37,11 @@ const (
 	// fully provisioned by this plugin.
 	PropertyProvisioningCompletedBy = lc.NamespcAuxiliary + "/csi-provisioning-completed-by"
 
+	// PropertyProvisioningCompletedFor is the Aux props key in LINSTOR holding the ID of the volume that
+	// PropertyProvisioningCompletedBy was set for. LINSTOR copies the resource definition properties when
+	// restoring a snapshot or cloning, so the marker alone can't tell a finished volume from a copy of one.
+	PropertyProvisioningCompletedFor = lc.NamespcAuxiliary + "/csi-provisioning-completed-for"
+
 	// PropertyCSIVolumeName tags a volume definition with its backing CSI volume (PV) name, marking a CG member.
 	PropertyCSIVolumeName = lc.NamespcAuxiliary + "/csi-volume-name"
 
