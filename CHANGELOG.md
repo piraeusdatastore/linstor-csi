@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reported ready while LINSTOR is still copying the snapshot data.
 - A volume whose creation timed out is no longer deleted. The retry resumes
   provisioning instead of starting over.
+- A retried restore from a snapshot or clone no longer accepts a volume that the
+  failed attempt left without resources or with too few replicas.
 
 ## [1.13.2] - 2026-10-27
 

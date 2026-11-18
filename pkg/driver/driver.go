@@ -582,7 +582,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		return nil, status.Errorf(codes.AlreadyExists, "FsType don't match: existing: '%s', requested: '%s'", existingVolume.FsType, fsType)
 	}
 
-	if existingVolume != nil && strings.HasPrefix(existingVolume.Properties[linstor.PropertyProvisioningCompletedBy], "linstor-csi") {
+	if existingVolume != nil && provisioningCompleted(existingVolume, volId, req.GetVolumeContentSource() != nil) {
 		log.WithField("existingVolume", existingVolume).Info("volume already present")
 
 		for vnr, size := range volumeBytes {
@@ -634,7 +634,8 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	}
 
 	volumeProperties := map[string]string{
-		linstor.PropertyProvisioningCompletedBy: "linstor-csi/" + Version,
+		linstor.PropertyProvisioningCompletedBy:  "linstor-csi/" + Version,
+		linstor.PropertyProvisioningCompletedFor: volId,
 	}
 	if pvcName != "" && pvcNamespace != "" {
 		volumeProperties[lc.NamespcAuxiliary+"/"+ParameterCsiPvcName] = pvcName
@@ -2058,3 +2059,20 @@ const (
 	ParameterCsiPvcName      = "csi.storage.k8s.io/pvc/name"
 	ParameterCsiPvcNamespace = "csi.storage.k8s.io/pvc/namespace"
 )
+
+// provisioningCompleted reports whether an existing volume was fully provisioned for volId. A restore or clone
+// copies the properties of its source, marker included, so the marker only counts if it was set for this volume.
+// Volumes provisioned before the marker carried a volume ID only have the marker, which is accepted for requests
+// without a content source.
+func provisioningCompleted(vol *volume.Info, volId string, hasContentSource bool) bool {
+	if !strings.HasPrefix(vol.Properties[linstor.PropertyProvisioningCompletedBy], "linstor-csi") {
+		return false
+	}
+
+	completedFor, ok := vol.Properties[linstor.PropertyProvisioningCompletedFor]
+	if !ok {
+		return !hasContentSource
+	}
+
+	return completedFor == volId
+}
