@@ -1275,7 +1275,10 @@ func TestKubernetesNodes(t *testing.T) {
 		assert.Equal(t, expected, ok, node)
 	}
 
-	none := &Linstor{}
-	require.NoError(t, KubernetesNodes(nil)(none))
-	assert.Nil(t, none.nodeSchedulable)
+	none, err := NewLinstor(KubernetesNodes(nil))
+	require.NoError(t, err)
+
+	ok, err := none.nodeSchedulable(context.Background(), "cordoned")
+	assert.NoError(t, err)
+	assert.True(t, ok)
 }

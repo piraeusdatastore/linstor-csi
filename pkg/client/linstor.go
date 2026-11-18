@@ -79,7 +79,6 @@ type Linstor struct {
 	labelBySP      bool
 	pollInterval   time.Duration
 	// nodeSchedulable reports whether new pods can be scheduled on a node.
-	// It is nil when not running in Kubernetes: every node then counts as schedulable.
 	nodeSchedulable func(ctx context.Context, node string) (bool, error)
 }
 
@@ -97,6 +96,8 @@ func NewLinstor(options ...func(*Linstor) error) (*Linstor, error) {
 		client:         c,
 		labelBySP:      true,
 		pollInterval:   5 * time.Second,
+		// Outside Kubernetes, every node counts as schedulable.
+		nodeSchedulable: func(context.Context, string) (bool, error) { return true, nil },
 	}
 
 	l.client.PropertyNamespace = lapiconsts.NamespcAuxiliary
@@ -168,8 +169,8 @@ func LabelBySP(b bool) func(*Linstor) error {
 	}
 }
 
-// KubernetesNodes lets the client read Kubernetes Node objects, so that a snapshot is not restored on a
-// cordoned node when another node holds it. A nil client leaves every node schedulable.
+// KubernetesNodes lets the client read Kubernetes Node objects, so that cordoned nodes can be avoided.
+// A nil client leaves every node schedulable.
 func KubernetesNodes(cl kubernetes.Interface) func(*Linstor) error {
 	return func(l *Linstor) error {
 		if cl == nil {
@@ -1953,17 +1954,13 @@ func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *volu
 			continue
 		}
 
-		available = append(available, snapNode)
-		schedulable[snapNode] = true
-
-		if s.nodeSchedulable != nil {
-			ok, err := s.nodeSchedulable(ctx, snapNode)
-			if err != nil {
-				logger.WithField("selected node candidate", snapNode).WithError(err).Warn("could not check if node is cordoned, assuming it is not")
-			}
-
-			schedulable[snapNode] = ok
+		ok, err := s.nodeSchedulable(ctx, snapNode)
+		if err != nil {
+			logger.WithField("selected node candidate", snapNode).WithError(err).Warn("could not check if node is cordoned, assuming it is not")
 		}
+
+		available = append(available, snapNode)
+		schedulable[snapNode] = ok
 	}
 
 	selectedNode := selectRestoreNode(available, preferredNodes, func(node string) bool { return schedulable[node] })
@@ -1989,14 +1986,8 @@ func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *volu
 }
 
 // selectRestoreNode picks the node a snapshot is restored on, among the available nodes holding it.
-//
-// The restored volume is pinned to that node, so the consumer pod has to run there:
-//   - Nodes are tried in the order of preferredNodes. For a WaitForFirstConsumer volume, preferredNodes[0] is the
-//     node the scheduler selected: if it holds the snapshot, the pod starts there without another scheduling round.
-//   - Cordoned nodes are skipped as long as another node holds the snapshot: no new pod can be scheduled on them,
-//     so a volume restored there stays unusable until the node is uncordoned.
-//
-// Nodes missing from preferredNodes come last, in the order of available.
+// Schedulable nodes are preferred over cordoned ones. Among those, nodes are tried in the order of preferredNodes,
+// then in the order of available.
 func selectRestoreNode(available, preferredNodes []string, schedulable func(node string) bool) string {
 	candidates := slices.DeleteFunc(slices.Clone(available), func(node string) bool { return !schedulable(node) })
 	if len(candidates) == 0 {
