@@ -24,6 +24,8 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -35,6 +37,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/piraeusdatastore/linstor-csi/pkg/client/mocks"
 	"github.com/piraeusdatastore/linstor-csi/pkg/linstor"
@@ -1163,4 +1171,171 @@ func TestReconcileVolumeDefinitionFileSystemProps(t *testing.T) {
 			m.AssertExpectations(t)
 		})
 	}
+}
+
+func TestLinstor_reconcileSnapshotResourcesNodeSelection(t *testing.T) {
+	const (
+		sourceRD = "pvc-source"
+		snapName = "snapshot-1"
+		targetRD = "pvc-target"
+	)
+
+	testcases := []struct {
+		name      string
+		snapNodes []string
+		preferred []string
+		cordoned  []string
+		expected  string
+	}{
+		{
+			name:      "selected node holds the snapshot",
+			snapNodes: []string{"node-1", "node-2", "node-3"},
+			preferred: []string{"node-3", "node-1", "node-2"},
+			expected:  "node-3",
+		},
+		{
+			name:      "selected node lacks the snapshot",
+			snapNodes: []string{"node-1", "node-2", "node-3"},
+			preferred: []string{"node-9", "node-2", "node-1", "node-3"},
+			expected:  "node-2",
+		},
+		{
+			name:      "cordoned node is skipped",
+			snapNodes: []string{"node-3", "node-1", "node-2"},
+			preferred: []string{"node-9", "node-3", "node-1", "node-2"},
+			cordoned:  []string{"node-3"},
+			expected:  "node-1",
+		},
+		{
+			name:      "cordoned selected node is skipped",
+			snapNodes: []string{"node-3", "node-1"},
+			preferred: []string{"node-3", "node-1"},
+			cordoned:  []string{"node-3"},
+			expected:  "node-1",
+		},
+		{
+			name:      "only cordoned nodes hold the snapshot",
+			snapNodes: []string{"node-3"},
+			preferred: []string{"node-1", "node-3"},
+			cordoned:  []string{"node-3"},
+			expected:  "node-3",
+		},
+		{
+			name:      "cordoned preferred node wins over a node outside the preferred nodes",
+			snapNodes: []string{"node-9", "node-1"},
+			preferred: []string{"node-1", "node-2"},
+			cordoned:  []string{"node-1"},
+			expected:  "node-1",
+		},
+		{
+			name:      "snapshot node outside the preferred nodes",
+			snapNodes: []string{"node-1"},
+			preferred: []string{"node-2"},
+			expected:  "node-1",
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			var restoredOn string
+
+			res := mocks.ResourceProvider{}
+			res.On("GetAll", mock.Anything, targetRD).Return([]lapi.Resource{}, nil)
+			res.On("GetSnapshot", mock.Anything, sourceRD, snapName).Return(lapi.Snapshot{Name: snapName, Nodes: tc.snapNodes}, nil)
+			res.On("RestoreSnapshot", mock.Anything, sourceRD, snapName, mock.Anything).Run(func(args mock.Arguments) {
+				restoredOn = args.Get(3).(lapi.SnapshotRestore).Nodes[0]
+			}).Return(nil)
+
+			nodes := mocks.NodeProvider{}
+			for _, n := range tc.snapNodes {
+				nodes.On("Get", mock.Anything, n).Return(lapi.Node{Name: n, ConnectionStatus: "ONLINE"}, nil)
+			}
+
+			var kubeNodes []runtime.Object
+			for _, n := range slices.Compact(slices.Sorted(slices.Values(append(slices.Clone(tc.snapNodes), tc.preferred...)))) {
+				kubeNodes = append(kubeNodes, &corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{Name: n},
+					Spec:       corev1.NodeSpec{Unschedulable: slices.Contains(tc.cordoned, n)},
+				})
+			}
+
+			cl, err := NewLinstor(
+				APIClient(&lc.HighLevelClient{Client: &lapi.Client{Resources: &res, Nodes: &nodes}}),
+				KubernetesNodes(t.Context(), fake.NewClientset(kubeNodes...)),
+			)
+			require.NoError(t, err)
+			waitCordoned(t, cl, tc.cordoned...)
+
+			preferred := cl.schedulableFirst(t.Context(), tc.preferred)
+
+			snap := &volume.Snapshot{SnapshotId: volume.SnapshotId{SourceName: sourceRD, SnapshotName: snapName}}
+			require.NoError(t, cl.reconcileSnapshotResources(t.Context(), snap, targetRD, preferred))
+			assert.Equal(t, tc.expected, restoredOn)
+		})
+	}
+}
+
+// waitCordoned waits until the Node cache of cl reports the given nodes as cordoned.
+func waitCordoned(t *testing.T, cl *Linstor, nodes ...string) {
+	t.Helper()
+
+	require.Eventually(t, func() bool {
+		for _, node := range nodes {
+			if ok, err := cl.nodeSchedulable(t.Context(), node); err != nil || ok {
+				return false
+			}
+		}
+
+		return true
+	}, 5*time.Second, 10*time.Millisecond)
+}
+
+func TestKubernetesNodes(t *testing.T) {
+	cl := &Linstor{}
+	require.NoError(t, KubernetesNodes(t.Context(), fake.NewClientset(
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "ready"}},
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "cordoned"}, Spec: corev1.NodeSpec{Unschedulable: true}},
+	))(cl))
+
+	waitCordoned(t, cl, "cordoned")
+
+	for node, expected := range map[string]bool{"ready": true, "cordoned": false, "unknown": true} {
+		ok, err := cl.nodeSchedulable(t.Context(), node)
+		assert.NoError(t, err)
+		assert.Equal(t, expected, ok, node)
+	}
+
+	none, err := NewLinstor(KubernetesNodes(t.Context(), nil))
+	require.NoError(t, err)
+
+	ok, err := none.nodeSchedulable(t.Context(), "cordoned")
+	assert.NoError(t, err)
+	assert.True(t, ok)
+}
+
+func TestKubernetesNodesNotSynced(t *testing.T) {
+	kube := fake.NewClientset(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "cordoned"}, Spec: corev1.NodeSpec{Unschedulable: true}})
+	kube.PrependReactor("list", "nodes", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewForbidden(corev1.Resource("nodes"), "", errors.New("missing RBAC"))
+	})
+
+	cl := &Linstor{}
+	require.NoError(t, KubernetesNodes(t.Context(), kube)(cl))
+
+	ok, err := cl.nodeSchedulable(t.Context(), "cordoned")
+	assert.NoError(t, err)
+	assert.True(t, ok)
+}
+
+func TestLinstor_schedulableFirst(t *testing.T) {
+	cl, err := NewLinstor(KubernetesNodes(t.Context(), fake.NewClientset(
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1"}, Spec: corev1.NodeSpec{Unschedulable: true}},
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-2"}},
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-3"}, Spec: corev1.NodeSpec{Unschedulable: true}},
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-4"}},
+	)))
+	require.NoError(t, err)
+	waitCordoned(t, cl, "node-1", "node-3")
+
+	assert.Equal(t, []string{"node-4", "node-2", "node-3", "node-1"}, cl.schedulableFirst(t.Context(), []string{"node-3", "node-4", "node-1", "node-2"}))
 }

@@ -47,7 +47,10 @@ import (
 	"github.com/piraeusdatastore/nri-volume-qos/pkg/meta"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/mount-utils"
 	utilexec "k8s.io/utils/exec"
 	"k8s.io/utils/ptr"
@@ -75,6 +78,8 @@ type Linstor struct {
 	resizer        *mount.ResizeFs
 	labelBySP      bool
 	pollInterval   time.Duration
+	// nodeSchedulable reports whether new pods can be scheduled on a node.
+	nodeSchedulable func(ctx context.Context, node string) (bool, error)
 }
 
 // NewLinstor returns a high-level linstor client for CSI applications to interact with
@@ -91,6 +96,8 @@ func NewLinstor(options ...func(*Linstor) error) (*Linstor, error) {
 		client:         c,
 		labelBySP:      true,
 		pollInterval:   5 * time.Second,
+		// Outside Kubernetes, every node counts as schedulable.
+		nodeSchedulable: func(context.Context, string) (bool, error) { return true, nil },
 	}
 
 	l.client.PropertyNamespace = lapiconsts.NamespcAuxiliary
@@ -157,6 +164,45 @@ func PropertyNamespace(ns string) func(*Linstor) error {
 func LabelBySP(b bool) func(*Linstor) error {
 	return func(l *Linstor) error {
 		l.labelBySP = b
+
+		return nil
+	}
+}
+
+// KubernetesNodes lets the client read Kubernetes Node objects, so that cordoned nodes can be avoided.
+// Nodes are read from an informer cache, stopped when ctx is done. Until the cache has synced, or with a nil
+// client, every node counts as schedulable.
+//
+// Only spec.unschedulable, as set by "kubectl cordon", is checked: nodes with a NoSchedule or NoExecute taint,
+// or NotReady nodes, still count as schedulable.
+func KubernetesNodes(ctx context.Context, cl kubernetes.Interface) func(*Linstor) error {
+	return func(l *Linstor) error {
+		if cl == nil {
+			return nil
+		}
+
+		factory := informers.NewSharedInformerFactory(cl, 0)
+		informer := factory.Core().V1().Nodes()
+		lister, synced := informer.Lister(), informer.Informer().HasSynced
+		factory.Start(ctx.Done())
+
+		l.nodeSchedulable = func(_ context.Context, node string) (bool, error) {
+			if !synced() {
+				return true, nil
+			}
+
+			n, err := lister.Get(node)
+			if apierrors.IsNotFound(err) {
+				// A LINSTOR node without a Kubernetes Node: nothing says it is cordoned.
+				return true, nil
+			}
+
+			if err != nil {
+				return true, err
+			}
+
+			return !n.Spec.Unschedulable, nil
+		}
 
 		return nil
 	}
@@ -1650,6 +1696,8 @@ func (s *Linstor) VolFromSnap(ctx context.Context, snap *volume.Snapshot, vol *v
 		return err
 	}
 
+	preferredNodes = s.schedulableFirst(ctx, preferredNodes)
+
 	logger.Debug("reconcile resource group from storage class")
 
 	rGroup, err := s.reconcileResourceGroup(ctx, params)
@@ -1910,25 +1958,18 @@ func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *volu
 		return fmt.Errorf("snapshot '%s' not deployed on any node", snap.Name)
 	}
 
-	// Optimize the node we use to restore. It should be one of the preferred nodes, or just the first with a snapshot
-	// if no preferred nodes match.
-	var selectedNode string
+	var available []string
+
 	for _, snapNode := range snap.Nodes {
 		if err := s.NodeAvailable(ctx, snapNode); err != nil {
 			logger.WithField("selected node candidate", snapNode).WithError(err).Debug("node is not available")
 			continue
 		}
 
-		if slices.Contains(preferredNodes, snapNode) {
-			// We found a perfect candidate.
-			selectedNode = snapNode
-			break
-		} else if selectedNode == "" {
-			// Set a fallback if we have no candidate yet.
-			selectedNode = snapNode
-		}
+		available = append(available, snapNode)
 	}
 
+	selectedNode := selectRestoreNode(available, preferredNodes)
 	if selectedNode == "" {
 		return fmt.Errorf("no node [%s] available for snapshot '%s'", strings.Join(snap.Nodes, ","), snap.Name)
 	}
@@ -1948,6 +1989,43 @@ func (s *Linstor) reconcileSnapshotResources(ctx context.Context, snapshot *volu
 	}
 
 	return nil
+}
+
+// selectRestoreNode returns the first node of preferredNodes that holds the snapshot, or the first available node
+// if none of them does.
+func selectRestoreNode(available, preferredNodes []string) string {
+	for _, node := range preferredNodes {
+		if slices.Contains(available, node) {
+			return node
+		}
+	}
+
+	if len(available) > 0 {
+		return available[0]
+	}
+
+	return ""
+}
+
+// schedulableFirst moves the nodes on which no new pod can be scheduled to the end of nodes, keeping the order
+// otherwise.
+func (s *Linstor) schedulableFirst(ctx context.Context, nodes []string) []string {
+	var schedulable, unschedulable []string
+
+	for _, node := range nodes {
+		ok, err := s.nodeSchedulable(ctx, node)
+		if err != nil {
+			s.log.WithField("node", node).WithError(err).Warn("could not check if node is cordoned, assuming it is not")
+		}
+
+		if ok {
+			schedulable = append(schedulable, node)
+		} else {
+			unschedulable = append(unschedulable, node)
+		}
+	}
+
+	return append(schedulable, unschedulable...)
 }
 
 // waitSnapshotResourcesRestored waits until no resource of targetRD is still being restored from a snapshot.
