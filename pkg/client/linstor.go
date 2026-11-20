@@ -36,7 +36,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	lapiconsts "github.com/LINBIT/golinstor"
@@ -52,8 +51,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	corelisters "k8s.io/client-go/listers/core/v1"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/mount-utils"
 	utilexec "k8s.io/utils/exec"
 	"k8s.io/utils/ptr"
@@ -172,12 +169,9 @@ func LabelBySP(b bool) func(*Linstor) error {
 	}
 }
 
-// nodeCacheSyncTimeout bounds how long the first restore waits for the Kubernetes Node cache.
-var nodeCacheSyncTimeout = 30 * time.Second
-
 // KubernetesNodes lets the client read Kubernetes Node objects, so that cordoned nodes can be avoided.
-// Nodes are read from an informer cache, started on first use and stopped when ctx is done.
-// A nil client leaves every node schedulable.
+// Nodes are read from an informer cache, stopped when ctx is done. Until the cache has synced, or with a nil
+// client, every node counts as schedulable.
 //
 // Only spec.unschedulable, as set by "kubectl cordon", is checked: nodes with a NoSchedule or NoExecute taint,
 // or NotReady nodes, still count as schedulable.
@@ -187,35 +181,13 @@ func KubernetesNodes(ctx context.Context, cl kubernetes.Interface) func(*Linstor
 			return nil
 		}
 
-		var (
-			start  sync.Once
-			lister corelisters.NodeLister
-			synced cache.InformerSynced
-		)
+		factory := informers.NewSharedInformerFactory(cl, 0)
+		informer := factory.Core().V1().Nodes()
+		lister, synced := informer.Lister(), informer.Informer().HasSynced
+		factory.Start(ctx.Done())
 
-		l.nodeSchedulable = func(reqCtx context.Context, node string) (bool, error) {
-			var syncErr error
-
-			start.Do(func() {
-				factory := informers.NewSharedInformerFactory(cl, 0)
-				informer := factory.Core().V1().Nodes()
-				lister, synced = informer.Lister(), informer.Informer().HasSynced
-				factory.Start(ctx.Done())
-
-				waitCtx, cancel := context.WithTimeout(reqCtx, nodeCacheSyncTimeout)
-				defer cancel()
-
-				if !cache.WaitForCacheSync(waitCtx.Done(), synced) {
-					syncErr = errors.New("kubernetes node cache not synced")
-				}
-			})
-
-			if syncErr != nil {
-				return true, syncErr
-			}
-
+		l.nodeSchedulable = func(_ context.Context, node string) (bool, error) {
 			if !synced() {
-				// Already reported by the call that started the informer.
 				return true, nil
 			}
 

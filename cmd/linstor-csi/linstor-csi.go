@@ -144,15 +144,21 @@ func main() {
 	// Build the Kubernetes clients once. They are nil when not running in Kubernetes
 	kubeTyped, kubeSnapshot, kubeErr := utils.KubernetesClient()
 
-	linstorClient, err := client.NewLinstor(
+	clientOpts := []func(*client.Linstor) error{
 		client.APIClient(c),
 		client.LogFmt(logFmt),
 		client.LogLevel(*logLevel),
 		client.LogOut(logOut),
 		client.PropertyNamespace(*propNs),
 		client.LabelBySP(*labelBySP),
-		client.KubernetesNodes(ctx, kubeTyped),
-	)
+	}
+
+	if *node == "" {
+		// Only the controller restores snapshots, and only its service account may list nodes.
+		clientOpts = append(clientOpts, client.KubernetesNodes(ctx, kubeTyped))
+	}
+
+	linstorClient, err := client.NewLinstor(clientOpts...)
 	if err != nil {
 		log.Fatal(err)
 	}

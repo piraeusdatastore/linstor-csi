@@ -1264,6 +1264,7 @@ func TestLinstor_reconcileSnapshotResourcesNodeSelection(t *testing.T) {
 				KubernetesNodes(t.Context(), fake.NewClientset(kubeNodes...)),
 			)
 			require.NoError(t, err)
+			waitCordoned(t, cl, tc.cordoned...)
 
 			preferred := cl.schedulableFirst(t.Context(), tc.preferred)
 
@@ -1274,12 +1275,29 @@ func TestLinstor_reconcileSnapshotResourcesNodeSelection(t *testing.T) {
 	}
 }
 
+// waitCordoned waits until the Node cache of cl reports the given nodes as cordoned.
+func waitCordoned(t *testing.T, cl *Linstor, nodes ...string) {
+	t.Helper()
+
+	require.Eventually(t, func() bool {
+		for _, node := range nodes {
+			if ok, err := cl.nodeSchedulable(t.Context(), node); err != nil || ok {
+				return false
+			}
+		}
+
+		return true
+	}, 5*time.Second, 10*time.Millisecond)
+}
+
 func TestKubernetesNodes(t *testing.T) {
 	cl := &Linstor{}
 	require.NoError(t, KubernetesNodes(t.Context(), fake.NewClientset(
 		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "ready"}},
 		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "cordoned"}, Spec: corev1.NodeSpec{Unschedulable: true}},
 	))(cl))
+
+	waitCordoned(t, cl, "cordoned")
 
 	for node, expected := range map[string]bool{"ready": true, "cordoned": false, "unknown": true} {
 		ok, err := cl.nodeSchedulable(t.Context(), node)
@@ -1295,10 +1313,7 @@ func TestKubernetesNodes(t *testing.T) {
 	assert.True(t, ok)
 }
 
-func TestKubernetesNodesForbidden(t *testing.T) {
-	defer func(timeout time.Duration) { nodeCacheSyncTimeout = timeout }(nodeCacheSyncTimeout)
-	nodeCacheSyncTimeout = 100 * time.Millisecond
-
+func TestKubernetesNodesNotSynced(t *testing.T) {
 	kube := fake.NewClientset(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "cordoned"}, Spec: corev1.NodeSpec{Unschedulable: true}})
 	kube.PrependReactor("list", "nodes", func(k8stesting.Action) (bool, runtime.Object, error) {
 		return true, nil, apierrors.NewForbidden(corev1.Resource("nodes"), "", errors.New("missing RBAC"))
@@ -1307,12 +1322,7 @@ func TestKubernetesNodesForbidden(t *testing.T) {
 	cl := &Linstor{}
 	require.NoError(t, KubernetesNodes(t.Context(), kube)(cl))
 
-	// The first lookup reports the unsynced cache, later ones stay silent.
 	ok, err := cl.nodeSchedulable(t.Context(), "cordoned")
-	assert.Error(t, err)
-	assert.True(t, ok)
-
-	ok, err = cl.nodeSchedulable(t.Context(), "cordoned")
 	assert.NoError(t, err)
 	assert.True(t, ok)
 }
@@ -1325,6 +1335,7 @@ func TestLinstor_schedulableFirst(t *testing.T) {
 		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-4"}},
 	)))
 	require.NoError(t, err)
+	waitCordoned(t, cl, "node-1", "node-3")
 
 	assert.Equal(t, []string{"node-4", "node-2", "node-3", "node-1"}, cl.schedulableFirst(t.Context(), []string{"node-3", "node-4", "node-1", "node-2"}))
 }
