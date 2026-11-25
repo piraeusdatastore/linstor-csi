@@ -11,6 +11,8 @@ that implement CSI, such as Kubernetes.
 
 If you wish to create a docker image for a local registry run `make upload REGISTRY=local.example.com`.
 
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the development workflow, tools, and tests.
+
 # Deployment
 
 If you are looking to deploy a full LINSTOR setup with LINSTOR controller and satellites,
