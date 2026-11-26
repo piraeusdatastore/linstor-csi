@@ -1,30 +1,30 @@
 namespace: piraeus-datastore
 resources:
 - namespace.yaml
-- https://github.com/piraeusdatastore/piraeus-operator//pkg/resources/cluster/csi-controller?ref=v2.12.0
-- https://github.com/piraeusdatastore/piraeus-operator//pkg/resources/cluster/csi-node?ref=v2.12.0
+- https://github.com/piraeusdatastore/piraeus-operator//pkg/resources/cluster/csi-controller?ref=v2.12.1
+- https://github.com/piraeusdatastore/piraeus-operator//pkg/resources/cluster/csi-node?ref=v2.12.1
 images:
 - name: csi-attacher
   newName: registry.k8s.io/sig-storage/csi-attacher
-  newTag: v4.13.0
+  newTag: v4.13.1
 - name: csi-livenessprobe
   newName: registry.k8s.io/sig-storage/livenessprobe
-  newTag: v2.20.0
+  newTag: v2.20.1
 - name: csi-node-driver-registrar
   newName: registry.k8s.io/sig-storage/csi-node-driver-registrar
-  newTag: v2.18.0
+  newTag: v2.18.1
 - name: csi-provisioner
   newName: registry.k8s.io/sig-storage/csi-provisioner
-  newTag: v6.4.0
+  newTag: v6.4.1
 - name: csi-resizer
   newName: registry.k8s.io/sig-storage/csi-resizer
-  newTag: v2.3.0
+  newTag: v2.3.1
 - name: csi-snapshotter
   newName: registry.k8s.io/sig-storage/csi-snapshotter
-  newTag: v8.7.0
+  newTag: v8.7.1
 - name: linstor-csi
   newName: quay.io/piraeusdatastore/piraeus-csi
-  newTag: v1.13.2
+  newTag: v1.13.3
 patches:
 - path: controller-patch.yaml
 - path: daemonset-patch.yaml
